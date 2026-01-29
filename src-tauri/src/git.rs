@@ -431,15 +431,38 @@ impl GitService {
         Ok(())
     }
 
-    pub fn reset_to_commit(repo_path: &str, commit_id: &str) -> Result<(), String> {
+    pub fn reset_to_commit(repo_path: &str, commit_id: &str, mode: &str) -> Result<(), String> {
         let repo = Repository::open(repo_path).map_err(|e| e.to_string())?;
 
         let oid = git2::Oid::from_str(commit_id).map_err(|e| e.to_string())?;
         let commit = repo.find_commit(oid).map_err(|e| e.to_string())?;
         let object = commit.as_object();
 
-        repo.reset(object, git2::ResetType::Hard, None)
+        let reset_type = match mode {
+            "soft" => git2::ResetType::Soft,
+            "mixed" => git2::ResetType::Mixed,
+            _ => git2::ResetType::Hard,
+        };
+
+        repo.reset(object, reset_type, None)
             .map_err(|e| e.to_string())?;
+
+        Ok(())
+    }
+
+    /// Revert a commit by creating a new commit that undoes the changes
+    pub fn revert_commit(repo_path: &str, commit_id: &str) -> Result<(), String> {
+        // Use git command for revert since libgit2's revert is complex
+        let output = std::process::Command::new("git")
+            .args(["revert", "--no-edit", commit_id])
+            .current_dir(repo_path)
+            .output()
+            .map_err(|e| e.to_string())?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(format!("Failed to revert commit: {}", stderr));
+        }
 
         Ok(())
     }

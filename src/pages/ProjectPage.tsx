@@ -15,12 +15,6 @@ import {
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
-  ResizablePanelGroup,
-  ResizablePanel,
-  ResizableHandle,
-} from "@/components/ui/resizable";
-import type { ImperativePanelHandle } from "react-resizable-panels";
-import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -82,55 +76,25 @@ export default function ProjectPage() {
   // Count visible panels - must always have at least one
   const visiblePanelCount = [showGitPanel, showAssistantPanel, showShellPanel].filter(Boolean).length;
 
-  // Toggle handlers using panel collapse/expand
-  // State is updated by onCollapse/onExpand callbacks on the panels
+  // Simple toggle handlers - just set state, CSS handles the hiding
   const toggleGitPanel = () => {
     if (showGitPanel && visiblePanelCount <= 1) return;
-    const panel = gitPanelRef.current;
-    if (panel) {
-      if (showGitPanel) {
-        panel.collapse();
-      } else {
-        panel.expand();
-      }
-    }
+    setShowGitPanel(!showGitPanel);
   };
 
   const toggleAssistantPanel = () => {
-    console.log('[toggleAssistantPanel] showAssistantPanel:', showAssistantPanel, 'visiblePanelCount:', visiblePanelCount);
     if (showAssistantPanel && visiblePanelCount <= 1) return;
-    const panel = assistantPanelRef.current;
-    console.log('[toggleAssistantPanel] panel ref:', panel);
-    if (panel) {
-      if (showAssistantPanel) {
-        console.log('[toggleAssistantPanel] calling collapse()');
-        panel.collapse();
-      } else {
-        console.log('[toggleAssistantPanel] calling expand()');
-        panel.expand();
-      }
-    }
+    setShowAssistantPanel(!showAssistantPanel);
   };
 
   const toggleShellPanel = () => {
     if (showShellPanel && visiblePanelCount <= 1) return;
-    const panel = shellPanelRef.current;
-    if (panel) {
-      if (showShellPanel) {
-        panel.collapse();
-      } else {
-        panel.expand();
-      }
-    }
+    setShowShellPanel(!showShellPanel);
   };
   const terminalsStarted = useRef(false);
   const tabCounter = useRef(1);
   const editInputRef = useRef<HTMLInputElement>(null);
 
-  // Panel refs for collapse/expand
-  const gitPanelRef = useRef<ImperativePanelHandle>(null);
-  const assistantPanelRef = useRef<ImperativePanelHandle>(null);
-  const shellPanelRef = useRef<ImperativePanelHandle>(null);
 
   useEffect(() => {
     const project = projects.find((p) => p.id === projectId);
@@ -217,7 +181,7 @@ export default function ProjectPage() {
     );
   };
 
-  const createNewTab = async (projectPath: string, assistantId?: string) => {
+  const createNewTab = async (_projectPath: string, assistantId?: string) => {
     try {
       // Check installed assistants fresh (don't rely on stale state)
       const currentInstalled = await invoke<string[]>("check_installed_assistants");
@@ -419,7 +383,6 @@ export default function ProjectPage() {
     );
   }
 
-  const currentBranch = useGitStore.getState().branches.find((b) => b.isHead);
   const assistantOptions = getAssistantOptions();
 
   return (
@@ -577,44 +540,30 @@ export default function ProjectPage() {
         </div>
       </div>
 
-      {/* Main content area */}
-      <div className="flex-1 overflow-hidden">
-        <ResizablePanelGroup direction="horizontal">
-          {/* Left sidebar - Git panel */}
-          <ResizablePanel
-            ref={gitPanelRef}
-            defaultSize={22}
-            minSize={15}
-            maxSize={35}
-            collapsible
-            collapsedSize={0}
-            onCollapse={() => setShowGitPanel(false)}
-            onExpand={() => setShowGitPanel(true)}
-            className="overflow-hidden"
-          >
-            <div className="flex h-full flex-col select-none overflow-hidden">
-              <GitPanel
-                projectPath={currentProject.path}
-                projectName={currentProject.name}
-                onRefresh={refreshGitData}
-              />
-            </div>
-          </ResizablePanel>
-          <ResizableHandle className="w-px bg-border" />
+      {/* Main content area - simple flex layout */}
+      <div className="flex-1 flex overflow-hidden">
+        {/* Left sidebar - Git panel */}
+        <div
+          className={cn(
+            "flex flex-col border-r border-border overflow-hidden transition-all duration-200",
+            showGitPanel ? "w-72 min-w-[200px]" : "w-0 min-w-0"
+          )}
+        >
+          <GitPanel
+            projectPath={currentProject.path}
+            projectName={currentProject.name}
+            onRefresh={refreshGitData}
+          />
+        </div>
 
-          {/* Center - Terminal area */}
-          <ResizablePanel
-            ref={assistantPanelRef}
-            defaultSize={45}
-            minSize={20}
-            maxSize={70}
-            collapsible
-            collapsedSize={0}
-            onCollapse={() => setShowAssistantPanel(false)}
-            onExpand={() => setShowAssistantPanel(true)}
-            className="overflow-hidden"
-          >
-            <div className="flex h-full flex-col select-none overflow-hidden">
+        {/* Center - Terminal area */}
+        <div
+          className={cn(
+            "flex flex-col overflow-hidden transition-all duration-200",
+            showAssistantPanel ? "flex-1 min-w-[200px]" : "w-0 min-w-0 flex-none"
+          )}
+        >
+          <div className="flex h-full flex-col select-none overflow-hidden">
           {/* Tab bar */}
           <div className="flex h-10 items-center border-b border-border">
             <div className="flex flex-1 items-center overflow-x-auto">
@@ -718,23 +667,16 @@ export default function ProjectPage() {
               <p className="text-sm text-muted-foreground">Starting AI assistant...</p>
             </div>
           )}
-                </div>
-              </ResizablePanel>
-              <ResizableHandle className="w-px bg-border" />
+          </div>
+        </div>
 
-          {/* Right sidebar - Utility terminal */}
-          <ResizablePanel
-            ref={shellPanelRef}
-            defaultSize={33}
-            minSize={15}
-            maxSize={50}
-            collapsible
-            collapsedSize={0}
-            onCollapse={() => setShowShellPanel(false)}
-            onExpand={() => setShowShellPanel(true)}
-            className="overflow-hidden"
-          >
-            <div className="flex h-full flex-col select-none overflow-hidden">
+        {/* Right sidebar - Utility terminal */}
+        <div
+          className={cn(
+            "flex flex-col border-l border-border overflow-hidden transition-all duration-200",
+            showShellPanel ? "flex-1 min-w-[200px]" : "w-0 min-w-0 flex-none"
+          )}
+        >
           {/* Header */}
           <div className="flex h-10 items-center justify-between px-4 border-b border-border">
             <div className="flex items-center gap-2">
@@ -779,9 +721,7 @@ export default function ProjectPage() {
               </div>
             )}
           </div>
-            </div>
-          </ResizablePanel>
-        </ResizablePanelGroup>
+        </div>
       </div>
 
       {/* Settings Sheet */}

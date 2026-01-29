@@ -16,6 +16,8 @@ import {
   X,
   ImageIcon,
   FileIcon,
+  History,
+  RotateCcw,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -52,6 +54,7 @@ import {
   ContextMenu,
   ContextMenuContent,
   ContextMenuItem,
+  ContextMenuSeparator,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
 import { useGitStore } from "@/stores/gitStore";
@@ -79,7 +82,7 @@ interface HunkToDiscard {
 }
 
 export default function GitPanel({ projectPath, projectName, onRefresh }: GitPanelProps) {
-  const { diffs, branches, loading, status } = useGitStore();
+  const { diffs, branches, loading, status, history } = useGitStore();
   const { autoCommitMessage } = useSettingsStore();
   const [commitSubject, setCommitSubject] = useState("");
   const [commitDescription, setCommitDescription] = useState("");
@@ -95,6 +98,9 @@ export default function GitPanel({ projectPath, projectName, onRefresh }: GitPan
   const [selectedFiles, setSelectedFiles] = useState<Set<string>>(new Set());
   const [showDiscardSelectedDialog, setShowDiscardSelectedDialog] = useState(false);
   const [isDiscardingSelected, setIsDiscardingSelected] = useState(false);
+  const [viewMode, setViewMode] = useState<"changes" | "history">("changes");
+  const [commitToReset, setCommitToReset] = useState<string | null>(null);
+  const [isResetting, setIsResetting] = useState(false);
   const lastDiffsHash = useRef<string>("");
   const refreshIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const hasGeneratedInitialMessage = useRef(false);
@@ -232,6 +238,32 @@ export default function GitPanel({ projectPath, projectName, onRefresh }: GitPan
       console.error(error);
     } finally {
       setIsPushing(false);
+    }
+  };
+
+  const handleResetToCommit = async (commitId: string, mode: "soft" | "hard") => {
+    setIsResetting(true);
+    try {
+      await invoke("reset_to_commit", { repoPath: projectPath, commitId, mode });
+      toast.success(mode === "hard" ? "Reset to commit (hard)" : "Reset to commit (soft)");
+      setCommitToReset(null);
+      onRefresh();
+    } catch (error) {
+      toast.error("Failed to reset");
+      console.error(error);
+    } finally {
+      setIsResetting(false);
+    }
+  };
+
+  const handleRevertCommit = async (commitId: string) => {
+    try {
+      await invoke("revert_commit", { repoPath: projectPath, commitId });
+      toast.success("Commit reverted");
+      onRefresh();
+    } catch (error) {
+      toast.error("Failed to revert commit");
+      console.error(error);
     }
   };
 
@@ -665,6 +697,20 @@ export default function GitPanel({ projectPath, projectName, onRefresh }: GitPan
             </TooltipTrigger>
             <TooltipContent>Refresh</TooltipContent>
           </Tooltip>
+
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className={cn("h-7 w-7", viewMode === "history" && "bg-muted text-foreground")}
+                onClick={() => setViewMode(viewMode === "changes" ? "history" : "changes")}
+              >
+                <History className="h-3.5 w-3.5" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>{viewMode === "changes" ? "Show History" : "Show Changes"}</TooltipContent>
+          </Tooltip>
       </div>
 
       {/* Scrollable content */}
@@ -711,63 +757,110 @@ export default function GitPanel({ projectPath, projectName, onRefresh }: GitPan
             </DropdownMenu>
           </div>
 
-          {/* Selection actions */}
-          {selectedFiles.size > 0 && (
-            <div className="mb-3 flex items-center gap-2 rounded-lg bg-muted/50 px-2 py-2">
-              <button
-                onClick={clearSelection}
-                className="flex h-5 w-5 items-center justify-center rounded hover:bg-muted"
-              >
-                <X className="h-3.5 w-3.5 text-muted-foreground" />
-              </button>
-              <span className="flex-1 text-xs text-muted-foreground">
-                {selectedFiles.size} file{selectedFiles.size > 1 ? 's' : ''} selected
-              </span>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-6 px-2 text-xs text-destructive hover:text-destructive"
-                onClick={() => setShowDiscardSelectedDialog(true)}
-              >
-                <Undo2 className="mr-1 h-3 w-3" />
-                Discard
-              </Button>
-            </div>
-          )}
+          {viewMode === "changes" ? (
+            <>
+              {/* Selection actions */}
+              {selectedFiles.size > 0 && (
+                <div className="mb-3 flex items-center gap-2 rounded-lg bg-muted/50 px-2 py-2">
+                  <button
+                    onClick={clearSelection}
+                    className="flex h-5 w-5 items-center justify-center rounded hover:bg-muted"
+                  >
+                    <X className="h-3.5 w-3.5 text-muted-foreground" />
+                  </button>
+                  <span className="flex-1 text-xs text-muted-foreground">
+                    {selectedFiles.size} file{selectedFiles.size > 1 ? 's' : ''} selected
+                  </span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 px-2 text-xs text-destructive hover:text-destructive"
+                    onClick={() => setShowDiscardSelectedDialog(true)}
+                  >
+                    <Undo2 className="mr-1 h-3 w-3" />
+                    Discard
+                  </Button>
+                </div>
+              )}
 
-          {/* Unstaged Changes */}
-          {unstagedChanges.length > 0 && (
-            <div className="mb-4">
+              {/* Unstaged Changes */}
+              {unstagedChanges.length > 0 && (
+                <div className="mb-4">
+                  <h3 className="mb-2 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                    Unstaged Changes
+                  </h3>
+                  <div className="space-y-0.5">
+                    {unstagedChanges.map((diff, index) => (
+                      <FileItem key={diff.path} diff={diff} index={index} />
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Staged Changes */}
+              {stagedChanges.length > 0 && (
+                <div className="mb-4">
+                  <h3 className="mb-2 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                    Staged Changes
+                  </h3>
+                  <div className="space-y-0.5">
+                    {stagedChanges.map((diff, index) => (
+                      <FileItem key={diff.path} diff={diff} index={unstagedChanges.length + index} />
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* No changes message */}
+              {diffs.length === 0 && (
+                <div className="flex flex-col items-center justify-center py-8 text-center">
+                  <GitCommit className="mb-2 h-8 w-8 text-muted-foreground" />
+                  <p className="text-sm text-muted-foreground">No changes</p>
+                </div>
+              )}
+            </>
+          ) : (
+            /* History View */
+            <div className="space-y-1">
               <h3 className="mb-2 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-                Unstaged Changes
+                Commit History
               </h3>
-              <div className="space-y-0.5">
-                {unstagedChanges.map((diff, index) => (
-                  <FileItem key={diff.path} diff={diff} index={index} />
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Staged Changes */}
-          {stagedChanges.length > 0 && (
-            <div className="mb-4">
-              <h3 className="mb-2 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-                Staged Changes
-              </h3>
-              <div className="space-y-0.5">
-                {stagedChanges.map((diff, index) => (
-                  <FileItem key={diff.path} diff={diff} index={unstagedChanges.length + index} />
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* No changes message */}
-          {diffs.length === 0 && (
-            <div className="flex flex-col items-center justify-center py-8 text-center">
-              <GitCommit className="mb-2 h-8 w-8 text-muted-foreground" />
-              <p className="text-sm text-muted-foreground">No changes</p>
+              {history.length > 0 ? (
+                history.map((commit) => (
+                  <ContextMenu key={commit.id}>
+                    <ContextMenuTrigger asChild>
+                      <div className="group flex flex-col gap-0.5 rounded px-2 py-1.5 hover:bg-muted/50 cursor-pointer">
+                        <div className="flex items-center gap-2">
+                          <GitCommit className="h-3 w-3 shrink-0 text-muted-foreground" />
+                          <span className="font-mono text-[10px] text-portal-orange">{commit.shortId}</span>
+                          <span className="text-xs truncate flex-1">{commit.message.split('\n')[0]}</span>
+                        </div>
+                        <div className="ml-5 flex items-center gap-2 text-[10px] text-muted-foreground">
+                          <span className="truncate">{commit.author}</span>
+                          <span>·</span>
+                          <span className="shrink-0">{new Date(commit.timestamp).toLocaleDateString()}</span>
+                        </div>
+                      </div>
+                    </ContextMenuTrigger>
+                    <ContextMenuContent>
+                      <ContextMenuItem onClick={() => handleRevertCommit(commit.id)}>
+                        <RotateCcw className="mr-2 h-4 w-4" />
+                        Revert this commit
+                      </ContextMenuItem>
+                      <ContextMenuSeparator />
+                      <ContextMenuItem onClick={() => setCommitToReset(commit.id)}>
+                        <Undo2 className="mr-2 h-4 w-4" />
+                        Reset to this commit...
+                      </ContextMenuItem>
+                    </ContextMenuContent>
+                  </ContextMenu>
+                ))
+              ) : (
+                <div className="flex flex-col items-center justify-center py-8 text-center">
+                  <History className="mb-2 h-8 w-8 text-muted-foreground" />
+                  <p className="text-sm text-muted-foreground">No commit history</p>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -927,6 +1020,45 @@ export default function GitPanel({ projectPath, projectName, onRefresh }: GitPan
             >
               Discard
             </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Reset to commit dialog */}
+      <AlertDialog open={!!commitToReset} onOpenChange={(open) => !open && setCommitToReset(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Reset to this commit?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Choose how you want to reset to commit <span className="font-mono text-portal-orange">{commitToReset?.slice(0, 7)}</span>:
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="space-y-2 py-2">
+            <Button
+              variant="outline"
+              className="w-full justify-start"
+              onClick={() => commitToReset && handleResetToCommit(commitToReset, "soft")}
+              disabled={isResetting}
+            >
+              <div className="text-left">
+                <div className="font-medium">Soft Reset</div>
+                <div className="text-xs text-muted-foreground">Keep changes in staging area</div>
+              </div>
+            </Button>
+            <Button
+              variant="outline"
+              className="w-full justify-start border-destructive/50 hover:bg-destructive/10"
+              onClick={() => commitToReset && handleResetToCommit(commitToReset, "hard")}
+              disabled={isResetting}
+            >
+              <div className="text-left">
+                <div className="font-medium text-destructive">Hard Reset</div>
+                <div className="text-xs text-muted-foreground">Discard all changes (cannot be undone)</div>
+              </div>
+            </Button>
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isResetting}>Cancel</AlertDialogCancel>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

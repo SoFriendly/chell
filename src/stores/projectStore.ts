@@ -20,7 +20,7 @@ interface ProjectState {
 
 export const useProjectStore = create<ProjectState>()(
   persist(
-    (set, get) => ({
+    (set, _get) => ({
       projects: [],
       tabs: [],
       activeTabId: null,

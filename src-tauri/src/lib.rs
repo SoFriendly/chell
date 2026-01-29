@@ -303,8 +303,13 @@ fn checkout_commit(repo_path: String, commit_id: String) -> Result<(), String> {
 }
 
 #[tauri::command]
-fn reset_to_commit(repo_path: String, commit_id: String) -> Result<(), String> {
-    GitService::reset_to_commit(&repo_path, &commit_id)
+fn reset_to_commit(repo_path: String, commit_id: String, mode: String) -> Result<(), String> {
+    GitService::reset_to_commit(&repo_path, &commit_id, &mode)
+}
+
+#[tauri::command]
+fn revert_commit(repo_path: String, commit_id: String) -> Result<(), String> {
+    GitService::revert_commit(&repo_path, &commit_id)
 }
 
 #[tauri::command]
@@ -624,6 +629,7 @@ pub fn run() {
             edit_file_line,
             checkout_commit,
             reset_to_commit,
+            revert_commit,
             init_repo,
             clone_repo,
             fetch_remote,
