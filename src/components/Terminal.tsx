@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import { Terminal as XTerm } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { WebLinksAddon } from "@xterm/addon-web-links";
+import { Unicode11Addon } from "@xterm/addon-unicode11";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import "@xterm/xterm/css/xterm.css";
@@ -43,18 +44,22 @@ export default function Terminal({ id }: TerminalProps) {
         brightCyan: "#a4ffff",
         brightWhite: "#ffffff",
       },
-      fontFamily: '"SF Mono", "Menlo", "Monaco", "Courier New", monospace',
+      fontFamily: '"MesloLGS NF", "Hack Nerd Font", "FiraCode Nerd Font", "JetBrains Mono", "Fira Code", "SF Mono", "Menlo", monospace',
       fontSize: 13,
       lineHeight: 1.2,
       cursorBlink: true,
       cursorStyle: "bar",
+      allowProposedApi: true,
     });
 
     const fitAddon = new FitAddon();
     const webLinksAddon = new WebLinksAddon();
+    const unicode11Addon = new Unicode11Addon();
 
     terminal.loadAddon(fitAddon);
     terminal.loadAddon(webLinksAddon);
+    terminal.loadAddon(unicode11Addon);
+    terminal.unicode.activeVersion = "11";
 
     terminal.open(containerRef.current);
     fitAddon.fit();

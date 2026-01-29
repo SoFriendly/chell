@@ -2,6 +2,39 @@
 @tailwind components;
 @tailwind utilities;
 
+/* MesloLGS Nerd Font - bundled for terminal Unicode support */
+@font-face {
+  font-family: "MesloLGS NF";
+  src: url("/fonts/MesloLGS-NF-Regular.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "MesloLGS NF";
+  src: url("/fonts/MesloLGS-NF-Bold.ttf") format("truetype");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "MesloLGS NF";
+  src: url("/fonts/MesloLGS-NF-Italic.ttf") format("truetype");
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "MesloLGS NF";
+  src: url("/fonts/MesloLGS-NF-BoldItalic.ttf") format("truetype");
+  font-weight: 700;
+  font-style: italic;
+  font-display: swap;
+}
+
 @layer base {
   :root {
     --background: 0 0% 100%;

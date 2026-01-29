@@ -254,40 +254,41 @@ export default function GitPanel({ projectPath, projectName, onRefresh }: GitPan
     }
   };
 
-  const handleFileSelect = (filePath: string, index: number, e: React.MouseEvent) => {
+  const handleFileClick = (filePath: string, index: number, e: React.MouseEvent) => {
     e.stopPropagation();
 
     const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
     const isMultiSelectKey = isMac ? e.metaKey : e.ctrlKey;
     const isRangeSelectKey = e.shiftKey;
 
-    setSelectedFiles(prev => {
-      const next = new Set(prev);
+    // Only handle selection with modifier keys, otherwise expand/collapse
+    if (isRangeSelectKey || isMultiSelectKey) {
+      setSelectedFiles(prev => {
+        const next = new Set(prev);
 
-      if (isRangeSelectKey && lastClickedIndex.current >= 0) {
-        // Shift-click: select range
-        const start = Math.min(lastClickedIndex.current, index);
-        const end = Math.max(lastClickedIndex.current, index);
-        for (let i = start; i <= end; i++) {
-          next.add(diffs[i].path);
+        if (isRangeSelectKey && lastClickedIndex.current >= 0) {
+          // Shift-click: select range
+          const start = Math.min(lastClickedIndex.current, index);
+          const end = Math.max(lastClickedIndex.current, index);
+          for (let i = start; i <= end; i++) {
+            next.add(diffs[i].path);
+          }
+        } else if (isMultiSelectKey) {
+          // Cmd/Ctrl-click: toggle individual selection
+          if (next.has(filePath)) {
+            next.delete(filePath);
+          } else {
+            next.add(filePath);
+          }
         }
-      } else if (isMultiSelectKey) {
-        // Cmd/Ctrl-click: toggle individual selection
-        if (next.has(filePath)) {
-          next.delete(filePath);
-        } else {
-          next.add(filePath);
-        }
-      } else {
-        // Regular click: clear and select only this one
-        next.clear();
-        next.add(filePath);
-      }
 
-      return next;
-    });
-
-    lastClickedIndex.current = index;
+        return next;
+      });
+      lastClickedIndex.current = index;
+    } else {
+      // Plain click: expand/collapse the file diff
+      toggleFileExpanded(filePath);
+    }
   };
 
   const clearSelection = () => {
@@ -363,21 +364,13 @@ export default function GitPanel({ projectPath, projectName, onRefresh }: GitPan
             "flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 transition-colors",
             isSelected ? "bg-portal-orange/20" : "hover:bg-muted/50"
           )}
-          onClick={(e) => handleFileSelect(diff.path, index, e)}
+          onClick={(e) => handleFileClick(diff.path, index, e)}
         >
-          <button
-            className="shrink-0 p-0.5 hover:bg-muted rounded"
-            onClick={(e) => {
-              e.stopPropagation();
-              toggleFileExpanded(diff.path);
-            }}
-          >
-            {expandedFiles.has(diff.path) ? (
-              <ChevronDown className="h-3 w-3 text-muted-foreground" />
-            ) : (
-              <ChevronRight className="h-3 w-3 text-muted-foreground" />
-            )}
-          </button>
+          {expandedFiles.has(diff.path) ? (
+            <ChevronDown className="h-3 w-3 shrink-0 text-muted-foreground" />
+          ) : (
+            <ChevronRight className="h-3 w-3 shrink-0 text-muted-foreground" />
+          )}
           <span className={cn("h-2 w-2 shrink-0 rounded-sm", getStatusColor(diff.status))} />
           <span className="flex-1 truncate font-mono text-xs">{diff.path}</span>
           <AlertDialog>
