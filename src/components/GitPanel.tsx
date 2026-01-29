@@ -404,7 +404,7 @@ export default function GitPanel({ projectPath, projectName, onRefresh }: GitPan
           <ContextMenuTrigger asChild>
             <div
               className={cn(
-                "flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 transition-colors",
+                "relative flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 transition-colors",
                 isSelected ? "bg-portal-orange/20" : "hover:bg-muted/50"
               )}
               onClick={(e) => handleFileClick(diff.path, index, e)}
@@ -418,13 +418,11 @@ export default function GitPanel({ projectPath, projectName, onRefresh }: GitPan
               <div className="flex-1 overflow-x-auto scrollbar-none">
                 <span className="whitespace-nowrap font-mono text-xs">{diff.path}</span>
               </div>
+              {/* Discard button - shows on hover, positioned over content on right */}
               <Button
                 variant="ghost"
                 size="icon"
-                className={cn(
-                  "h-5 w-5 shrink-0",
-                  isExpanded ? "opacity-100" : "opacity-0 group-hover:opacity-100"
-                )}
+                className="absolute right-3 top-1/2 -translate-y-1/2 h-5 w-5 opacity-0 group-hover:opacity-100 bg-background/80 hover:bg-muted"
                 onClick={(e) => {
                   e.stopPropagation();
                   setFileToDiscard(diff.path);

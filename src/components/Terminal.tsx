@@ -9,8 +9,10 @@ import { useSettingsStore } from "@/stores/settingsStore";
 import "@xterm/xterm/css/xterm.css";
 
 interface TerminalProps {
-  id: string;
+  id?: string;  // Optional - if not provided, Terminal will spawn its own
+  command?: string;  // Command to run (empty for default shell)
   cwd: string;
+  onTerminalReady?: (terminalId: string) => void;  // Called when terminal is spawned
 }
 
 // Terminal themes matching app themes
@@ -86,43 +88,54 @@ const TERMINAL_THEMES: Record<string, ITheme> = {
   },
 };
 
-export default function Terminal({ id }: TerminalProps) {
+export default function Terminal({ id, command = "", cwd, onTerminalReady }: TerminalProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const terminalRef = useRef<XTerm | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
   const [isContainerReady, setIsContainerReady] = useState(false);
+  const [terminalId, setTerminalId] = useState<string | null>(id || null);
+  const [initialDimensions, setInitialDimensions] = useState<{ cols: number; rows: number } | null>(null);
   const theme = useSettingsStore((state) => state.theme);
+  const hasSpawnedRef = useRef(false);
 
-  // Phase 1: Wait for container to have dimensions
+  // Phase 1: Wait for container to have stable dimensions
   useEffect(() => {
     if (!containerRef.current) return;
 
-    const checkReady = () => {
-      if (containerRef.current &&
-          containerRef.current.offsetWidth > 0 &&
-          containerRef.current.offsetHeight > 0) {
-        setIsContainerReady(true);
-        return true;
-      }
-      return false;
-    };
+    let lastWidth = 0;
+    let lastHeight = 0;
+    let stableCount = 0;
+    let stabilityTimer: ReturnType<typeof setTimeout> | null = null;
 
-    // Check immediately
-    if (checkReady()) return;
+    const checkStability = () => {
+      if (!containerRef.current) return;
 
-    // Use ResizeObserver to detect when container gets dimensions
-    const resizeObserver = new ResizeObserver((entries) => {
-      for (const entry of entries) {
-        if (entry.contentRect.width > 0 && entry.contentRect.height > 0) {
-          setIsContainerReady(true);
-          resizeObserver.disconnect();
+      const width = containerRef.current.offsetWidth;
+      const height = containerRef.current.offsetHeight;
+
+      if (width > 0 && height > 0) {
+        if (width === lastWidth && height === lastHeight) {
+          stableCount++;
+          // Require dimensions to be stable for 3 consecutive checks (150ms)
+          if (stableCount >= 3) {
+            setIsContainerReady(true);
+            return;
+          }
+        } else {
+          stableCount = 0;
+          lastWidth = width;
+          lastHeight = height;
         }
       }
-    });
-    resizeObserver.observe(containerRef.current);
+
+      stabilityTimer = setTimeout(checkStability, 50);
+    };
+
+    // Start checking after a short initial delay to let layout begin
+    stabilityTimer = setTimeout(checkStability, 50);
 
     return () => {
-      resizeObserver.disconnect();
+      if (stabilityTimer) clearTimeout(stabilityTimer);
     };
   }, []);
 
@@ -133,7 +146,7 @@ export default function Terminal({ id }: TerminalProps) {
     }
   }, [theme]);
 
-  // Phase 2: Create terminal only after container is ready
+  // Phase 2: Create xterm and calculate dimensions (but don't connect to PTY yet)
   useEffect(() => {
     if (!containerRef.current || !isContainerReady || terminalRef.current) return;
 
@@ -210,41 +223,90 @@ export default function Terminal({ id }: TerminalProps) {
       return true;
     });
 
+    // Do initial fit to calculate dimensions
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        try {
+          fitAddon.fit();
+          const { cols, rows } = terminal;
+          setInitialDimensions({ cols, rows });
+        } catch (e) {
+          // Fallback dimensions
+          setInitialDimensions({ cols: 80, rows: 24 });
+        }
+      });
+    });
+
+    return () => {
+      terminal.dispose();
+      terminalRef.current = null;
+      fitAddonRef.current = null;
+    };
+  }, [isContainerReady, theme]);
+
+  // Phase 3: Spawn PTY with correct dimensions (only if not provided externally)
+  useEffect(() => {
+    if (!initialDimensions || hasSpawnedRef.current) return;
+    if (id) {
+      // Terminal ID was provided externally, use it
+      setTerminalId(id);
+      return;
+    }
+
+    hasSpawnedRef.current = true;
+
+    const spawnTerminal = async () => {
+      try {
+        const newId = await invoke<string>("spawn_terminal", {
+          shell: command,
+          cwd,
+          cols: initialDimensions.cols,
+          rows: initialDimensions.rows,
+        });
+        setTerminalId(newId);
+        onTerminalReady?.(newId);
+      } catch (error) {
+        console.error("Failed to spawn terminal:", error);
+      }
+    };
+
+    spawnTerminal();
+  }, [initialDimensions, id, command, cwd, onTerminalReady]);
+
+  // Phase 4: Connect to PTY and handle ongoing resize
+  useEffect(() => {
+    if (!terminalId || !terminalRef.current || !fitAddonRef.current) return;
+
+    const terminal = terminalRef.current;
+    const fitAddon = fitAddonRef.current;
+
     // Safe fit function that checks if terminal is ready
     const safeFit = () => {
       try {
         if (containerRef.current && containerRef.current.offsetWidth > 0 && containerRef.current.offsetHeight > 0) {
           fitAddon.fit();
           const { cols, rows } = terminal;
-          invoke("resize_terminal", { id, cols, rows }).catch(console.error);
+          invoke("resize_terminal", { id: terminalId, cols, rows }).catch(console.error);
           return true;
         }
       } catch (e) {
-        // Ignore fit errors during initialization
+        // Ignore fit errors
       }
       return false;
     };
 
-    // Initial fit - container already has dimensions at this point
-    // Use requestAnimationFrame to ensure DOM is fully painted
-    requestAnimationFrame(() => {
-      safeFit();
-      // Do a second fit after a short delay to handle any late layout adjustments
-      setTimeout(() => safeFit(), 50);
-    });
-
     // Handle terminal input
-    terminal.onData((data) => {
-      invoke("write_terminal", { id, data }).catch(console.error);
+    const dataDisposable = terminal.onData((data) => {
+      invoke("write_terminal", { id: terminalId, data }).catch(console.error);
     });
 
     // Handle terminal resize
-    terminal.onResize(({ cols, rows }) => {
-      invoke("resize_terminal", { id, cols, rows }).catch(console.error);
+    const resizeDisposable = terminal.onResize(({ cols, rows }) => {
+      invoke("resize_terminal", { id: terminalId, cols, rows }).catch(console.error);
     });
 
     // Listen for terminal output from backend
-    const unlisten = listen<string>(`terminal-output-${id}`, (event) => {
+    const unlisten = listen<string>(`terminal-output-${terminalId}`, (event) => {
       terminal.write(event.payload);
     });
 
@@ -262,29 +324,31 @@ export default function Terminal({ id }: TerminalProps) {
         }
       }
     });
-    resizeObserver.observe(containerRef.current);
+    if (containerRef.current) {
+      resizeObserver.observe(containerRef.current);
+    }
 
     // Also handle visibility changes (for tabbed terminals)
     const intersectionObserver = new IntersectionObserver((entries) => {
       for (const entry of entries) {
         if (entry.isIntersecting) {
-          // Small delay to ensure layout is complete
           setTimeout(() => safeFit(), 10);
         }
       }
     });
-    intersectionObserver.observe(containerRef.current);
+    if (containerRef.current) {
+      intersectionObserver.observe(containerRef.current);
+    }
 
     return () => {
+      dataDisposable.dispose();
+      resizeDisposable.dispose();
       unlisten.then((fn) => fn());
       window.removeEventListener("resize", handleResize);
       resizeObserver.disconnect();
       intersectionObserver.disconnect();
-      terminal.dispose();
-      terminalRef.current = null;
-      fitAddonRef.current = null;
     };
-  }, [id, isContainerReady]);
+  }, [terminalId]);
 
   // Focus terminal on click
   const handleClick = () => {

@@ -40,7 +40,8 @@ import type { Project, GitStatus, FileDiff, Branch, Commit } from "@/types";
 interface TerminalTab {
   id: string;
   name: string;
-  terminalId: string | null;
+  command: string;  // Command to run (empty for shell)
+  terminalId: string | null;  // Set by Terminal component after spawning
 }
 
 interface AssistantOption {
@@ -176,6 +177,15 @@ export default function ProjectPage() {
     ];
   };
 
+  // Callback when Terminal component spawns its PTY
+  const handleTerminalReady = (tabId: string, newTerminalId: string) => {
+    setTerminalTabs(prev =>
+      prev.map(tab =>
+        tab.id === tabId ? { ...tab, terminalId: newTerminalId } : tab
+      )
+    );
+  };
+
   const createNewTab = async (projectPath: string, assistantId?: string) => {
     try {
       // Check installed assistants fresh (don't rely on stale state)
@@ -218,24 +228,21 @@ export default function ProjectPage() {
         }
       }
 
-      const terminalId = await invoke<string>("spawn_terminal", {
-        shell: command,
-        cwd: projectPath,
-      });
-
+      // Don't spawn terminal here - let Terminal component do it with correct dimensions
       const tabId = `tab-${Date.now()}`;
       const tabNumber = tabCounter.current++;
       const newTab: TerminalTab = {
         id: tabId,
         name: tabNumber === 1 ? name : `${name} ${tabNumber}`,
-        terminalId,
+        command,  // Store command, Terminal will spawn with correct dimensions
+        terminalId: null,  // Will be set by Terminal component
       };
 
       setTerminalTabs(prev => [...prev, newTab]);
       setActiveTabId(tabId);
 
       if (command) {
-        toast.success(`${newTab.name} started`);
+        toast.success(`${newTab.name} starting...`);
       }
 
       return newTab;
@@ -289,14 +296,8 @@ export default function ProjectPage() {
 
   const startTerminals = async (projectPath: string) => {
     try {
-      // Start utility terminal (plain shell)
-      const utilityId = await invoke<string>("spawn_terminal", {
-        shell: "",
-        cwd: projectPath,
-      });
-      setUtilityTerminalId(utilityId);
-
-      // Create the first AI terminal tab
+      // Utility terminal will spawn itself when its Terminal component mounts
+      // Just create the first AI terminal tab
       await createNewTab(projectPath);
     } catch (error) {
       console.error("Failed to start terminals:", error);
@@ -560,15 +561,13 @@ export default function ProjectPage() {
                   />
                 </div>
               </ResizablePanel>
-
               <ResizableHandle className="w-px bg-border" />
             </>
           )}
 
           {/* Center - Terminal area */}
           {showAssistantPanel && (
-            <>
-              <ResizablePanel defaultSize={showGitPanel && showShellPanel ? 56 : showGitPanel || showShellPanel ? 78 : 100} minSize={35}>
+            <ResizablePanel defaultSize={showGitPanel && showShellPanel ? 56 : showGitPanel || showShellPanel ? 78 : 100} minSize={35}>
                 <div className="flex h-full flex-col">
                   {/* Tab bar */}
                   <div className="flex h-10 items-center">
@@ -655,15 +654,12 @@ export default function ProjectPage() {
                       )}
                     >
                       <div className="flex-1 overflow-hidden" style={{ backgroundColor: terminalBg }}>
-                        {tab.terminalId ? (
-                          <Terminal id={tab.terminalId} cwd={currentProject.path} />
-                        ) : (
-                          <div className="flex h-full items-center justify-center">
-                            <p className="text-sm text-muted-foreground">
-                              Starting terminal...
-                            </p>
-                          </div>
-                        )}
+                        <Terminal
+                          id={tab.terminalId || undefined}
+                          command={tab.command}
+                          cwd={currentProject.path}
+                          onTerminalReady={(terminalId) => handleTerminalReady(tab.id, terminalId)}
+                        />
                       </div>
                     </div>
                   ))}
@@ -676,11 +672,10 @@ export default function ProjectPage() {
                     </div>
                   )}
                 </div>
-              </ResizablePanel>
-
-              {showShellPanel && <ResizableHandle className="w-px bg-border" />}
-            </>
+            </ResizablePanel>
           )}
+
+          {showAssistantPanel && showShellPanel && <ResizableHandle className="w-px bg-border" />}
 
           {/* Right sidebar - Utility terminal */}
           {showShellPanel && (
@@ -692,14 +687,14 @@ export default function ProjectPage() {
                   <TerminalIcon className="h-4 w-4 text-portal-orange" />
                   <span className="text-sm font-medium">Shell</span>
                 </div>
-                {utilityTerminalId && (
+                {utilityTerminalId && utilityTerminalId !== "closed" && (
                   <Button
                     variant="ghost"
                     size="icon"
                     className="h-6 w-6"
                     onClick={() => {
                       invoke("kill_terminal", { id: utilityTerminalId });
-                      setUtilityTerminalId(null);
+                      setUtilityTerminalId("closed");
                     }}
                   >
                     <X className="h-3 w-3" />
@@ -709,21 +704,20 @@ export default function ProjectPage() {
 
               {/* Utility terminal content */}
               <div className="flex-1 overflow-hidden" style={{ backgroundColor: terminalBg }}>
-                {utilityTerminalId ? (
-                  <Terminal id={utilityTerminalId} cwd={currentProject.path} />
+                {utilityTerminalId !== "closed" ? (
+                  <Terminal
+                    id={utilityTerminalId || undefined}
+                    command=""
+                    cwd={currentProject.path}
+                    onTerminalReady={(id) => setUtilityTerminalId(id)}
+                  />
                 ) : (
                   <div className="flex h-full flex-col items-center justify-center gap-3">
                     <TerminalIcon className="h-6 w-6 text-muted-foreground" />
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={async () => {
-                        const id = await invoke<string>("spawn_terminal", {
-                          shell: "",
-                          cwd: currentProject.path,
-                        });
-                        setUtilityTerminalId(id);
-                      }}
+                      onClick={() => setUtilityTerminalId(null)}
                     >
                       Start Shell
                     </Button>

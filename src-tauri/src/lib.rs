@@ -105,16 +105,22 @@ struct AppState {
 fn spawn_terminal(
     shell: String,
     cwd: String,
+    cols: Option<u16>,
+    rows: Option<u16>,
     app_handle: tauri::AppHandle,
     state: tauri::State<Arc<AppState>>,
 ) -> Result<String, String> {
     let id = Uuid::new_v4().to_string();
     let pty_system = native_pty_system();
 
+    // Use provided dimensions or fall back to defaults
+    let initial_cols = cols.unwrap_or(80);
+    let initial_rows = rows.unwrap_or(24);
+
     let pty_pair = pty_system
         .openpty(PtySize {
-            rows: 24,
-            cols: 80,
+            rows: initial_rows,
+            cols: initial_cols,
             pixel_width: 0,
             pixel_height: 0,
         })
