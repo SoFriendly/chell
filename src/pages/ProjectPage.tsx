@@ -253,14 +253,17 @@ export default function ProjectPage() {
       await invoke("kill_terminal", { id: tab.terminalId });
     }
 
-    setTerminalTabs(prev => {
-      const newTabs = prev.filter(t => t.id !== tabId);
-      // If we closed the active tab, switch to the last remaining tab
-      if (activeTabId === tabId && newTabs.length > 0) {
+    const newTabs = terminalTabs.filter(t => t.id !== tabId);
+    setTerminalTabs(newTabs);
+
+    // If we closed the active tab, switch to another tab or null
+    if (activeTabId === tabId) {
+      if (newTabs.length > 0) {
         setActiveTabId(newTabs[newTabs.length - 1].id);
+      } else {
+        setActiveTabId(null);
       }
-      return newTabs;
-    });
+    }
   };
 
   const startEditingTab = (tab: TerminalTab) => {
