@@ -10,7 +10,6 @@ import {
   HelpCircle,
   Plus,
   Bot,
-  Square,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -55,7 +54,7 @@ export default function ProjectPage() {
   const navigate = useNavigate();
   const { projects, openTab } = useProjectStore();
   const { setStatus, setDiffs, setBranches, setHistory, setLoading } = useGitStore();
-  const { assistantArgs } = useSettingsStore();
+  const { assistantArgs, defaultAssistant } = useSettingsStore();
   const [currentProject, setCurrentProject] = useState<Project | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [terminalTabs, setTerminalTabs] = useState<TerminalTab[]>([]);
@@ -122,10 +121,24 @@ export default function ProjectPage() {
         installed: installedAssistants.includes("aider"),
       },
       {
+        id: "gemini",
+        name: "Gemini CLI",
+        command: "gemini",
+        icon: <Bot className="h-4 w-4" />,
+        installed: installedAssistants.includes("gemini"),
+      },
+      {
+        id: "codex",
+        name: "OpenAI Codex",
+        command: "codex",
+        icon: <Bot className="h-4 w-4" />,
+        installed: installedAssistants.includes("codex"),
+      },
+      {
         id: "shell",
         name: "Shell",
         command: "",
-        icon: <Square className="h-4 w-4" />,
+        icon: <TerminalIcon className="h-4 w-4" />,
         installed: true,
       },
     ];
@@ -136,32 +149,29 @@ export default function ProjectPage() {
       let command = "";
       let name = "Shell";
 
-      if (assistantId) {
+      // Use provided assistantId, or fall back to default from settings
+      const targetAssistant = assistantId || defaultAssistant;
+
+      if (targetAssistant && targetAssistant !== "shell") {
         const options = getAssistantOptions();
-        const assistant = options.find(a => a.id === assistantId);
-        if (assistant) {
+        const assistant = options.find(a => a.id === targetAssistant);
+        if (assistant && assistant.installed) {
           command = assistant.command;
           name = assistant.name;
-          if (assistantId === "claude") {
-            const args = assistantArgs["claude-code"] || "";
-            if (args) command = `${command} ${args}`;
-          } else if (assistantId === "aider") {
-            const args = assistantArgs["aider"] || "";
+          // Get args based on assistant id
+          const argsKey = targetAssistant === "claude" ? "claude-code" : targetAssistant;
+          const args = assistantArgs[argsKey] || "";
+          if (args) command = `${command} ${args}`;
+        } else if (!assistant?.installed) {
+          // Fall back to first installed assistant if default isn't installed
+          const firstInstalled = options.find(a => a.installed && a.id !== "shell");
+          if (firstInstalled) {
+            command = firstInstalled.command;
+            name = firstInstalled.name;
+            const argsKey = firstInstalled.id === "claude" ? "claude-code" : firstInstalled.id;
+            const args = assistantArgs[argsKey] || "";
             if (args) command = `${command} ${args}`;
           }
-        }
-      } else {
-        // Default to first installed assistant
-        if (installedAssistants.includes("claude")) {
-          command = "claude";
-          name = "Claude Code";
-          const args = assistantArgs["claude-code"] || "";
-          if (args) command = `${command} ${args}`;
-        } else if (installedAssistants.includes("aider")) {
-          command = "aider";
-          name = "Aider";
-          const args = assistantArgs["aider"] || "";
-          if (args) command = `${command} ${args}`;
         }
       }
 
