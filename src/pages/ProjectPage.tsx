@@ -151,6 +151,14 @@ export default function ProjectPage() {
   const savedGitWidth = useRef(280);
   const savedShellWidth = useRef(400);
 
+  // Trigger terminal resize when panel visibility changes
+  useEffect(() => {
+    // Small delay to let the layout settle, then trigger resize
+    const timer = setTimeout(() => {
+      window.dispatchEvent(new Event('resize'));
+    }, 50);
+    return () => clearTimeout(timer);
+  }, [showGitPanel, showAssistantPanel, showShellPanel]);
 
   useEffect(() => {
     const project = projects.find((p) => p.id === projectId);
