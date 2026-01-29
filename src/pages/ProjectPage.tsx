@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
@@ -131,11 +131,11 @@ export default function ProjectPage() {
     }
   };
 
-  const refreshGitData = () => {
+  const refreshGitData = useCallback(() => {
     if (currentProject) {
       loadGitData(currentProject.path);
     }
-  };
+  }, [currentProject]);
 
   useEffect(() => {
     const unlisten = listen("git-refresh", () => {

@@ -291,6 +291,21 @@ fn clone_repo(url: String, path: String) -> Result<String, String> {
     GitService::clone_repo(&url, &path)
 }
 
+#[tauri::command]
+fn fetch_remote(repo_path: String, remote: String) -> Result<(), String> {
+    GitService::fetch(&repo_path, &remote)
+}
+
+#[tauri::command]
+fn pull_remote(repo_path: String, remote: String) -> Result<(), String> {
+    GitService::pull(&repo_path, &remote)
+}
+
+#[tauri::command]
+fn push_remote(repo_path: String, remote: String) -> Result<(), String> {
+    GitService::push(&repo_path, &remote)
+}
+
 // Project commands
 #[tauri::command]
 fn add_project(project: Project, state: tauri::State<Arc<AppState>>) -> Result<(), String> {
@@ -554,6 +569,9 @@ pub fn run() {
             reset_to_commit,
             init_repo,
             clone_repo,
+            fetch_remote,
+            pull_remote,
+            push_remote,
             // Project
             add_project,
             remove_project,

@@ -156,7 +156,9 @@ impl GitService {
         )
         .map_err(|e| e.to_string())?;
 
-        Ok(diffs.into_inner().into_values().collect())
+        let mut result: Vec<FileDiff> = diffs.into_inner().into_values().collect();
+        result.sort_by(|a, b| a.path.cmp(&b.path));
+        Ok(result)
     }
 
     pub fn commit(repo_path: &str, message: &str) -> Result<(), String> {
@@ -366,5 +368,59 @@ impl GitService {
         std::fs::create_dir_all(path).map_err(|e| e.to_string())?;
         Repository::clone(url, path).map_err(|e| e.to_string())?;
         Ok(path.to_string())
+    }
+
+    /// Fetch from remote using system git (handles credentials properly)
+    pub fn fetch(repo_path: &str, remote: &str) -> Result<(), String> {
+        let output = std::process::Command::new("git")
+            .arg("-C")
+            .arg(repo_path)
+            .arg("fetch")
+            .arg(remote)
+            .output()
+            .map_err(|e| format!("Failed to run git: {}", e))?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(format!("git fetch failed: {}", stderr.trim()));
+        }
+
+        Ok(())
+    }
+
+    /// Pull from remote using system git (handles credentials properly)
+    pub fn pull(repo_path: &str, remote: &str) -> Result<(), String> {
+        let output = std::process::Command::new("git")
+            .arg("-C")
+            .arg(repo_path)
+            .arg("pull")
+            .arg(remote)
+            .output()
+            .map_err(|e| format!("Failed to run git: {}", e))?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(format!("git pull failed: {}", stderr.trim()));
+        }
+
+        Ok(())
+    }
+
+    /// Push to remote using system git (handles credentials properly)
+    pub fn push(repo_path: &str, remote: &str) -> Result<(), String> {
+        let output = std::process::Command::new("git")
+            .arg("-C")
+            .arg(repo_path)
+            .arg("push")
+            .arg(remote)
+            .output()
+            .map_err(|e| format!("Failed to run git: {}", e))?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(format!("git push failed: {}", stderr.trim()));
+        }
+
+        Ok(())
     }
 }

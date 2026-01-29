@@ -1,10 +1,20 @@
 import { useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
-import { Settings, Key, Bot, Zap, Palette, Check, FolderOpen, Cog } from "lucide-react";
+import {
+  Settings,
+  Circle,
+  Palette,
+  Sparkles,
+  Keyboard,
+  Info,
+  FolderOpen,
+  Check,
+} from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
 import {
   Dialog,
   DialogContent,
@@ -12,97 +22,49 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Separator } from "@/components/ui/separator";
 import { useSettingsStore } from "@/stores/settingsStore";
-import type { AIProvider } from "@/types";
+import { cn } from "@/lib/utils";
 
 interface SettingsSheetProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
 
-const AI_PROVIDERS = [
-  { id: "anthropic", name: "Anthropic", models: ["claude-3-5-sonnet-20241022", "claude-3-opus-20240229"] },
-  { id: "openai", name: "OpenAI", models: ["gpt-4o", "gpt-4-turbo"] },
-  { id: "groq", name: "Groq", models: ["llama-3.1-70b-versatile", "mixtral-8x7b-32768"] },
-  { id: "custom", name: "Custom (OpenAI-compatible)", models: [] },
+type SettingsTab = "general" | "appearance" | "ai" | "keyboard" | "about";
+
+const NAV_ITEMS: { id: SettingsTab; label: string; icon: React.ReactNode }[] = [
+  { id: "general", label: "General", icon: <Circle className="h-4 w-4" /> },
+  { id: "appearance", label: "Appearance", icon: <Palette className="h-4 w-4" /> },
+  { id: "ai", label: "AI Behavior", icon: <Sparkles className="h-4 w-4" /> },
+  { id: "keyboard", label: "Keyboard", icon: <Keyboard className="h-4 w-4" /> },
+  { id: "about", label: "About", icon: <Info className="h-4 w-4" /> },
+];
+
+const THEMES = [
+  { id: "dark", name: "Chell Dark", gradient: "from-portal-orange/60 to-neutral-900" },
+  { id: "tokyo", name: "Tokyo Night", gradient: "from-indigo-500/60 to-slate-900" },
+  { id: "light", name: "Light", gradient: "from-slate-200 to-slate-100" },
 ];
 
 export default function SettingsSheet({ open, onOpenChange }: SettingsSheetProps) {
   const {
     theme,
     setTheme,
-    aiProvider,
-    setAIProvider,
     assistantArgs,
     setAssistantArgs,
     defaultClonePath,
     setDefaultClonePath,
   } = useSettingsStore();
-  const [selectedProvider, setSelectedProvider] = useState(aiProvider?.id || "");
-  const [apiKey, setApiKey] = useState(aiProvider?.apiKey || "");
-  const [model, setModel] = useState(aiProvider?.model || "");
-  const [customEndpoint, setCustomEndpoint] = useState(aiProvider?.endpoint || "");
+
+  const [activeTab, setActiveTab] = useState<SettingsTab>("general");
+  const [localDefaultClonePath, setLocalDefaultClonePath] = useState(defaultClonePath || "");
   const [claudeCodeArgs, setClaudeCodeArgs] = useState(assistantArgs["claude-code"] || "");
   const [aiderArgs, setAiderArgs] = useState(assistantArgs["aider"] || "");
-  const [testingConnection, setTestingConnection] = useState(false);
-  const [localDefaultClonePath, setLocalDefaultClonePath] = useState(defaultClonePath || "");
 
-  const handleSaveAIProvider = () => {
-    if (!selectedProvider) {
-      setAIProvider(undefined);
-      toast.success("AI provider cleared");
-      return;
-    }
-
-    const provider: AIProvider = {
-      id: selectedProvider,
-      name: AI_PROVIDERS.find((p) => p.id === selectedProvider)?.name || selectedProvider,
-      apiKey,
-      model,
-      endpoint: selectedProvider === "custom" ? customEndpoint : undefined,
-    };
-
-    setAIProvider(provider);
-    toast.success("AI provider saved");
-  };
-
-  const handleTestConnection = async () => {
-    if (!apiKey) {
-      toast.error("Please enter an API key");
-      return;
-    }
-    setTestingConnection(true);
-    try {
-      await invoke("test_ai_connection", {
-        provider: selectedProvider,
-        apiKey,
-        model,
-        endpoint: customEndpoint || undefined,
-      });
-      toast.success("Connection successful");
-    } catch (error) {
-      toast.error("Connection failed");
-      console.error(error);
-    } finally {
-      setTestingConnection(false);
-    }
-  };
-
-  const handleSaveAssistantArgs = () => {
-    setAssistantArgs("claude-code", claudeCodeArgs);
-    setAssistantArgs("aider", aiderArgs);
-    toast.success("Assistant settings saved");
-  };
+  // AI behavior toggles
+  const [autoCommitMessage, setAutoCommitMessage] = useState(true);
+  const [autoFetchRemote, setAutoFetchRemote] = useState(false);
 
   const handleSelectDefaultClonePath = async () => {
     try {
@@ -115,286 +77,317 @@ export default function SettingsSheet({ open, onOpenChange }: SettingsSheetProps
 
       if (selected && typeof selected === "string") {
         setLocalDefaultClonePath(selected);
+        setDefaultClonePath(selected);
+        toast.success("Default clone path updated");
       }
     } catch (error) {
       console.error("Failed to select folder:", error);
     }
   };
 
-  const handleSaveGeneralSettings = () => {
-    setDefaultClonePath(localDefaultClonePath || undefined);
-    toast.success("General settings saved");
+  const handleSaveAssistantArgs = () => {
+    setAssistantArgs("claude-code", claudeCodeArgs);
+    setAssistantArgs("aider", aiderArgs);
+    toast.success("Assistant settings saved");
   };
 
-  const handleClearDefaultClonePath = () => {
-    setLocalDefaultClonePath("");
-    setDefaultClonePath(undefined);
-    toast.success("Default clone path cleared");
+  const handleThemeChange = (newTheme: string) => {
+    const themeValue = newTheme === "light" ? "light" : "dark";
+    setTheme(themeValue);
+    if (themeValue === "dark") {
+      document.documentElement.classList.add("dark");
+    } else {
+      document.documentElement.classList.remove("dark");
+    }
+    toast.success(`Theme set to ${newTheme}`);
   };
-
-  const currentProviderModels = AI_PROVIDERS.find((p) => p.id === selectedProvider)?.models || [];
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Settings className="h-5 w-5" />
-            Settings
-          </DialogTitle>
-          <DialogDescription>
-            Configure Chell to your preferences
-          </DialogDescription>
-        </DialogHeader>
-
-        <Tabs defaultValue="general" className="mt-4">
-          <TabsList className="grid w-full grid-cols-4">
-            <TabsTrigger value="general" className="flex items-center gap-2">
-              <Cog className="h-4 w-4" />
-              General
-            </TabsTrigger>
-            <TabsTrigger value="ai" className="flex items-center gap-2">
-              <Key className="h-4 w-4" />
-              AI
-            </TabsTrigger>
-            <TabsTrigger value="assistants" className="flex items-center gap-2">
-              <Bot className="h-4 w-4" />
-              Assistants
-            </TabsTrigger>
-            <TabsTrigger value="appearance" className="flex items-center gap-2">
-              <Palette className="h-4 w-4" />
-              Appearance
-            </TabsTrigger>
-          </TabsList>
-
-          {/* General Settings */}
-          <TabsContent value="general" className="mt-4">
-            <ScrollArea className="h-[400px] pr-4">
-              <div className="space-y-6">
-                <div className="space-y-4">
-                  <div>
-                    <h3 className="text-sm font-medium">Default Clone Path</h3>
-                    <p className="text-xs text-muted-foreground">
-                      All cloned repositories will be placed in this directory by default
-                    </p>
-                  </div>
-                  <div className="flex gap-2">
-                    <Input
-                      placeholder="e.g., ~/Projects"
-                      value={localDefaultClonePath}
-                      onChange={(e) => setLocalDefaultClonePath(e.target.value)}
-                      className="flex-1"
-                    />
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="icon"
-                      onClick={handleSelectDefaultClonePath}
-                      title="Browse..."
-                    >
-                      <FolderOpen className="h-4 w-4" />
-                    </Button>
-                  </div>
-                  {localDefaultClonePath && (
-                    <p className="text-xs text-muted-foreground">
-                      Repos will be cloned to: {localDefaultClonePath}/repo-name
-                    </p>
+      <DialogContent className="max-w-3xl p-0 gap-0 overflow-hidden">
+        <div className="flex h-[500px]">
+          {/* Left sidebar navigation */}
+          <div className="w-48 border-r border-border bg-card p-2">
+            <nav className="space-y-1">
+              {NAV_ITEMS.map((item) => (
+                <button
+                  key={item.id}
+                  onClick={() => setActiveTab(item.id)}
+                  className={cn(
+                    "flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors",
+                    activeTab === item.id
+                      ? "bg-portal-orange/10 text-portal-orange"
+                      : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
                   )}
-                </div>
+                >
+                  <span className={activeTab === item.id ? "text-portal-orange" : ""}>
+                    {item.icon}
+                  </span>
+                  {item.label}
+                </button>
+              ))}
+            </nav>
+          </div>
 
-                <div className="flex gap-2">
-                  <Button onClick={handleSaveGeneralSettings}>
-                    <Check className="mr-2 h-4 w-4" />
-                    Save
-                  </Button>
-                  {localDefaultClonePath && (
-                    <Button variant="outline" onClick={handleClearDefaultClonePath}>
-                      Clear
-                    </Button>
-                  )}
-                </div>
-              </div>
-            </ScrollArea>
-          </TabsContent>
+          {/* Main content */}
+          <ScrollArea className="flex-1">
+            <div className="p-6">
+              {/* General Tab */}
+              {activeTab === "general" && (
+                <div className="space-y-8">
+                  {/* Git Configuration Section */}
+                  <section>
+                    <h2 className="text-lg font-semibold">Git Configuration</h2>
+                    <p className="text-sm text-muted-foreground mb-6">
+                      Manage your global git identity and repository behaviors.
+                    </p>
 
-          {/* AI Provider Settings */}
-          <TabsContent value="ai" className="mt-4">
-            <ScrollArea className="h-[400px] pr-4">
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Provider</label>
-                  <Select value={selectedProvider} onValueChange={setSelectedProvider}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select AI provider" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="">None (AI features disabled)</SelectItem>
-                      {AI_PROVIDERS.map((provider) => (
-                        <SelectItem key={provider.id} value={provider.id}>
-                          {provider.name}
-                        </SelectItem>
+                    <div className="space-y-6">
+                      {/* Default Clone Path */}
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm font-medium">Default Clone Path</p>
+                          <p className="text-xs text-muted-foreground">
+                            All cloned repositories will be placed in this directory.
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Input
+                            value={localDefaultClonePath}
+                            onChange={(e) => {
+                              setLocalDefaultClonePath(e.target.value);
+                              setDefaultClonePath(e.target.value || undefined);
+                            }}
+                            placeholder="~/Projects"
+                            className="w-56 h-9 bg-muted/50"
+                          />
+                          <Button
+                            variant="outline"
+                            size="icon"
+                            className="h-9 w-9"
+                            onClick={handleSelectDefaultClonePath}
+                          >
+                            <FolderOpen className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+
+                      {/* Auto Fetch Remote */}
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm font-medium">Auto-Fetch Remote</p>
+                          <p className="text-xs text-muted-foreground">
+                            Periodically check for upstream changes in the background.
+                          </p>
+                        </div>
+                        <Switch
+                          checked={autoFetchRemote}
+                          onCheckedChange={setAutoFetchRemote}
+                        />
+                      </div>
+                    </div>
+                  </section>
+
+                  {/* Assistant Arguments Section */}
+                  <section>
+                    <h2 className="text-lg font-semibold">Assistant Configuration</h2>
+                    <p className="text-sm text-muted-foreground mb-6">
+                      Default launch arguments for coding assistants.
+                    </p>
+
+                    <div className="space-y-6">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm font-medium">Claude Code</p>
+                          <p className="text-xs text-muted-foreground">
+                            Arguments passed when launching Claude Code.
+                          </p>
+                        </div>
+                        <Input
+                          value={claudeCodeArgs}
+                          onChange={(e) => setClaudeCodeArgs(e.target.value)}
+                          placeholder="--dangerously-skip-permissions"
+                          className="w-56 h-9 bg-muted/50"
+                          onBlur={handleSaveAssistantArgs}
+                        />
+                      </div>
+
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm font-medium">Aider</p>
+                          <p className="text-xs text-muted-foreground">
+                            Arguments passed when launching Aider.
+                          </p>
+                        </div>
+                        <Input
+                          value={aiderArgs}
+                          onChange={(e) => setAiderArgs(e.target.value)}
+                          placeholder="--model gpt-4"
+                          className="w-56 h-9 bg-muted/50"
+                          onBlur={handleSaveAssistantArgs}
+                        />
+                      </div>
+                    </div>
+                  </section>
+                </div>
+              )}
+
+              {/* Appearance Tab */}
+              {activeTab === "appearance" && (
+                <div className="space-y-8">
+                  <section>
+                    <h2 className="text-lg font-semibold">Appearance</h2>
+                    <p className="text-sm text-muted-foreground mb-6">
+                      Customize the look and feel of your terminal environment.
+                    </p>
+
+                    <div className="grid grid-cols-3 gap-4">
+                      {THEMES.map((t) => (
+                        <button
+                          key={t.id}
+                          onClick={() => handleThemeChange(t.id)}
+                          className={cn(
+                            "group relative rounded-lg border-2 p-1 transition-all",
+                            theme === (t.id === "light" ? "light" : "dark") && t.id !== "tokyo"
+                              ? "border-portal-orange"
+                              : "border-transparent hover:border-muted"
+                          )}
+                        >
+                          <div
+                            className={cn(
+                              "h-20 rounded-md bg-gradient-to-br",
+                              t.gradient
+                            )}
+                          />
+                          <p className="mt-2 text-center text-xs font-medium">
+                            {t.name}
+                          </p>
+                        </button>
                       ))}
-                    </SelectContent>
-                  </Select>
+                    </div>
+                  </section>
                 </div>
+              )}
 
-                {selectedProvider && (
-                  <>
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium">API Key</label>
-                      <Input
-                        type="password"
-                        placeholder="Enter your API key"
-                        value={apiKey}
-                        onChange={(e) => setApiKey(e.target.value)}
-                      />
+              {/* AI Behavior Tab */}
+              {activeTab === "ai" && (
+                <div className="space-y-8">
+                  <section>
+                    <h2 className="text-lg font-semibold">AI Assistant Behavior</h2>
+                    <p className="text-sm text-muted-foreground mb-6">
+                      Tune how the AI interacts with your workflow and code.
+                    </p>
+
+                    <div className="space-y-6">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm font-medium">Commit Message Generation</p>
+                          <p className="text-xs text-muted-foreground">
+                            Automatically generate draft commit messages for staged changes.
+                          </p>
+                        </div>
+                        <Switch
+                          checked={autoCommitMessage}
+                          onCheckedChange={setAutoCommitMessage}
+                        />
+                      </div>
+
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm font-medium">Analysis Deep Scan</p>
+                          <p className="text-xs text-muted-foreground">
+                            Enables semantic code analysis for better context awareness (Higher token usage).
+                          </p>
+                        </div>
+                        <Switch checked={false} onCheckedChange={() => {}} />
+                      </div>
+                    </div>
+                  </section>
+                </div>
+              )}
+
+              {/* Keyboard Tab */}
+              {activeTab === "keyboard" && (
+                <div className="space-y-8">
+                  <section>
+                    <h2 className="text-lg font-semibold">Keyboard Shortcuts</h2>
+                    <p className="text-sm text-muted-foreground mb-6">
+                      Global hotkeys for rapid terminal operations.
+                    </p>
+
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between py-2">
+                        <p className="text-sm">New Terminal</p>
+                        <kbd className="rounded bg-muted px-2 py-1 text-xs font-mono">
+                          ⌘ T
+                        </kbd>
+                      </div>
+                      <div className="flex items-center justify-between py-2">
+                        <p className="text-sm">Commit Changes</p>
+                        <kbd className="rounded bg-muted px-2 py-1 text-xs font-mono">
+                          ⌘ Enter
+                        </kbd>
+                      </div>
+                      <div className="flex items-center justify-between py-2">
+                        <p className="text-sm">Refresh Git Status</p>
+                        <kbd className="rounded bg-muted px-2 py-1 text-xs font-mono">
+                          ⌘ R
+                        </kbd>
+                      </div>
+                      <div className="flex items-center justify-between py-2">
+                        <p className="text-sm">Toggle Git Panel</p>
+                        <kbd className="rounded bg-muted px-2 py-1 text-xs font-mono">
+                          ⌘ B
+                        </kbd>
+                      </div>
+                      <div className="flex items-center justify-between py-2">
+                        <p className="text-sm">Open Settings</p>
+                        <kbd className="rounded bg-muted px-2 py-1 text-xs font-mono">
+                          ⌘ ,
+                        </kbd>
+                      </div>
+                    </div>
+                  </section>
+                </div>
+              )}
+
+              {/* About Tab */}
+              {activeTab === "about" && (
+                <div className="space-y-8">
+                  <section>
+                    <h2 className="text-lg font-semibold">About Chell</h2>
+                    <p className="text-sm text-muted-foreground mb-6">
+                      A visual git client designed for AI coding assistants.
+                    </p>
+
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between py-2">
+                        <p className="text-sm text-muted-foreground">Version</p>
+                        <p className="text-sm font-mono">0.1.0</p>
+                      </div>
+                      <div className="flex items-center justify-between py-2">
+                        <p className="text-sm text-muted-foreground">Build</p>
+                        <p className="text-sm font-mono">2026.01.29</p>
+                      </div>
+                      <div className="flex items-center justify-between py-2">
+                        <p className="text-sm text-muted-foreground">License</p>
+                        <p className="text-sm">MIT</p>
+                      </div>
+                    </div>
+
+                    <div className="mt-8 rounded-lg border border-border bg-muted/30 p-4">
                       <p className="text-xs text-muted-foreground">
-                        Your API key is stored securely in the system keychain
+                        Named after the protagonist of Portal—the silent character who escapes
+                        through portals. Thematically aligned with the concept of portals between
+                        your ideas and your code.
                       </p>
                     </div>
-
-                    {selectedProvider === "custom" ? (
-                      <>
-                        <div className="space-y-2">
-                          <label className="text-sm font-medium">Endpoint URL</label>
-                          <Input
-                            placeholder="https://api.example.com/v1"
-                            value={customEndpoint}
-                            onChange={(e) => setCustomEndpoint(e.target.value)}
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <label className="text-sm font-medium">Model</label>
-                          <Input
-                            placeholder="Model name"
-                            value={model}
-                            onChange={(e) => setModel(e.target.value)}
-                          />
-                        </div>
-                      </>
-                    ) : (
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium">Model</label>
-                        <Select value={model} onValueChange={setModel}>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select model" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {currentProviderModels.map((m) => (
-                              <SelectItem key={m} value={m}>
-                                {m}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    )}
-
-                    <div className="flex gap-2">
-                      <Button
-                        variant="outline"
-                        onClick={handleTestConnection}
-                        disabled={testingConnection || !apiKey}
-                      >
-                        <Zap className="mr-2 h-4 w-4" />
-                        {testingConnection ? "Testing..." : "Test Connection"}
-                      </Button>
-                      <Button onClick={handleSaveAIProvider}>
-                        <Check className="mr-2 h-4 w-4" />
-                        Save
-                      </Button>
-                    </div>
-                  </>
-                )}
-
-                {!selectedProvider && (
-                  <Button onClick={handleSaveAIProvider}>
-                    <Check className="mr-2 h-4 w-4" />
-                    Save
-                  </Button>
-                )}
-              </div>
-            </ScrollArea>
-          </TabsContent>
-
-          {/* Assistant Settings */}
-          <TabsContent value="assistants" className="mt-4">
-            <ScrollArea className="h-[400px] pr-4">
-              <div className="space-y-6">
-                <div className="space-y-4">
-                  <div>
-                    <h3 className="text-sm font-medium">Claude Code</h3>
-                    <p className="text-xs text-muted-foreground">
-                      Default arguments for Claude Code
-                    </p>
-                  </div>
-                  <Input
-                    placeholder="e.g., --dangerously-skip-permissions"
-                    value={claudeCodeArgs}
-                    onChange={(e) => setClaudeCodeArgs(e.target.value)}
-                  />
+                  </section>
                 </div>
-
-                <Separator />
-
-                <div className="space-y-4">
-                  <div>
-                    <h3 className="text-sm font-medium">Aider</h3>
-                    <p className="text-xs text-muted-foreground">
-                      Default arguments for Aider
-                    </p>
-                  </div>
-                  <Input
-                    placeholder="e.g., --model gpt-4"
-                    value={aiderArgs}
-                    onChange={(e) => setAiderArgs(e.target.value)}
-                  />
-                </div>
-
-                <Button onClick={handleSaveAssistantArgs}>
-                  <Check className="mr-2 h-4 w-4" />
-                  Save Assistant Settings
-                </Button>
-              </div>
-            </ScrollArea>
-          </TabsContent>
-
-          {/* Appearance Settings */}
-          <TabsContent value="appearance" className="mt-4">
-            <ScrollArea className="h-[400px] pr-4">
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Theme</label>
-                  <Select
-                    value={theme}
-                    onValueChange={(value: "light" | "dark" | "system") => {
-                      setTheme(value);
-                      // Apply theme to document
-                      if (value === "dark" || (value === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches)) {
-                        document.documentElement.classList.add("dark");
-                      } else {
-                        document.documentElement.classList.remove("dark");
-                      }
-                      toast.success(`Theme set to ${value}`);
-                    }}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="dark">Dark</SelectItem>
-                      <SelectItem value="light">Light</SelectItem>
-                      <SelectItem value="system">System</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <p className="text-xs text-muted-foreground">
-                    Dark mode is recommended for terminal work
-                  </p>
-                </div>
-              </div>
-            </ScrollArea>
-          </TabsContent>
-        </Tabs>
+              )}
+            </div>
+          </ScrollArea>
+        </div>
       </DialogContent>
     </Dialog>
   );

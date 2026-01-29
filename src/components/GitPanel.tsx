@@ -8,6 +8,11 @@ import {
   ChevronRight,
   Sparkles,
   Loader2,
+  ArrowDownToLine,
+  ArrowUpFromLine,
+  GitBranch,
+  Plus,
+  Check,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -20,6 +25,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -57,27 +69,57 @@ export default function GitPanel({ projectPath, onRefresh }: GitPanelProps) {
   const [commitDescription, setCommitDescription] = useState("");
   const [isCommitting, setIsCommitting] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isPulling, setIsPulling] = useState(false);
+  const [isPushing, setIsPushing] = useState(false);
   const [showBranchDialog, setShowBranchDialog] = useState(false);
   const [newBranchName, setNewBranchName] = useState("");
+  const [isCreatingBranch, setIsCreatingBranch] = useState(false);
+  const [isSwitchingBranch, setIsSwitchingBranch] = useState(false);
   const [expandedFiles, setExpandedFiles] = useState<Set<string>>(new Set());
   const lastDiffsHash = useRef<string>("");
+  const refreshIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const hasGeneratedInitialMessage = useRef(false);
 
   const currentBranch = branches.find((b) => b.isHead);
+  const localBranches = branches.filter((b) => !b.isRemote);
 
   // Separate staged and unstaged changes (for now, treating all as unstaged)
   const unstagedChanges = diffs;
   const stagedChanges: FileDiff[] = [];
 
-  // Auto-generate commit message when diffs change
+  // Auto-refresh git status every 2 seconds for real-time updates
   useEffect(() => {
-    const diffsHash = JSON.stringify(diffs.map(d => d.path + d.status));
-    if (diffs.length > 0 && diffsHash !== lastDiffsHash.current) {
-      lastDiffsHash.current = diffsHash;
-      generateCommitMessage();
-    } else if (diffs.length === 0) {
+    refreshIntervalRef.current = setInterval(() => {
+      onRefresh();
+    }, 2000);
+
+    return () => {
+      if (refreshIntervalRef.current) {
+        clearInterval(refreshIntervalRef.current);
+      }
+    };
+  }, [onRefresh]);
+
+  // Auto-generate commit message only when the set of changed files changes
+  useEffect(() => {
+    const diffsHash = JSON.stringify(diffs.map(d => d.path + d.status).sort());
+
+    if (diffs.length === 0) {
+      // Reset when no changes
       setCommitSubject("");
       setCommitDescription("");
       lastDiffsHash.current = "";
+      hasGeneratedInitialMessage.current = false;
+    } else if (diffsHash !== lastDiffsHash.current) {
+      // Files changed - generate new message
+      const previousHash = lastDiffsHash.current;
+      lastDiffsHash.current = diffsHash;
+
+      // Only auto-generate on first load or when files actually change
+      if (!previousHash || !hasGeneratedInitialMessage.current) {
+        hasGeneratedInitialMessage.current = true;
+        generateCommitMessage();
+      }
     }
   }, [diffs]);
 
@@ -125,6 +167,39 @@ export default function GitPanel({ projectPath, onRefresh }: GitPanelProps) {
     }
   };
 
+  const handlePull = async () => {
+    setIsPulling(true);
+    try {
+      await invoke("pull_remote", { repoPath: projectPath, remote: "origin" });
+      toast.success("Pulled from remote");
+      onRefresh();
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      if (errorMsg.includes("merge required")) {
+        toast.error("Cannot fast-forward. Merge or rebase required.");
+      } else {
+        toast.error("Failed to pull");
+      }
+      console.error(error);
+    } finally {
+      setIsPulling(false);
+    }
+  };
+
+  const handlePush = async () => {
+    setIsPushing(true);
+    try {
+      await invoke("push_remote", { repoPath: projectPath, remote: "origin" });
+      toast.success("Pushed to remote");
+      onRefresh();
+    } catch (error) {
+      toast.error("Failed to push");
+      console.error(error);
+    } finally {
+      setIsPushing(false);
+    }
+  };
+
   const handleDiscardFile = async (filePath: string) => {
     try {
       await invoke("discard_file", { repoPath: projectPath, filePath });
@@ -138,15 +213,36 @@ export default function GitPanel({ projectPath, onRefresh }: GitPanelProps) {
 
   const handleCreateBranch = async () => {
     if (!newBranchName) return;
+    setIsCreatingBranch(true);
     try {
       await invoke("create_branch", { repoPath: projectPath, name: newBranchName });
       toast.success(`Created branch ${newBranchName}`);
+      // Automatically switch to the new branch
+      await invoke("checkout_branch", { repoPath: projectPath, branch: newBranchName });
+      toast.success(`Switched to ${newBranchName}`);
       setShowBranchDialog(false);
       setNewBranchName("");
       onRefresh();
     } catch (error) {
       toast.error("Failed to create branch");
       console.error(error);
+    } finally {
+      setIsCreatingBranch(false);
+    }
+  };
+
+  const handleSwitchBranch = async (branchName: string) => {
+    if (branchName === currentBranch?.name) return;
+    setIsSwitchingBranch(true);
+    try {
+      await invoke("checkout_branch", { repoPath: projectPath, branch: branchName });
+      toast.success(`Switched to ${branchName}`);
+      onRefresh();
+    } catch (error) {
+      toast.error("Failed to switch branch");
+      console.error(error);
+    } finally {
+      setIsSwitchingBranch(false);
     }
   };
 
@@ -251,27 +347,105 @@ export default function GitPanel({ projectPath, onRefresh }: GitPanelProps) {
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
-      {/* Refresh button */}
-      <div className="flex items-center justify-end px-4 py-2">
-        <Tooltip>
-          <TooltipTrigger asChild>
+      {/* Branch selector and actions */}
+      <div className="flex items-center justify-between gap-2 border-b border-border px-4 py-2">
+        {/* Branch dropdown */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
             <Button
               variant="ghost"
-              size="icon"
-              className="h-7 w-7"
-              onClick={onRefresh}
-              disabled={loading}
+              size="sm"
+              className="h-7 gap-1.5 px-2 text-xs font-normal"
+              disabled={isSwitchingBranch}
             >
-              <RefreshCw className={cn("h-3.5 w-3.5", loading && "animate-spin")} />
+              <GitBranch className="h-3 w-3" />
+              <span className="max-w-[100px] truncate">{currentBranch?.name || "main"}</span>
+              {isSwitchingBranch ? (
+                <Loader2 className="h-3 w-3 animate-spin" />
+              ) : (
+                <ChevronDown className="h-3 w-3" />
+              )}
             </Button>
-          </TooltipTrigger>
-          <TooltipContent>Refresh</TooltipContent>
-        </Tooltip>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" className="w-56">
+            {localBranches.map((branch) => (
+              <DropdownMenuItem
+                key={branch.name}
+                onClick={() => handleSwitchBranch(branch.name)}
+                className="flex items-center justify-between"
+              >
+                <span className="truncate">{branch.name}</span>
+                {branch.isHead && <Check className="h-3 w-3 text-portal-orange" />}
+              </DropdownMenuItem>
+            ))}
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={() => setShowBranchDialog(true)}>
+              <Plus className="mr-2 h-3 w-3" />
+              New branch
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+
+        {/* Actions */}
+        <div className="flex items-center gap-1">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7"
+                onClick={handlePull}
+                disabled={isPulling}
+              >
+                {isPulling ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <ArrowDownToLine className="h-3.5 w-3.5" />
+                )}
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Pull</TooltipContent>
+          </Tooltip>
+
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7"
+                onClick={handlePush}
+                disabled={isPushing}
+              >
+                {isPushing ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <ArrowUpFromLine className="h-3.5 w-3.5" />
+                )}
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Push</TooltipContent>
+          </Tooltip>
+
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7"
+                onClick={onRefresh}
+                disabled={loading}
+              >
+                <RefreshCw className={cn("h-3.5 w-3.5", loading && "animate-spin")} />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Refresh</TooltipContent>
+          </Tooltip>
+        </div>
       </div>
 
       {/* Scrollable content */}
       <ScrollArea className="flex-1">
-        <div className="px-4 pb-4">
+        <div className="px-4 pb-4 pt-2">
           {/* Unstaged Changes */}
           {unstagedChanges.length > 0 && (
             <div className="mb-4">
@@ -365,20 +539,25 @@ export default function GitPanel({ projectPath, onRefresh }: GitPanelProps) {
           <DialogHeader>
             <DialogTitle>Create New Branch</DialogTitle>
             <DialogDescription>
-              Create a new branch from the current HEAD
+              Create a new branch from the current HEAD and switch to it
             </DialogDescription>
           </DialogHeader>
           <Input
             placeholder="Branch name"
             value={newBranchName}
             onChange={(e) => setNewBranchName(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && newBranchName.trim()) {
+                handleCreateBranch();
+              }
+            }}
           />
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowBranchDialog(false)}>
               Cancel
             </Button>
-            <Button onClick={handleCreateBranch} disabled={!newBranchName.trim()}>
-              Create
+            <Button onClick={handleCreateBranch} disabled={!newBranchName.trim() || isCreatingBranch}>
+              {isCreatingBranch ? "Creating..." : "Create & Switch"}
             </Button>
           </DialogFooter>
         </DialogContent>
