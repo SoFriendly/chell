@@ -393,7 +393,7 @@ export default function GitPanel({ projectPath, onRefresh }: GitPanelProps) {
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-7 w-7"
+                className={cn("h-7 w-7", isPulling && "text-portal-orange")}
                 onClick={handlePull}
                 disabled={isPulling}
               >
@@ -404,7 +404,7 @@ export default function GitPanel({ projectPath, onRefresh }: GitPanelProps) {
                 )}
               </Button>
             </TooltipTrigger>
-            <TooltipContent>Pull</TooltipContent>
+            <TooltipContent>{isPulling ? "Pulling..." : "Pull"}</TooltipContent>
           </Tooltip>
 
           <Tooltip>
@@ -412,7 +412,7 @@ export default function GitPanel({ projectPath, onRefresh }: GitPanelProps) {
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-7 w-7"
+                className={cn("h-7 w-7", isPushing && "text-portal-orange")}
                 onClick={handlePush}
                 disabled={isPushing}
               >
@@ -423,7 +423,7 @@ export default function GitPanel({ projectPath, onRefresh }: GitPanelProps) {
                 )}
               </Button>
             </TooltipTrigger>
-            <TooltipContent>Push</TooltipContent>
+            <TooltipContent>{isPushing ? "Pushing..." : "Push"}</TooltipContent>
           </Tooltip>
 
           <Tooltip>

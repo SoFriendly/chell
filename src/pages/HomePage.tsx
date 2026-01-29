@@ -13,6 +13,7 @@ import {
   Terminal,
   Sparkles,
   ArrowRight,
+  HelpCircle,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -23,7 +24,6 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import {
@@ -33,8 +33,10 @@ import {
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useProjectStore } from "@/stores/projectStore";
 import { useSettingsStore } from "@/stores/settingsStore";
+import { cn } from "@/lib/utils";
 import type { Project } from "@/types";
 import SettingsSheet from "@/components/SettingsSheet";
 
@@ -50,6 +52,7 @@ export default function HomePage() {
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [newRepoName, setNewRepoName] = useState("");
   const [newRepoPath, setNewRepoPath] = useState("");
+  const [activeSidebarItem, setActiveSidebarItem] = useState<"home" | "settings">("home");
 
   // Sort projects by last opened
   const sortedProjects = [...projects].sort(
@@ -254,155 +257,206 @@ export default function HomePage() {
   };
 
   return (
-    <div className="flex h-full flex-col bg-background">
-      {/* Header */}
-      <header className="flex items-center justify-between border-b border-border px-6 py-4">
-        <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-portal-orange/20 to-orange-600/20 border border-portal-orange/30">
-            <GitBranch className="h-5 w-5 text-portal-orange" />
-          </div>
-          <div>
-            <h1 className="text-base font-semibold">Chell</h1>
-            <p className="text-[11px] text-muted-foreground">
-              AI-powered git client
-            </p>
-          </div>
-        </div>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-8 w-8"
-          onClick={() => setShowSettings(true)}
-        >
-          <Settings className="h-4 w-4" />
-        </Button>
-      </header>
+    <div className="flex h-full bg-background">
+      {/* Left icon sidebar */}
+      <div className="flex w-12 flex-col items-center border-r border-border bg-background py-3">
+        {/* Top icons */}
+        <div className="flex flex-col items-center gap-1">
+          <Tooltip delayDuration={0}>
+            <TooltipTrigger asChild>
+              <button
+                onClick={() => setActiveSidebarItem("home")}
+                className={cn(
+                  "flex h-9 w-9 items-center justify-center rounded-lg transition-colors",
+                  activeSidebarItem === "home"
+                    ? "bg-portal-orange/20 text-portal-orange"
+                    : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                )}
+              >
+                <Terminal className="h-5 w-5" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="right">Home</TooltipContent>
+          </Tooltip>
 
-      {/* Main content */}
-      <ScrollArea className="flex-1">
-        <div className="px-6 py-8">
-          <div className="mx-auto max-w-md space-y-8">
-            {/* Hero */}
-            <div className="text-center">
-              <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-portal-orange/20 to-orange-600/20 border border-portal-orange/30">
-                <GitBranch className="h-8 w-8 text-portal-orange" />
-              </div>
-              <h2 className="text-xl font-semibold">Welcome to Chell</h2>
-              <p className="mt-2 text-sm text-muted-foreground">
-                A visual git client designed for AI coding assistants
-              </p>
-            </div>
-
-            {/* Quick actions */}
-            <div className="space-y-3">
+          <Tooltip delayDuration={0}>
+            <TooltipTrigger asChild>
               <button
                 onClick={handleOpenProject}
-                className="group flex w-full items-center gap-4 rounded-lg border border-border bg-card p-4 text-left transition-all hover:border-portal-orange/50 hover:bg-muted/50"
+                className="flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
               >
-                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
-                  <FolderOpen className="h-5 w-5 text-muted-foreground group-hover:text-portal-orange" />
-                </div>
-                <div className="flex-1">
-                  <p className="text-sm font-medium">Open existing repository</p>
-                  <p className="text-xs text-muted-foreground">
-                    Browse to a local git repository
-                  </p>
-                </div>
-                <ArrowRight className="h-4 w-4 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
+                <Plus className="h-5 w-5" />
               </button>
+            </TooltipTrigger>
+            <TooltipContent side="right">Open Project</TooltipContent>
+          </Tooltip>
 
+          <Tooltip delayDuration={0}>
+            <TooltipTrigger asChild>
               <button
-                onClick={() => setShowCloneDialog(true)}
-                className="group flex w-full items-center gap-4 rounded-lg border border-border bg-card p-4 text-left transition-all hover:border-portal-orange/50 hover:bg-muted/50"
+                onClick={() => {
+                  setActiveSidebarItem("settings");
+                  setShowSettings(true);
+                }}
+                className={cn(
+                  "flex h-9 w-9 items-center justify-center rounded-lg transition-colors",
+                  activeSidebarItem === "settings"
+                    ? "bg-portal-orange/20 text-portal-orange"
+                    : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                )}
               >
-                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
-                  <Download className="h-5 w-5 text-muted-foreground group-hover:text-portal-orange" />
-                </div>
-                <div className="flex-1">
-                  <p className="text-sm font-medium">Clone repository</p>
-                  <p className="text-xs text-muted-foreground">
-                    Clone from GitHub, GitLab, or any URL
-                  </p>
-                </div>
-                <ArrowRight className="h-4 w-4 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
+                <Settings className="h-5 w-5" />
               </button>
+            </TooltipTrigger>
+            <TooltipContent side="right">Settings</TooltipContent>
+          </Tooltip>
+        </div>
 
+        {/* Spacer */}
+        <div className="flex-1" />
+
+        {/* Bottom icons */}
+        <div className="flex flex-col items-center gap-1">
+          <Tooltip delayDuration={0}>
+            <TooltipTrigger asChild>
               <button
-                onClick={() => setShowCreateDialog(true)}
-                className="group flex w-full items-center gap-4 rounded-lg border border-border bg-card p-4 text-left transition-all hover:border-portal-orange/50 hover:bg-muted/50"
+                className="flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
               >
-                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
-                  <Plus className="h-5 w-5 text-muted-foreground group-hover:text-portal-orange" />
-                </div>
-                <div className="flex-1">
-                  <p className="text-sm font-medium">Create new repository</p>
-                  <p className="text-xs text-muted-foreground">
-                    Initialize a new git repository
-                  </p>
-                </div>
-                <ArrowRight className="h-4 w-4 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
+                <HelpCircle className="h-5 w-5" />
               </button>
-            </div>
+            </TooltipTrigger>
+            <TooltipContent side="right">Help</TooltipContent>
+          </Tooltip>
+        </div>
+      </div>
 
-            {/* Recent projects */}
-            {sortedProjects.length > 0 && (
+      {/* Main content */}
+      <div className="flex flex-1 flex-col">
+        <ScrollArea className="flex-1">
+          <div className="px-6 py-8">
+            <div className="mx-auto max-w-md space-y-8">
+              {/* Hero */}
+              <div className="text-center">
+                <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-portal-orange/20 to-orange-600/20 border border-portal-orange/30">
+                  <GitBranch className="h-8 w-8 text-portal-orange" />
+                </div>
+                <h2 className="text-xl font-semibold">Welcome to Chell</h2>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  A visual git client designed for AI coding assistants
+                </p>
+              </div>
+
+              {/* Quick actions */}
               <div className="space-y-3">
-                <h2 className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground px-1">
-                  Recent Projects
-                </h2>
-                <div className="space-y-1">
-                  {sortedProjects.map((project) => (
-                    <ContextMenu key={project.id}>
-                      <ContextMenuTrigger>
-                        <button
-                          className="group flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left transition-colors hover:bg-muted/50"
-                          onClick={() => handleProjectClick(project)}
-                        >
-                          <FolderGit2 className="h-4 w-4 shrink-0 text-portal-orange" />
-                          <div className="min-w-0 flex-1">
-                            <p className="truncate text-sm font-medium">{project.name}</p>
-                            <p className="truncate text-[11px] text-muted-foreground font-mono">
-                              {project.path}
-                            </p>
-                          </div>
-                          <span className="shrink-0 text-[11px] text-muted-foreground">
-                            {getRelativeTime(project.lastOpened)}
-                          </span>
-                        </button>
-                      </ContextMenuTrigger>
-                      <ContextMenuContent>
-                        <ContextMenuItem onClick={() => handleOpenInFinder(project.path)}>
-                          <FolderOpen className="mr-2 h-4 w-4" />
-                          Open in Finder
-                        </ContextMenuItem>
-                        <ContextMenuItem
-                          className="text-destructive"
-                          onClick={() => handleDeleteProject(project)}
-                        >
-                          <Trash2 className="mr-2 h-4 w-4" />
-                          Remove from list
-                        </ContextMenuItem>
-                      </ContextMenuContent>
-                    </ContextMenu>
-                  ))}
-                </div>
-              </div>
-            )}
+                <button
+                  onClick={handleOpenProject}
+                  className="group flex w-full items-center gap-4 rounded-lg border border-border bg-card p-4 text-left transition-all hover:border-portal-orange/50 hover:bg-muted/50"
+                >
+                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
+                    <FolderOpen className="h-5 w-5 text-muted-foreground group-hover:text-portal-orange" />
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-sm font-medium">Open existing repository</p>
+                    <p className="text-xs text-muted-foreground">
+                      Browse to a local git repository
+                    </p>
+                  </div>
+                  <ArrowRight className="h-4 w-4 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
+                </button>
 
-            {/* Features hint */}
-            <div className="flex items-center justify-center gap-6 text-[11px] text-muted-foreground">
-              <div className="flex items-center gap-1.5">
-                <Sparkles className="h-3 w-3 text-portal-orange" />
-                <span>AI commit messages</span>
+                <button
+                  onClick={() => setShowCloneDialog(true)}
+                  className="group flex w-full items-center gap-4 rounded-lg border border-border bg-card p-4 text-left transition-all hover:border-portal-orange/50 hover:bg-muted/50"
+                >
+                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
+                    <Download className="h-5 w-5 text-muted-foreground group-hover:text-portal-orange" />
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-sm font-medium">Clone repository</p>
+                    <p className="text-xs text-muted-foreground">
+                      Clone from GitHub, GitLab, or any URL
+                    </p>
+                  </div>
+                  <ArrowRight className="h-4 w-4 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
+                </button>
+
+                <button
+                  onClick={() => setShowCreateDialog(true)}
+                  className="group flex w-full items-center gap-4 rounded-lg border border-border bg-card p-4 text-left transition-all hover:border-portal-orange/50 hover:bg-muted/50"
+                >
+                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
+                    <Plus className="h-5 w-5 text-muted-foreground group-hover:text-portal-orange" />
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-sm font-medium">Create new repository</p>
+                    <p className="text-xs text-muted-foreground">
+                      Initialize a new git repository
+                    </p>
+                  </div>
+                  <ArrowRight className="h-4 w-4 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
+                </button>
               </div>
-              <div className="flex items-center gap-1.5">
-                <Terminal className="h-3 w-3 text-portal-orange" />
-                <span>Built-in terminal</span>
+
+              {/* Recent projects */}
+              {sortedProjects.length > 0 && (
+                <div className="space-y-3">
+                  <h2 className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground px-1">
+                    Recent Projects
+                  </h2>
+                  <div className="space-y-1">
+                    {sortedProjects.map((project) => (
+                      <ContextMenu key={project.id}>
+                        <ContextMenuTrigger>
+                          <button
+                            className="group flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left transition-colors hover:bg-muted/50"
+                            onClick={() => handleProjectClick(project)}
+                          >
+                            <FolderGit2 className="h-4 w-4 shrink-0 text-portal-orange" />
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate text-sm font-medium">{project.name}</p>
+                              <p className="truncate text-[11px] text-muted-foreground font-mono">
+                                {project.path}
+                              </p>
+                            </div>
+                            <span className="shrink-0 text-[11px] text-muted-foreground">
+                              {getRelativeTime(project.lastOpened)}
+                            </span>
+                          </button>
+                        </ContextMenuTrigger>
+                        <ContextMenuContent>
+                          <ContextMenuItem onClick={() => handleOpenInFinder(project.path)}>
+                            <FolderOpen className="mr-2 h-4 w-4" />
+                            Open in Finder
+                          </ContextMenuItem>
+                          <ContextMenuItem
+                            className="text-destructive"
+                            onClick={() => handleDeleteProject(project)}
+                          >
+                            <Trash2 className="mr-2 h-4 w-4" />
+                            Remove from list
+                          </ContextMenuItem>
+                        </ContextMenuContent>
+                      </ContextMenu>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Features hint */}
+              <div className="flex items-center justify-center gap-6 text-[11px] text-muted-foreground">
+                <div className="flex items-center gap-1.5">
+                  <Sparkles className="h-3 w-3 text-portal-orange" />
+                  <span>AI commit messages</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <Terminal className="h-3 w-3 text-portal-orange" />
+                  <span>Built-in terminal</span>
+                </div>
               </div>
             </div>
           </div>
-        </div>
-      </ScrollArea>
+        </ScrollArea>
+      </div>
 
       {/* Clone Dialog */}
       <Dialog open={showCloneDialog} onOpenChange={handleCloneDialogChange}>
