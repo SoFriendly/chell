@@ -82,7 +82,7 @@ export default function ProjectPage() {
   // Count visible panels - must always have at least one
   const visiblePanelCount = [showGitPanel, showAssistantPanel, showShellPanel].filter(Boolean).length;
 
-  // Toggle handlers that prevent hiding the last panel
+  // Simple toggle handlers - just update state
   const toggleGitPanel = () => {
     if (showGitPanel && visiblePanelCount <= 1) return;
     setShowGitPanel(!showGitPanel);
@@ -552,8 +552,8 @@ export default function ProjectPage() {
           {/* Left sidebar - Git panel */}
           {showGitPanel && (
             <>
-              <ResizablePanel defaultSize={22} minSize={18} maxSize={35}>
-                <div className="flex h-full flex-col">
+              <ResizablePanel defaultSize={22} minSize={15} maxSize={35}>
+                <div className="flex h-full flex-col select-none">
                   <GitPanel
                     projectPath={currentProject.path}
                     projectName={currentProject.name}
@@ -567,165 +567,168 @@ export default function ProjectPage() {
 
           {/* Center - Terminal area */}
           {showAssistantPanel && (
-            <ResizablePanel defaultSize={showGitPanel && showShellPanel ? 56 : showGitPanel || showShellPanel ? 78 : 100} minSize={35}>
-                <div className="flex h-full flex-col">
-                  {/* Tab bar */}
-                  <div className="flex h-10 items-center">
-                    <div className="flex flex-1 items-center overflow-x-auto">
-                      {terminalTabs.map((tab) => (
-                        <div
-                          key={tab.id}
-                          className={cn(
-                            "group flex items-center gap-1 border-r border-border px-3 py-2 text-sm font-medium transition-colors cursor-pointer",
-                            activeTabId === tab.id
-                              ? "border-b-2 border-b-portal-orange bg-muted/50 text-foreground"
-                              : "text-muted-foreground hover:bg-muted/30 hover:text-foreground"
-                          )}
-                          onClick={() => setActiveTabId(tab.id)}
-                        >
-                          <TerminalIcon className="h-3.5 w-3.5 shrink-0" />
-                          {editingTabId === tab.id ? (
-                            <Input
-                              ref={editInputRef}
-                              value={editingTabName}
-                              onChange={(e) => setEditingTabName(e.target.value)}
-                              onBlur={finishEditingTab}
-                              onKeyDown={handleTabNameKeyDown}
-                              onClick={(e) => e.stopPropagation()}
-                              className="h-5 w-24 px-1 py-0 text-sm"
-                            />
-                          ) : (
-                            <span
-                              className="truncate max-w-[120px] cursor-text"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                startEditingTab(tab);
-                              }}
-                            >
-                              {tab.name}
-                            </span>
-                          )}
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              closeTab(tab.id);
-                            }}
-                            className="ml-1 rounded p-0.5 opacity-0 group-hover:opacity-100 hover:bg-muted transition-opacity"
-                          >
-                            <X className="h-3 w-3" />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <button
-                          className="flex h-full items-center px-3 py-2 text-muted-foreground transition-colors hover:bg-muted/30 hover:text-foreground"
-                        >
-                          <Plus className="h-4 w-4" />
-                        </button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        {assistantOptions.map((assistant) => (
-                          <DropdownMenuItem
-                            key={assistant.id}
-                            onClick={() => currentProject && createNewTab(currentProject.path, assistant.id)}
-                            disabled={!assistant.installed}
-                            className="flex items-center gap-2"
-                          >
-                            {assistant.icon}
-                            <span>{assistant.name}</span>
-                            {!assistant.installed && (
-                              <span className="text-xs text-muted-foreground ml-auto">(not installed)</span>
-                            )}
-                          </DropdownMenuItem>
-                        ))}
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </div>
-
-                  {/* Tab content - keep all terminals mounted, hide with CSS */}
-                  {terminalTabs.map((tab) => (
-                    <div
-                      key={tab.id}
-                      className={cn(
-                        "flex flex-1 flex-col overflow-hidden",
-                        activeTabId !== tab.id && "hidden"
-                      )}
-                    >
-                      <div className="flex-1 overflow-hidden" style={{ backgroundColor: terminalBg }}>
-                        <Terminal
-                          id={tab.terminalId || undefined}
-                          command={tab.command}
-                          cwd={currentProject.path}
-                          onTerminalReady={(terminalId) => handleTerminalReady(tab.id, terminalId)}
-                        />
-                      </div>
-                    </div>
-                  ))}
-
-                  {/* Empty state when no tabs */}
-                  {terminalTabs.length === 0 && (
-                    <div className="flex flex-1 flex-col items-center justify-center gap-3" style={{ backgroundColor: terminalBg }}>
-                      <TerminalIcon className="h-8 w-8 text-muted-foreground" />
-                      <p className="text-sm text-muted-foreground">Starting AI assistant...</p>
-                    </div>
+            <>
+              <ResizablePanel defaultSize={56} minSize={30}>
+                <div className="flex h-full flex-col select-none">
+          {/* Tab bar */}
+          <div className="flex h-10 items-center border-b border-border">
+            <div className="flex flex-1 items-center overflow-x-auto">
+              {terminalTabs.map((tab) => (
+                <div
+                  key={tab.id}
+                  className={cn(
+                    "group flex items-center gap-1 border-r border-border px-3 py-2 text-sm font-medium transition-colors cursor-pointer",
+                    activeTabId === tab.id
+                      ? "border-b-2 border-b-portal-orange bg-muted/50 text-foreground"
+                      : "text-muted-foreground hover:bg-muted/30 hover:text-foreground"
                   )}
+                  onClick={() => setActiveTabId(tab.id)}
+                >
+                  <TerminalIcon className="h-3.5 w-3.5 shrink-0" />
+                  {editingTabId === tab.id ? (
+                    <Input
+                      ref={editInputRef}
+                      value={editingTabName}
+                      onChange={(e) => setEditingTabName(e.target.value)}
+                      onBlur={finishEditingTab}
+                      onKeyDown={handleTabNameKeyDown}
+                      onClick={(e) => e.stopPropagation()}
+                      className="h-5 w-24 px-1 py-0 text-sm"
+                    />
+                  ) : (
+                    <span
+                      className="truncate max-w-[120px] cursor-text"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        startEditingTab(tab);
+                      }}
+                    >
+                      {tab.name}
+                    </span>
+                  )}
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      closeTab(tab.id);
+                    }}
+                    className="ml-1 rounded p-0.5 opacity-0 group-hover:opacity-100 hover:bg-muted transition-opacity"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
                 </div>
-            </ResizablePanel>
-          )}
+              ))}
+            </div>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  className="flex h-full items-center px-3 py-2 text-muted-foreground transition-colors hover:bg-muted/30 hover:text-foreground"
+                >
+                  <Plus className="h-4 w-4" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                {assistantOptions.map((assistant) => (
+                  <DropdownMenuItem
+                    key={assistant.id}
+                    onClick={() => currentProject && createNewTab(currentProject.path, assistant.id)}
+                    disabled={!assistant.installed}
+                    className="flex items-center gap-2"
+                  >
+                    {assistant.icon}
+                    <span>{assistant.name}</span>
+                    {!assistant.installed && (
+                      <span className="text-xs text-muted-foreground ml-auto">(not installed)</span>
+                    )}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
 
-          {showAssistantPanel && showShellPanel && <ResizableHandle className="w-px bg-border" />}
+          {/* Tab content - keep all terminals mounted, hide with CSS */}
+          {terminalTabs.map((tab) => (
+            <div
+              key={tab.id}
+              className={cn(
+                "flex flex-1 flex-col overflow-hidden",
+                activeTabId !== tab.id && "hidden"
+              )}
+            >
+              <div className="flex-1 overflow-hidden" style={{ backgroundColor: terminalBg }}>
+                <Terminal
+                  id={tab.terminalId || undefined}
+                  command={tab.command}
+                  cwd={currentProject.path}
+                  onTerminalReady={(terminalId) => handleTerminalReady(tab.id, terminalId)}
+                  visible={showAssistantPanel && activeTabId === tab.id}
+                />
+              </div>
+            </div>
+          ))}
+
+          {/* Empty state when no tabs */}
+          {terminalTabs.length === 0 && (
+            <div className="flex flex-1 flex-col items-center justify-center gap-3" style={{ backgroundColor: terminalBg }}>
+              <TerminalIcon className="h-8 w-8 text-muted-foreground" />
+              <p className="text-sm text-muted-foreground">Starting AI assistant...</p>
+            </div>
+          )}
+                </div>
+              </ResizablePanel>
+              <ResizableHandle className="w-px bg-border" />
+            </>
+          )}
 
           {/* Right sidebar - Utility terminal */}
           {showShellPanel && (
-            <ResizablePanel defaultSize={showGitPanel && showAssistantPanel ? 22 : showGitPanel || showAssistantPanel ? 50 : 100} minSize={15} maxSize={showAssistantPanel ? 40 : 100}>
-            <div className="flex h-full flex-col">
-              {/* Header */}
-              <div className="flex h-10 items-center justify-between px-4">
-                <div className="flex items-center gap-2">
-                  <TerminalIcon className="h-4 w-4 text-portal-orange" />
-                  <span className="text-sm font-medium">Shell</span>
-                </div>
-                {utilityTerminalId && utilityTerminalId !== "closed" && (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-6 w-6"
-                    onClick={() => {
-                      invoke("kill_terminal", { id: utilityTerminalId });
-                      setUtilityTerminalId("closed");
-                    }}
-                  >
-                    <X className="h-3 w-3" />
-                  </Button>
-                )}
-              </div>
-
-              {/* Utility terminal content */}
-              <div className="flex-1 overflow-hidden" style={{ backgroundColor: terminalBg }}>
-                {utilityTerminalId !== "closed" ? (
-                  <Terminal
-                    id={utilityTerminalId || undefined}
-                    command=""
-                    cwd={currentProject.path}
-                    onTerminalReady={(id) => setUtilityTerminalId(id)}
-                  />
-                ) : (
-                  <div className="flex h-full flex-col items-center justify-center gap-3">
-                    <TerminalIcon className="h-6 w-6 text-muted-foreground" />
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setUtilityTerminalId(null)}
-                    >
-                      Start Shell
-                    </Button>
-                  </div>
-                )}
-              </div>
+            <ResizablePanel defaultSize={22} minSize={15} maxSize={35}>
+              <div className="flex h-full flex-col select-none">
+          {/* Header */}
+          <div className="flex h-10 items-center justify-between px-4 border-b border-border">
+            <div className="flex items-center gap-2">
+              <TerminalIcon className="h-4 w-4 text-portal-orange" />
+              <span className="text-sm font-medium">Shell</span>
             </div>
-          </ResizablePanel>
+            {utilityTerminalId && utilityTerminalId !== "closed" && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6"
+                onClick={() => {
+                  invoke("kill_terminal", { id: utilityTerminalId });
+                  setUtilityTerminalId("closed");
+                }}
+              >
+                <X className="h-3 w-3" />
+              </Button>
+            )}
+          </div>
+
+          {/* Utility terminal content */}
+          <div className="flex-1 overflow-hidden" style={{ backgroundColor: terminalBg }}>
+            {utilityTerminalId !== "closed" ? (
+              <Terminal
+                id={utilityTerminalId || undefined}
+                command=""
+                cwd={currentProject.path}
+                onTerminalReady={(id) => setUtilityTerminalId(id)}
+                visible={showShellPanel}
+              />
+            ) : (
+              <div className="flex h-full flex-col items-center justify-center gap-3">
+                <TerminalIcon className="h-6 w-6 text-muted-foreground" />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setUtilityTerminalId(null)}
+                >
+                  Start Shell
+                </Button>
+              </div>
+            )}
+          </div>
+              </div>
+            </ResizablePanel>
           )}
         </ResizablePanelGroup>
       </div>

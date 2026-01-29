@@ -13,6 +13,7 @@ interface TerminalProps {
   command?: string;  // Command to run (empty for default shell)
   cwd: string;
   onTerminalReady?: (terminalId: string) => void;  // Called when terminal is spawned
+  visible?: boolean;  // Trigger resize when visibility changes
 }
 
 // Terminal themes matching app themes
@@ -88,7 +89,7 @@ const TERMINAL_THEMES: Record<string, ITheme> = {
   },
 };
 
-export default function Terminal({ id, command = "", cwd, onTerminalReady }: TerminalProps) {
+export default function Terminal({ id, command = "", cwd, onTerminalReady, visible = true }: TerminalProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const terminalRef = useRef<XTerm | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
@@ -99,6 +100,7 @@ export default function Terminal({ id, command = "", cwd, onTerminalReady }: Ter
   const hasSpawnedRef = useRef(false);
 
   // Phase 1: Wait for container to have stable dimensions
+  // This is critical - ResizablePanelGroup takes time to calculate final layout
   useEffect(() => {
     if (!containerRef.current) return;
 
@@ -116,8 +118,9 @@ export default function Terminal({ id, command = "", cwd, onTerminalReady }: Ter
       if (width > 0 && height > 0) {
         if (width === lastWidth && height === lastHeight) {
           stableCount++;
-          // Require dimensions to be stable for 3 consecutive checks (150ms)
-          if (stableCount >= 3) {
+          // Require dimensions to be stable for 8 consecutive checks (400ms)
+          // This gives ResizablePanelGroup plenty of time to finish layout
+          if (stableCount >= 8) {
             setIsContainerReady(true);
             return;
           }
@@ -131,8 +134,8 @@ export default function Terminal({ id, command = "", cwd, onTerminalReady }: Ter
       stabilityTimer = setTimeout(checkStability, 50);
     };
 
-    // Start checking after a short initial delay to let layout begin
-    stabilityTimer = setTimeout(checkStability, 50);
+    // Start checking after significant delay to let ResizablePanelGroup fully settle
+    stabilityTimer = setTimeout(checkStability, 200);
 
     return () => {
       if (stabilityTimer) clearTimeout(stabilityTimer);
@@ -340,7 +343,15 @@ export default function Terminal({ id, command = "", cwd, onTerminalReady }: Ter
       intersectionObserver.observe(containerRef.current);
     }
 
+    // CRITICAL: Do delayed resizes after terminal connects to ensure
+    // Claude Code gets SIGWINCH and redraws with correct dimensions.
+    // The layout may still be settling when we first connect.
+    const resizeTimers = [100, 300, 500, 1000].map(delay =>
+      setTimeout(() => safeFit(), delay)
+    );
+
     return () => {
+      resizeTimers.forEach(timer => clearTimeout(timer));
       dataDisposable.dispose();
       resizeDisposable.dispose();
       unlisten.then((fn) => fn());
@@ -349,6 +360,26 @@ export default function Terminal({ id, command = "", cwd, onTerminalReady }: Ter
       intersectionObserver.disconnect();
     };
   }, [terminalId]);
+
+  // Resize when visibility changes
+  useEffect(() => {
+    if (visible && terminalRef.current && fitAddonRef.current && terminalId) {
+      // Delay to allow CSS transition to complete
+      const timer = setTimeout(() => {
+        try {
+          fitAddonRef.current?.fit();
+          const terminal = terminalRef.current;
+          if (terminal) {
+            const { cols, rows } = terminal;
+            invoke("resize_terminal", { id: terminalId, cols, rows }).catch(console.error);
+          }
+        } catch (e) {
+          // Ignore fit errors
+        }
+      }, 250);
+      return () => clearTimeout(timer);
+    }
+  }, [visible, terminalId]);
 
   // Focus terminal on click
   const handleClick = () => {

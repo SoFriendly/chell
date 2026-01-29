@@ -404,7 +404,7 @@ export default function GitPanel({ projectPath, projectName, onRefresh }: GitPan
           <ContextMenuTrigger asChild>
             <div
               className={cn(
-                "relative flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 transition-colors",
+                "relative flex cursor-pointer items-center gap-2 rounded pr-8 py-1.5 transition-colors",
                 isSelected ? "bg-portal-orange/20" : "hover:bg-muted/50"
               )}
               onClick={(e) => handleFileClick(diff.path, index, e)}
@@ -415,14 +415,14 @@ export default function GitPanel({ projectPath, projectName, onRefresh }: GitPan
                 <ChevronRight className="h-3 w-3 shrink-0 text-muted-foreground" />
               )}
               <span className={cn("h-2 w-2 shrink-0 rounded-sm", getStatusColor(diff.status))} />
-              <div className="flex-1 overflow-x-auto scrollbar-none">
-                <span className="whitespace-nowrap font-mono text-xs">{diff.path}</span>
+              <div className="flex-1 min-w-0 overflow-hidden">
+                <span className="block break-words font-mono text-xs">{diff.path}</span>
               </div>
               {/* Discard button - shows on hover, positioned over content on right */}
               <Button
                 variant="ghost"
                 size="icon"
-                className="absolute right-3 top-1/2 -translate-y-1/2 h-5 w-5 opacity-0 group-hover:opacity-100 bg-background/80 hover:bg-muted"
+                className="absolute right-5 top-1/2 -translate-y-1/2 h-5 w-5 opacity-0 group-hover:opacity-100 bg-background/80 hover:bg-muted"
                 onClick={(e) => {
                   e.stopPropagation();
                   setFileToDiscard(diff.path);
@@ -446,20 +446,20 @@ export default function GitPanel({ projectPath, projectName, onRefresh }: GitPan
         {/* Inline diff view with per-hunk context menus */}
         {isExpanded && (
           <div className="ml-5 mt-1 overflow-hidden rounded bg-[#0d0d0d]">
-            <div className="overflow-x-auto p-2">
+            <div className="p-2">
               <div className="font-mono text-[10px] leading-relaxed">
                 {diff.hunks.map((hunk, hi) => (
                   <ContextMenu key={hi}>
                     <ContextMenuTrigger asChild>
                       <div className="rounded hover:bg-white/5 -mx-1 px-1">
-                        <div className="text-muted-foreground whitespace-nowrap">
+                        <div className="text-muted-foreground">
                           @@ -{hunk.oldStart},{hunk.oldLines} +{hunk.newStart},{hunk.newLines} @@
                         </div>
                         {hunk.lines.map((line, li) => (
                           <div
                             key={li}
                             className={cn(
-                              "whitespace-pre",
+                              "whitespace-pre-wrap break-words",
                               line.type === "addition" && "bg-green-500/10 text-green-400",
                               line.type === "deletion" && "bg-red-500/10 text-red-400",
                               line.type === "context" && "text-muted-foreground"
@@ -500,7 +500,7 @@ export default function GitPanel({ projectPath, projectName, onRefresh }: GitPan
   };
 
   return (
-    <div className="flex flex-1 flex-col overflow-hidden">
+    <div className="flex flex-1 flex-col overflow-hidden select-none">
       {/* Header with actions only */}
       <div className="flex h-10 items-center justify-end gap-1 px-4">
           <Tooltip>
