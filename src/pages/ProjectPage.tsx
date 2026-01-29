@@ -2,6 +2,7 @@ import { useEffect, useState, useRef, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { getCurrentWebview } from "@tauri-apps/api/webview";
 import {
   Settings,
   Terminal as TerminalIcon,
@@ -98,6 +99,8 @@ export default function ProjectPage() {
   const terminalsStarted = useRef(false);
   const tabCounter = useRef(1);
   const editInputRef = useRef<HTMLInputElement>(null);
+  const assistantPanelRef = useRef<HTMLDivElement>(null);
+  const shellPanelRef = useRef<HTMLDivElement>(null);
 
 
   useEffect(() => {
@@ -167,6 +170,44 @@ export default function ProjectPage() {
     setShellCwd(newPath);
     loadShellDirectories(newPath);
   };
+
+  // Handle file drag and drop into terminals
+  useEffect(() => {
+    const unlisten = getCurrentWebview().onDragDropEvent((event) => {
+      if (event.payload.type === "drop") {
+        const { paths, position } = event.payload;
+        if (!paths || paths.length === 0) return;
+
+        // Escape paths for shell (wrap in quotes, escape special chars)
+        const escapedPaths = paths
+          .map(p => `"${p.replace(/"/g, '\\"')}"`)
+          .join(" ");
+
+        // Determine which panel was targeted based on position
+        const assistantRect = assistantPanelRef.current?.getBoundingClientRect();
+        const shellRect = shellPanelRef.current?.getBoundingClientRect();
+
+        if (assistantRect && position.x >= assistantRect.left && position.x <= assistantRect.right &&
+            position.y >= assistantRect.top && position.y <= assistantRect.bottom) {
+          // Dropped on assistant panel - find active tab's terminal
+          const activeTab = terminalTabs.find(t => t.id === activeTabId);
+          if (activeTab?.terminalId) {
+            invoke("write_terminal", { id: activeTab.terminalId, data: escapedPaths });
+          }
+        } else if (shellRect && position.x >= shellRect.left && position.x <= shellRect.right &&
+                   position.y >= shellRect.top && position.y <= shellRect.bottom) {
+          // Dropped on shell panel
+          if (utilityTerminalId && utilityTerminalId !== "closed") {
+            invoke("write_terminal", { id: utilityTerminalId, data: escapedPaths });
+          }
+        }
+      }
+    });
+
+    return () => {
+      unlisten.then(fn => fn());
+    };
+  }, [terminalTabs, activeTabId, utilityTerminalId]);
 
   // Focus input when editing starts
   useEffect(() => {
@@ -605,6 +646,7 @@ export default function ProjectPage() {
 
         {/* Center - Terminal area */}
         <div
+          ref={assistantPanelRef}
           className={cn(
             "flex flex-col overflow-hidden transition-all duration-200",
             showAssistantPanel ? "flex-1 min-w-[200px]" : "w-0 min-w-0 flex-none"
@@ -719,6 +761,7 @@ export default function ProjectPage() {
 
         {/* Right sidebar - Utility terminal */}
         <div
+          ref={shellPanelRef}
           className={cn(
             "flex flex-col border-l border-border overflow-hidden transition-all duration-200",
             showShellPanel ? "flex-1 min-w-[200px]" : "w-0 min-w-0 flex-none"
