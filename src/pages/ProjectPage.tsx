@@ -18,6 +18,11 @@ import {
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
+  ResizablePanelGroup,
+  ResizablePanel,
+  ResizableHandle,
+} from "@/components/ui/resizable";
+import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -97,7 +102,6 @@ export default function ProjectPage() {
     setShowShellPanel(!showShellPanel);
   };
   const terminalsStarted = useRef(false);
-  const tabCounter = useRef(1);
   const editInputRef = useRef<HTMLInputElement>(null);
   const assistantPanelRef = useRef<HTMLDivElement>(null);
   const shellPanelRef = useRef<HTMLDivElement>(null);
@@ -310,10 +314,9 @@ export default function ProjectPage() {
 
       // Don't spawn terminal here - let Terminal component do it with correct dimensions
       const tabId = `tab-${Date.now()}`;
-      const tabNumber = tabCounter.current++;
       const newTab: TerminalTab = {
         id: tabId,
-        name: tabNumber === 1 ? name : `${name} ${tabNumber}`,
+        name,
         command,  // Store command, Terminal will spawn with correct dimensions
         terminalId: null,  // Will be set by Terminal component
       };
@@ -626,30 +629,33 @@ export default function ProjectPage() {
         </div>
       </div>
 
-      {/* Main content area - simple flex layout */}
-      <div className="flex-1 flex overflow-hidden">
-        {/* Left sidebar - Git panel */}
-        <div
-          className={cn(
-            "flex flex-col border-r border-border overflow-hidden transition-all duration-200",
-            showGitPanel ? "w-72 min-w-[200px]" : "w-0 min-w-0"
-          )}
-        >
-          <GitPanel
-            projectPath={currentProject.path}
-            projectName={currentProject.name}
-            onRefresh={refreshGitData}
-          />
-        </div>
+      {/* Main content area */}
+      <div className="flex-1 overflow-hidden">
+        <ResizablePanelGroup direction="horizontal">
+          {/* Left sidebar - Git panel */}
+          <ResizablePanel
+            defaultSize={20}
+            minSize={showGitPanel ? 15 : 0}
+            maxSize={35}
+            className={cn("overflow-hidden", !showGitPanel && "!min-w-0 !w-0")}
+          >
+            <div className={cn("h-full flex flex-col", !showGitPanel && "hidden")}>
+              <GitPanel
+                projectPath={currentProject.path}
+                projectName={currentProject.name}
+                onRefresh={refreshGitData}
+              />
+            </div>
+          </ResizablePanel>
+          <ResizableHandle className={cn("w-px bg-border", !showGitPanel && "hidden")} />
 
-        {/* Center - Terminal area */}
-        <div
-          ref={assistantPanelRef}
-          className={cn(
-            "flex flex-col overflow-hidden transition-all duration-200",
-            showAssistantPanel ? "flex-1 min-w-[200px]" : "w-0 min-w-0 flex-none"
-          )}
-        >
+          {/* Center - Terminal area */}
+          <ResizablePanel
+            defaultSize={50}
+            minSize={showAssistantPanel ? 20 : 0}
+            className={cn("overflow-hidden", !showAssistantPanel && "!min-w-0 !w-0")}
+          >
+            <div ref={assistantPanelRef} className="h-full">
           <div className="flex h-full flex-col select-none overflow-hidden">
           {/* Tab bar */}
           <div className="flex h-10 items-center border-b border-border">
@@ -756,16 +762,18 @@ export default function ProjectPage() {
             </div>
           )}
           </div>
-        </div>
+          </div>
+          </ResizablePanel>
+          <ResizableHandle className={cn("w-px bg-border", !showAssistantPanel && "hidden")} />
 
-        {/* Right sidebar - Utility terminal */}
-        <div
-          ref={shellPanelRef}
-          className={cn(
-            "flex flex-col border-l border-border overflow-hidden transition-all duration-200",
-            showShellPanel ? "flex-1 min-w-[200px]" : "w-0 min-w-0 flex-none"
-          )}
-        >
+          {/* Right sidebar - Utility terminal */}
+          <ResizablePanel
+            defaultSize={30}
+            minSize={showShellPanel ? 15 : 0}
+            maxSize={50}
+            className={cn("overflow-hidden", !showShellPanel && "!min-w-0 !w-0")}
+          >
+            <div ref={shellPanelRef} className={cn("flex flex-col h-full", !showShellPanel && "hidden")}>
           {/* Header */}
           <div className="flex h-10 items-center justify-between px-2 border-b border-border">
             <div className="flex items-center gap-2 min-w-0 flex-1">
@@ -839,7 +847,9 @@ export default function ProjectPage() {
               </div>
             )}
           </div>
-        </div>
+            </div>
+          </ResizablePanel>
+        </ResizablePanelGroup>
       </div>
 
       {/* Settings Sheet */}
