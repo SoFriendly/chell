@@ -47,6 +47,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useGitStore } from "@/stores/gitStore";
+import { useSettingsStore } from "@/stores/settingsStore";
 import { cn } from "@/lib/utils";
 import type { FileDiff } from "@/types";
 
@@ -66,6 +67,7 @@ interface CommitSuggestion {
 
 export default function GitPanel({ projectPath, projectName, onRefresh }: GitPanelProps) {
   const { diffs, branches, loading, status } = useGitStore();
+  const { autoCommitMessage } = useSettingsStore();
   const [commitSubject, setCommitSubject] = useState("");
   const [commitDescription, setCommitDescription] = useState("");
   const [isCommitting, setIsCommitting] = useState(false);
@@ -131,8 +133,8 @@ export default function GitPanel({ projectPath, projectName, onRefresh }: GitPan
         return next;
       });
 
-      // Only auto-generate on first load or when files actually change
-      if (!previousHash || !hasGeneratedInitialMessage.current) {
+      // Only auto-generate on first load or when files actually change (if enabled)
+      if (autoCommitMessage && (!previousHash || !hasGeneratedInitialMessage.current)) {
         hasGeneratedInitialMessage.current = true;
         generateCommitMessage();
       }

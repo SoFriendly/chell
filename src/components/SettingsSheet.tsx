@@ -11,7 +11,6 @@ import {
   Check,
   Download,
   Bot,
-  Terminal,
   ExternalLink,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -25,6 +24,7 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useSettingsStore } from "@/stores/settingsStore";
 import { cn } from "@/lib/utils";
+import type { ThemeOption } from "@/types";
 
 interface SettingsSheetProps {
   open: boolean;
@@ -42,7 +42,13 @@ const NAV_ITEMS: { id: SettingsTab; label: string; icon: React.ReactNode }[] = [
   { id: "about", label: "About", icon: <Info className="h-4 w-4" /> },
 ];
 
-const THEMES = [
+interface ThemeInfo {
+  id: ThemeOption;
+  name: string;
+  gradient: string;
+}
+
+const THEMES: ThemeInfo[] = [
   { id: "dark", name: "Chell Dark", gradient: "from-portal-orange/60 to-neutral-900" },
   { id: "tokyo", name: "Tokyo Night", gradient: "from-indigo-500/60 to-slate-900" },
   { id: "light", name: "Light", gradient: "from-slate-200 to-slate-100" },
@@ -75,7 +81,7 @@ const ASSISTANTS: AssistantInfo[] = [
     id: "gemini",
     name: "Gemini CLI",
     description: "Google's Gemini AI assistant for coding",
-    installCommand: "npm install -g @anthropic-ai/gemini-cli",
+    installCommand: "npm install -g @google/gemini-cli",
     docsUrl: "https://ai.google.dev/gemini-api",
   },
   {
@@ -97,6 +103,10 @@ export default function SettingsSheet({ open, onOpenChange }: SettingsSheetProps
     setDefaultClonePath,
     defaultAssistant,
     setDefaultAssistant,
+    autoCommitMessage,
+    setAutoCommitMessage,
+    autoFetchRemote,
+    setAutoFetchRemote,
   } = useSettingsStore();
 
   const [activeTab, setActiveTab] = useState<SettingsTab>("general");
@@ -109,9 +119,19 @@ export default function SettingsSheet({ open, onOpenChange }: SettingsSheetProps
     "codex": assistantArgs["codex"] || "",
   });
 
-  // AI behavior toggles
-  const [autoCommitMessage, setAutoCommitMessage] = useState(true);
-  const [autoFetchRemote, setAutoFetchRemote] = useState(false);
+  // Update local state when store changes
+  useEffect(() => {
+    setLocalDefaultClonePath(defaultClonePath || "");
+  }, [defaultClonePath]);
+
+  useEffect(() => {
+    setAssistantArgsState({
+      "claude-code": assistantArgs["claude-code"] || "",
+      "aider": assistantArgs["aider"] || "",
+      "gemini": assistantArgs["gemini"] || "",
+      "codex": assistantArgs["codex"] || "",
+    });
+  }, [assistantArgs]);
 
   // Check installed assistants when dialog opens
   useEffect(() => {
@@ -153,15 +173,9 @@ export default function SettingsSheet({ open, onOpenChange }: SettingsSheetProps
     toast.success("Settings saved");
   };
 
-  const handleThemeChange = (newTheme: string) => {
-    const themeValue = newTheme === "light" ? "light" : "dark";
-    setTheme(themeValue);
-    if (themeValue === "dark") {
-      document.documentElement.classList.add("dark");
-    } else {
-      document.documentElement.classList.remove("dark");
-    }
-    toast.success(`Theme set to ${newTheme}`);
+  const handleThemeChange = (newTheme: ThemeOption) => {
+    setTheme(newTheme);
+    toast.success(`Theme set to ${THEMES.find(t => t.id === newTheme)?.name}`);
   };
 
   const handleSetDefaultAssistant = (assistantId: string) => {
@@ -399,7 +413,7 @@ export default function SettingsSheet({ open, onOpenChange }: SettingsSheetProps
                           onClick={() => handleThemeChange(t.id)}
                           className={cn(
                             "group relative rounded-lg border-2 p-1 transition-all",
-                            theme === (t.id === "light" ? "light" : "dark") && t.id !== "tokyo"
+                            theme === t.id
                               ? "border-portal-orange"
                               : "border-transparent hover:border-muted"
                           )}
@@ -413,6 +427,11 @@ export default function SettingsSheet({ open, onOpenChange }: SettingsSheetProps
                           <p className="mt-2 text-center text-xs font-medium">
                             {t.name}
                           </p>
+                          {theme === t.id && (
+                            <div className="absolute top-3 right-3 flex h-5 w-5 items-center justify-center rounded-full bg-portal-orange">
+                              <Check className="h-3 w-3 text-white" />
+                            </div>
+                          )}
                         </button>
                       ))}
                     </div>
@@ -450,7 +469,7 @@ export default function SettingsSheet({ open, onOpenChange }: SettingsSheetProps
                             Enables semantic code analysis for better context awareness (Higher token usage).
                           </p>
                         </div>
-                        <Switch checked={false} onCheckedChange={() => {}} />
+                        <Switch checked={false} disabled />
                       </div>
                     </div>
                   </section>

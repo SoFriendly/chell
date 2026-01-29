@@ -103,10 +103,14 @@ export interface ProjectTab {
 }
 
 // Settings types
+export type ThemeOption = 'dark' | 'tokyo' | 'light';
+
 export interface Settings {
-  theme: 'light' | 'dark' | 'system';
+  theme: ThemeOption;
   aiProvider?: AIProvider;
   assistantArgs: Record<string, string>;
   globalSnippets: Snippet[];
   defaultClonePath?: string;
+  autoCommitMessage: boolean;
+  autoFetchRemote: boolean;
 }

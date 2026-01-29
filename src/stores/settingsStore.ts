@@ -1,11 +1,11 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { Settings, AIProvider, Snippet } from '@/types';
+import type { Settings, AIProvider, Snippet, ThemeOption } from '@/types';
 
 interface SettingsState extends Settings {
   defaultAssistant: string;
   // Actions
-  setTheme: (theme: Settings['theme']) => void;
+  setTheme: (theme: ThemeOption) => void;
   setAIProvider: (provider: AIProvider | undefined) => void;
   setAssistantArgs: (assistantId: string, args: string) => void;
   addGlobalSnippet: (snippet: Snippet) => void;
@@ -13,7 +13,23 @@ interface SettingsState extends Settings {
   updateGlobalSnippet: (id: string, updates: Partial<Snippet>) => void;
   setDefaultClonePath: (path: string | undefined) => void;
   setDefaultAssistant: (assistantId: string) => void;
+  setAutoCommitMessage: (enabled: boolean) => void;
+  setAutoFetchRemote: (enabled: boolean) => void;
 }
+
+// Apply theme to document
+export const applyTheme = (theme: ThemeOption) => {
+  const root = document.documentElement;
+  // Remove all theme classes
+  root.classList.remove('dark', 'tokyo', 'light');
+
+  if (theme === 'light') {
+    // Light mode - no class needed (uses :root)
+  } else {
+    // Add the theme class
+    root.classList.add(theme);
+  }
+};
 
 export const useSettingsStore = create<SettingsState>()(
   persist(
@@ -23,9 +39,14 @@ export const useSettingsStore = create<SettingsState>()(
       assistantArgs: {},
       globalSnippets: [],
       defaultClonePath: undefined,
-      defaultAssistant: 'claude', // Default to Claude Code
+      defaultAssistant: 'claude',
+      autoCommitMessage: true,
+      autoFetchRemote: false,
 
-      setTheme: (theme) => set({ theme }),
+      setTheme: (theme) => {
+        applyTheme(theme);
+        set({ theme });
+      },
 
       setAIProvider: (provider) => set({ aiProvider: provider }),
 
@@ -50,9 +71,19 @@ export const useSettingsStore = create<SettingsState>()(
       setDefaultClonePath: (path) => set({ defaultClonePath: path }),
 
       setDefaultAssistant: (assistantId) => set({ defaultAssistant: assistantId }),
+
+      setAutoCommitMessage: (enabled) => set({ autoCommitMessage: enabled }),
+
+      setAutoFetchRemote: (enabled) => set({ autoFetchRemote: enabled }),
     }),
     {
       name: 'chell-settings',
+      onRehydrateStorage: () => (state) => {
+        // Apply saved theme on load
+        if (state?.theme) {
+          applyTheme(state.theme);
+        }
+      },
     }
   )
 );

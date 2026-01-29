@@ -53,7 +53,7 @@ export default function ProjectPage() {
   const navigate = useNavigate();
   const { projects, openTab } = useProjectStore();
   const { setStatus, setDiffs, setBranches, setHistory, setLoading } = useGitStore();
-  const { assistantArgs, defaultAssistant } = useSettingsStore();
+  const { assistantArgs, defaultAssistant, autoFetchRemote } = useSettingsStore();
   const [currentProject, setCurrentProject] = useState<Project | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [terminalTabs, setTerminalTabs] = useState<TerminalTab[]>([]);
@@ -322,6 +322,29 @@ export default function ProjectPage() {
       unlisten.then((fn) => fn());
     };
   }, [currentProject]);
+
+  // Auto-fetch remote when enabled (every 60 seconds)
+  useEffect(() => {
+    if (!autoFetchRemote || !currentProject) return;
+
+    const fetchRemote = async () => {
+      try {
+        await invoke("fetch_remote", { repoPath: currentProject.path, remote: "origin" });
+        refreshGitData();
+      } catch (error) {
+        // Silently fail - this is background operation
+        console.error("Auto-fetch failed:", error);
+      }
+    };
+
+    // Initial fetch
+    fetchRemote();
+
+    // Set up interval for periodic fetching
+    const interval = setInterval(fetchRemote, 60000);
+
+    return () => clearInterval(interval);
+  }, [autoFetchRemote, currentProject, refreshGitData]);
 
   if (!currentProject) {
     return (

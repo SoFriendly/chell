@@ -47,6 +47,28 @@
     --input: 0 0% 18%;
     --ring: 24 100% 50%;
   }
+
+  .tokyo {
+    --background: 228 18% 12%;
+    --foreground: 225 27% 88%;
+    --card: 228 18% 14%;
+    --card-foreground: 225 27% 88%;
+    --popover: 228 18% 14%;
+    --popover-foreground: 225 27% 88%;
+    --primary: 252 87% 67%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 228 18% 18%;
+    --secondary-foreground: 225 27% 88%;
+    --muted: 228 18% 20%;
+    --muted-foreground: 225 15% 55%;
+    --accent: 228 18% 20%;
+    --accent-foreground: 225 27% 88%;
+    --destructive: 353 80% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 228 18% 22%;
+    --input: 228 18% 22%;
+    --ring: 252 87% 67%;
+  }
 }
 
 @layer base {
@@ -74,12 +96,14 @@
 }
 
 /* Custom scrollbar for dark mode */
-.dark ::-webkit-scrollbar {
+.dark ::-webkit-scrollbar,
+.tokyo ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
 
-.dark ::-webkit-scrollbar-track {
+.dark ::-webkit-scrollbar-track,
+.tokyo ::-webkit-scrollbar-track {
   background: transparent;
 }
 
@@ -90,6 +114,15 @@
 
 .dark ::-webkit-scrollbar-thumb:hover {
   background: hsl(0 0% 35%);
+}
+
+.tokyo ::-webkit-scrollbar-thumb {
+  background: hsl(228 18% 28%);
+  border-radius: 3px;
+}
+
+.tokyo ::-webkit-scrollbar-thumb:hover {
+  background: hsl(228 18% 38%);
 }
 
 /* Prevent text selection in UI elements */

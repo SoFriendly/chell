@@ -9,12 +9,11 @@ import {
   Settings,
   Trash2,
   FolderOpen,
-  GitBranch,
   Terminal,
-  Sparkles,
   ArrowRight,
   HelpCircle,
 } from "lucide-react";
+import ChellLogo from "@/components/ChellLogo";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -258,18 +257,11 @@ export default function HomePage() {
 
   return (
     <div className="relative flex h-full bg-background">
-      {/* Single horizontal divider line spanning full width */}
-      <div className="absolute left-0 right-0 top-10 h-px bg-border" />
-      {/* Vertical divider for sidebar */}
-      <div className="absolute left-12 top-10 bottom-0 w-px bg-border" />
-
       {/* Left icon sidebar */}
       <div
         data-tauri-drag-region
-        className="flex w-12 flex-col bg-background pt-8 pb-3"
+        className="flex w-12 flex-col items-center bg-background pt-8 pb-3"
       >
-        {/* Inner container */}
-        <div className="flex flex-1 flex-col items-center mt-[9px] pt-3">
           {/* Top icons */}
           <div className="flex flex-col items-center gap-1">
           <Tooltip delayDuration={0}>
@@ -338,7 +330,6 @@ export default function HomePage() {
             <TooltipContent side="right">Help</TooltipContent>
           </Tooltip>
         </div>
-        </div>
       </div>
 
       {/* Main content */}
@@ -349,11 +340,11 @@ export default function HomePage() {
               {/* Hero */}
               <div className="text-center">
                 <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-portal-orange/20 to-orange-600/20 border border-portal-orange/30">
-                  <GitBranch className="h-8 w-8 text-portal-orange" />
+                  <ChellLogo size={36} />
                 </div>
                 <h2 className="text-xl font-semibold">Welcome to Chell</h2>
                 <p className="mt-2 text-sm text-muted-foreground">
-                  A visual git client designed for AI coding assistants
+                  Think in changes, not commands.
                 </p>
               </div>
 
@@ -453,17 +444,6 @@ export default function HomePage() {
                 </div>
               )}
 
-              {/* Features hint */}
-              <div className="flex items-center justify-center gap-6 text-[11px] text-muted-foreground">
-                <div className="flex items-center gap-1.5">
-                  <Sparkles className="h-3 w-3 text-portal-orange" />
-                  <span>AI commit messages</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <Terminal className="h-3 w-3 text-portal-orange" />
-                  <span>Built-in terminal</span>
-                </div>
-              </div>
             </div>
           </div>
         </ScrollArea>
