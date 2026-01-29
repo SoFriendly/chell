@@ -1,0 +1,531 @@
+import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import { invoke } from "@tauri-apps/api/core";
+import { open } from "@tauri-apps/plugin-dialog";
+import {
+  FolderGit2,
+  Plus,
+  Download,
+  Settings,
+  Trash2,
+  FolderOpen,
+  GitBranch,
+  Terminal,
+  Sparkles,
+  ArrowRight,
+} from "lucide-react";
+import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuTrigger,
+} from "@/components/ui/context-menu";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { useProjectStore } from "@/stores/projectStore";
+import { useSettingsStore } from "@/stores/settingsStore";
+import type { Project } from "@/types";
+import SettingsSheet from "@/components/SettingsSheet";
+
+export default function HomePage() {
+  const navigate = useNavigate();
+  const { projects, addProject, removeProject } = useProjectStore();
+  const { defaultClonePath } = useSettingsStore();
+  const [cloneUrl, setCloneUrl] = useState("");
+  const [clonePath, setClonePath] = useState("");
+  const [isCloning, setIsCloning] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  const [showCloneDialog, setShowCloneDialog] = useState(false);
+  const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [newRepoName, setNewRepoName] = useState("");
+  const [newRepoPath, setNewRepoPath] = useState("");
+
+  // Sort projects by last opened
+  const sortedProjects = [...projects].sort(
+    (a, b) => new Date(b.lastOpened).getTime() - new Date(a.lastOpened).getTime()
+  );
+
+  useEffect(() => {
+    if (showCloneDialog && defaultClonePath && !clonePath) {
+      setClonePath(defaultClonePath);
+    }
+  }, [showCloneDialog, defaultClonePath]);
+
+  useEffect(() => {
+    if (showCreateDialog && defaultClonePath && !newRepoPath) {
+      setNewRepoPath(defaultClonePath);
+    }
+  }, [showCreateDialog, defaultClonePath]);
+
+  const handleOpenProject = async () => {
+    try {
+      const selected = await open({
+        directory: true,
+        multiple: false,
+        title: "Select Git Repository",
+      });
+
+      if (selected && typeof selected === "string") {
+        const isRepo = await invoke<boolean>("is_git_repo", { path: selected });
+        if (!isRepo) {
+          toast.error("Selected folder is not a git repository");
+          return;
+        }
+        const name = selected.split("/").pop() || "Unknown";
+        const project: Project = {
+          id: crypto.randomUUID(),
+          name,
+          path: selected,
+          lastOpened: new Date().toISOString(),
+        };
+        addProject(project);
+        await invoke("add_project", { project });
+        navigate(`/project/${project.id}`);
+      }
+    } catch (error) {
+      toast.error("Failed to open project");
+      console.error(error);
+    }
+  };
+
+  const handleSelectClonePath = async () => {
+    try {
+      const selected = await open({
+        directory: true,
+        multiple: false,
+        title: "Select Clone Location",
+        defaultPath: clonePath || defaultClonePath || undefined,
+      });
+
+      if (selected && typeof selected === "string") {
+        const repoName = cloneUrl
+          .split("/")
+          .pop()
+          ?.replace(/\.git$/, "") || "repo";
+        setClonePath(`${selected}/${repoName}`);
+      }
+    } catch (error) {
+      console.error("Failed to select folder:", error);
+    }
+  };
+
+  const handleSelectCreatePath = async () => {
+    try {
+      const selected = await open({
+        directory: true,
+        multiple: false,
+        title: "Select Parent Directory",
+        defaultPath: newRepoPath || defaultClonePath || undefined,
+      });
+
+      if (selected && typeof selected === "string") {
+        setNewRepoPath(selected);
+      }
+    } catch (error) {
+      console.error("Failed to select folder:", error);
+    }
+  };
+
+  const handleCloneRepo = async () => {
+    if (!cloneUrl || !clonePath) {
+      toast.error("Please fill in all fields");
+      return;
+    }
+    setIsCloning(true);
+    try {
+      const result = await invoke<string>("clone_repo", {
+        url: cloneUrl,
+        path: clonePath,
+      });
+      const name = clonePath.split("/").pop() || "Cloned Repo";
+      const project: Project = {
+        id: crypto.randomUUID(),
+        name,
+        path: result,
+        lastOpened: new Date().toISOString(),
+      };
+      addProject(project);
+      await invoke("add_project", { project });
+      toast.success("Repository cloned successfully");
+      setShowCloneDialog(false);
+      setCloneUrl("");
+      setClonePath("");
+      navigate(`/project/${project.id}`);
+    } catch (error) {
+      toast.error("Failed to clone repository");
+      console.error(error);
+    } finally {
+      setIsCloning(false);
+    }
+  };
+
+  const handleCreateRepo = async () => {
+    if (!newRepoName || !newRepoPath) {
+      toast.error("Please fill in all fields");
+      return;
+    }
+    try {
+      const fullPath = `${newRepoPath}/${newRepoName}`;
+      await invoke("init_repo", { path: fullPath });
+      const project: Project = {
+        id: crypto.randomUUID(),
+        name: newRepoName,
+        path: fullPath,
+        lastOpened: new Date().toISOString(),
+      };
+      addProject(project);
+      await invoke("add_project", { project });
+      toast.success("Repository created successfully");
+      setShowCreateDialog(false);
+      setNewRepoName("");
+      setNewRepoPath("");
+      navigate(`/project/${project.id}`);
+    } catch (error) {
+      toast.error("Failed to create repository");
+      console.error(error);
+    }
+  };
+
+  const handleDeleteProject = async (project: Project) => {
+    try {
+      removeProject(project.id);
+      await invoke("remove_project", { id: project.id });
+      toast.success("Project removed");
+    } catch (error) {
+      toast.error("Failed to remove project");
+      console.error(error);
+    }
+  };
+
+  const handleOpenInFinder = async (path: string) => {
+    try {
+      await invoke("open_in_finder", { path });
+    } catch (error) {
+      toast.error("Failed to open in Finder");
+      console.error(error);
+    }
+  };
+
+  const handleProjectClick = (project: Project) => {
+    // Update last opened
+    addProject({ ...project, lastOpened: new Date().toISOString() });
+    navigate(`/project/${project.id}`);
+  };
+
+  const handleCloneDialogChange = (open: boolean) => {
+    setShowCloneDialog(open);
+    if (!open) {
+      setCloneUrl("");
+      setClonePath("");
+    }
+  };
+
+  const handleCreateDialogChange = (open: boolean) => {
+    setShowCreateDialog(open);
+    if (!open) {
+      setNewRepoName("");
+      setNewRepoPath("");
+    }
+  };
+
+  const getRelativeTime = (date: string) => {
+    const now = new Date();
+    const then = new Date(date);
+    const diff = now.getTime() - then.getTime();
+    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+    const hours = Math.floor(diff / (1000 * 60 * 60));
+    const minutes = Math.floor(diff / (1000 * 60));
+
+    if (days > 0) return `${days}d ago`;
+    if (hours > 0) return `${hours}h ago`;
+    if (minutes > 0) return `${minutes}m ago`;
+    return "Just now";
+  };
+
+  return (
+    <div className="flex h-full flex-col bg-background">
+      {/* Header */}
+      <header className="flex items-center justify-between border-b border-border px-6 py-4">
+        <div className="flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-portal-orange/20 to-orange-600/20 border border-portal-orange/30">
+            <GitBranch className="h-5 w-5 text-portal-orange" />
+          </div>
+          <div>
+            <h1 className="text-base font-semibold">Chell</h1>
+            <p className="text-[11px] text-muted-foreground">
+              AI-powered git client
+            </p>
+          </div>
+        </div>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8"
+          onClick={() => setShowSettings(true)}
+        >
+          <Settings className="h-4 w-4" />
+        </Button>
+      </header>
+
+      {/* Main content */}
+      <div className="flex-1 overflow-hidden">
+        {projects.length === 0 ? (
+          /* Empty state */
+          <div className="flex h-full flex-col items-center justify-center px-6">
+            <div className="w-full max-w-md space-y-8">
+              {/* Hero */}
+              <div className="text-center">
+                <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-portal-orange/20 to-orange-600/20 border border-portal-orange/30">
+                  <GitBranch className="h-8 w-8 text-portal-orange" />
+                </div>
+                <h2 className="text-xl font-semibold">Welcome to Chell</h2>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  A visual git client designed for AI coding assistants
+                </p>
+              </div>
+
+              {/* Quick actions */}
+              <div className="space-y-3">
+                <button
+                  onClick={handleOpenProject}
+                  className="group flex w-full items-center gap-4 rounded-lg border border-border bg-card p-4 text-left transition-all hover:border-portal-orange/50 hover:bg-muted/50"
+                >
+                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
+                    <FolderOpen className="h-5 w-5 text-muted-foreground group-hover:text-portal-orange" />
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-sm font-medium">Open existing repository</p>
+                    <p className="text-xs text-muted-foreground">
+                      Browse to a local git repository
+                    </p>
+                  </div>
+                  <ArrowRight className="h-4 w-4 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
+                </button>
+
+                <button
+                  onClick={() => setShowCloneDialog(true)}
+                  className="group flex w-full items-center gap-4 rounded-lg border border-border bg-card p-4 text-left transition-all hover:border-portal-orange/50 hover:bg-muted/50"
+                >
+                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
+                    <Download className="h-5 w-5 text-muted-foreground group-hover:text-portal-orange" />
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-sm font-medium">Clone repository</p>
+                    <p className="text-xs text-muted-foreground">
+                      Clone from GitHub, GitLab, or any URL
+                    </p>
+                  </div>
+                  <ArrowRight className="h-4 w-4 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
+                </button>
+
+                <button
+                  onClick={() => setShowCreateDialog(true)}
+                  className="group flex w-full items-center gap-4 rounded-lg border border-border bg-card p-4 text-left transition-all hover:border-portal-orange/50 hover:bg-muted/50"
+                >
+                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
+                    <Plus className="h-5 w-5 text-muted-foreground group-hover:text-portal-orange" />
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-sm font-medium">Create new repository</p>
+                    <p className="text-xs text-muted-foreground">
+                      Initialize a new git repository
+                    </p>
+                  </div>
+                  <ArrowRight className="h-4 w-4 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
+                </button>
+              </div>
+
+              {/* Features hint */}
+              <div className="flex items-center justify-center gap-6 pt-4 text-[11px] text-muted-foreground">
+                <div className="flex items-center gap-1.5">
+                  <Sparkles className="h-3 w-3 text-portal-orange" />
+                  <span>AI commit messages</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <Terminal className="h-3 w-3 text-portal-orange" />
+                  <span>Built-in terminal</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : (
+          /* Project list */
+          <div className="flex h-full flex-col">
+            {/* Actions bar */}
+            <div className="flex items-center gap-2 border-b border-border px-6 py-3">
+              <Button onClick={handleOpenProject} variant="outline" size="sm">
+                <FolderOpen className="mr-2 h-3.5 w-3.5" />
+                Open
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => setShowCloneDialog(true)}>
+                <Download className="mr-2 h-3.5 w-3.5" />
+                Clone
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => setShowCreateDialog(true)}>
+                <Plus className="mr-2 h-3.5 w-3.5" />
+                New
+              </Button>
+            </div>
+
+            {/* Recent projects */}
+            <div className="px-6 py-4">
+              <h2 className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                Recent Projects
+              </h2>
+            </div>
+
+            <ScrollArea className="flex-1 px-6">
+              <div className="space-y-1 pb-6">
+                {sortedProjects.map((project) => (
+                  <ContextMenu key={project.id}>
+                    <ContextMenuTrigger>
+                      <button
+                        className="group flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left transition-colors hover:bg-muted/50"
+                        onClick={() => handleProjectClick(project)}
+                      >
+                        <FolderGit2 className="h-4 w-4 shrink-0 text-portal-orange" />
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-medium">{project.name}</p>
+                          <p className="truncate text-[11px] text-muted-foreground font-mono">
+                            {project.path}
+                          </p>
+                        </div>
+                        <span className="shrink-0 text-[11px] text-muted-foreground">
+                          {getRelativeTime(project.lastOpened)}
+                        </span>
+                      </button>
+                    </ContextMenuTrigger>
+                    <ContextMenuContent>
+                      <ContextMenuItem onClick={() => handleOpenInFinder(project.path)}>
+                        <FolderOpen className="mr-2 h-4 w-4" />
+                        Open in Finder
+                      </ContextMenuItem>
+                      <ContextMenuItem
+                        className="text-destructive"
+                        onClick={() => handleDeleteProject(project)}
+                      >
+                        <Trash2 className="mr-2 h-4 w-4" />
+                        Remove from list
+                      </ContextMenuItem>
+                    </ContextMenuContent>
+                  </ContextMenu>
+                ))}
+              </div>
+            </ScrollArea>
+          </div>
+        )}
+      </div>
+
+      {/* Clone Dialog */}
+      <Dialog open={showCloneDialog} onOpenChange={handleCloneDialogChange}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Clone Repository</DialogTitle>
+            <DialogDescription>
+              Enter the URL of the repository to clone
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <Input
+              placeholder="https://github.com/user/repo.git"
+              value={cloneUrl}
+              onChange={(e) => setCloneUrl(e.target.value)}
+            />
+            <div className="flex gap-2">
+              <Input
+                placeholder="Local path"
+                value={clonePath}
+                onChange={(e) => setClonePath(e.target.value)}
+                className="flex-1"
+              />
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                onClick={handleSelectClonePath}
+              >
+                <FolderOpen className="h-4 w-4" />
+              </Button>
+            </div>
+            {defaultClonePath && (
+              <p className="text-xs text-muted-foreground">
+                Default: {defaultClonePath}
+              </p>
+            )}
+          </div>
+          <DialogFooter>
+            <Button
+              onClick={handleCloneRepo}
+              disabled={isCloning}
+              className="bg-portal-orange hover:bg-portal-orange/90"
+            >
+              {isCloning ? "Cloning..." : "Clone"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Create Dialog */}
+      <Dialog open={showCreateDialog} onOpenChange={handleCreateDialogChange}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Create New Repository</DialogTitle>
+            <DialogDescription>
+              Initialize a new git repository
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <Input
+              placeholder="Repository name"
+              value={newRepoName}
+              onChange={(e) => setNewRepoName(e.target.value)}
+            />
+            <div className="flex gap-2">
+              <Input
+                placeholder="Parent directory"
+                value={newRepoPath}
+                onChange={(e) => setNewRepoPath(e.target.value)}
+                className="flex-1"
+              />
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                onClick={handleSelectCreatePath}
+              >
+                <FolderOpen className="h-4 w-4" />
+              </Button>
+            </div>
+            {defaultClonePath && (
+              <p className="text-xs text-muted-foreground">
+                Default: {defaultClonePath}
+              </p>
+            )}
+          </div>
+          <DialogFooter>
+            <Button
+              onClick={handleCreateRepo}
+              className="bg-portal-orange hover:bg-portal-orange/90"
+            >
+              Create
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Settings Sheet */}
+      <SettingsSheet open={showSettings} onOpenChange={setShowSettings} />
+    </div>
+  );
+}

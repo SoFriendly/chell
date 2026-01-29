@@ -1,0 +1,370 @@
+use crate::{Branch, Commit, DiffHunk, DiffLine, FileDiff, GitStatus};
+use git2::{DiffOptions, Repository, StatusOptions};
+
+pub struct GitService;
+
+impl GitService {
+    pub fn is_git_repo(path: &str) -> Result<bool, String> {
+        Ok(Repository::open(path).is_ok())
+    }
+
+    pub fn get_status(repo_path: &str) -> Result<GitStatus, String> {
+        let repo = Repository::open(repo_path).map_err(|e| e.to_string())?;
+
+        let head = repo.head().ok();
+        let branch = head
+            .as_ref()
+            .and_then(|h| h.shorthand())
+            .map(|s| s.to_string())
+            .unwrap_or_else(|| "HEAD".to_string());
+
+        let mut opts = StatusOptions::new();
+        opts.include_untracked(true);
+        opts.recurse_untracked_dirs(true);
+
+        let statuses = repo.statuses(Some(&mut opts)).map_err(|e| e.to_string())?;
+
+        let mut staged = Vec::new();
+        let mut unstaged = Vec::new();
+        let mut untracked = Vec::new();
+
+        for entry in statuses.iter() {
+            let status = entry.status();
+            let path = entry.path().unwrap_or("").to_string();
+
+            if status.is_index_new()
+                || status.is_index_modified()
+                || status.is_index_deleted()
+                || status.is_index_renamed()
+            {
+                staged.push(path.clone());
+            }
+            if status.is_wt_modified() || status.is_wt_deleted() || status.is_wt_renamed() {
+                unstaged.push(path.clone());
+            }
+            if status.is_wt_new() {
+                untracked.push(path);
+            }
+        }
+
+        Ok(GitStatus {
+            branch,
+            ahead: 0,
+            behind: 0,
+            staged,
+            unstaged,
+            untracked,
+        })
+    }
+
+    pub fn get_diff(repo_path: &str) -> Result<Vec<FileDiff>, String> {
+        use std::cell::RefCell;
+        use std::collections::HashMap;
+
+        let repo = Repository::open(repo_path).map_err(|e| e.to_string())?;
+
+        // Get diff between HEAD and working directory
+        let head = repo.head().ok().and_then(|h| h.peel_to_tree().ok());
+
+        let mut opts = DiffOptions::new();
+        opts.include_untracked(true);
+
+        let diff = repo
+            .diff_tree_to_workdir_with_index(head.as_ref(), Some(&mut opts))
+            .map_err(|e| e.to_string())?;
+
+        // Use RefCell to allow interior mutability
+        let diffs: RefCell<HashMap<String, FileDiff>> = RefCell::new(HashMap::new());
+
+        diff.foreach(
+            &mut |delta, _| {
+                let path = delta
+                    .new_file()
+                    .path()
+                    .or_else(|| delta.old_file().path())
+                    .map(|p| p.to_string_lossy().to_string())
+                    .unwrap_or_default();
+
+                let status = match delta.status() {
+                    git2::Delta::Added => "added",
+                    git2::Delta::Deleted => "deleted",
+                    git2::Delta::Modified => "modified",
+                    git2::Delta::Renamed => "renamed",
+                    _ => "modified",
+                }
+                .to_string();
+
+                diffs.borrow_mut().insert(path.clone(), FileDiff {
+                    path,
+                    status,
+                    hunks: Vec::new(),
+                });
+
+                true
+            },
+            None,
+            Some(&mut |delta, hunk| {
+                let path = delta
+                    .new_file()
+                    .path()
+                    .or_else(|| delta.old_file().path())
+                    .map(|p| p.to_string_lossy().to_string())
+                    .unwrap_or_default();
+
+                if let Some(file_diff) = diffs.borrow_mut().get_mut(&path) {
+                    file_diff.hunks.push(DiffHunk {
+                        old_start: hunk.old_start(),
+                        old_lines: hunk.old_lines(),
+                        new_start: hunk.new_start(),
+                        new_lines: hunk.new_lines(),
+                        lines: Vec::new(),
+                    });
+                }
+
+                true
+            }),
+            Some(&mut |delta, _hunk, line| {
+                let path = delta
+                    .new_file()
+                    .path()
+                    .or_else(|| delta.old_file().path())
+                    .map(|p| p.to_string_lossy().to_string())
+                    .unwrap_or_default();
+
+                let line_type = match line.origin() {
+                    '+' => "addition",
+                    '-' => "deletion",
+                    _ => "context",
+                }
+                .to_string();
+
+                let content = String::from_utf8_lossy(line.content()).to_string();
+
+                if let Some(file_diff) = diffs.borrow_mut().get_mut(&path) {
+                    if let Some(hunk) = file_diff.hunks.last_mut() {
+                        hunk.lines.push(DiffLine {
+                            line_type,
+                            content: content.trim_end_matches('\n').to_string(),
+                            old_line_no: line.old_lineno(),
+                            new_line_no: line.new_lineno(),
+                        });
+                    }
+                }
+
+                true
+            }),
+        )
+        .map_err(|e| e.to_string())?;
+
+        Ok(diffs.into_inner().into_values().collect())
+    }
+
+    pub fn commit(repo_path: &str, message: &str) -> Result<(), String> {
+        let repo = Repository::open(repo_path).map_err(|e| e.to_string())?;
+
+        // Add all changes to index
+        let mut index = repo.index().map_err(|e| e.to_string())?;
+        index
+            .add_all(["*"].iter(), git2::IndexAddOption::DEFAULT, None)
+            .map_err(|e| e.to_string())?;
+        index.write().map_err(|e| e.to_string())?;
+
+        let tree_id = index.write_tree().map_err(|e| e.to_string())?;
+        let tree = repo.find_tree(tree_id).map_err(|e| e.to_string())?;
+
+        let signature = repo.signature().map_err(|e| e.to_string())?;
+
+        let parent = repo
+            .head()
+            .ok()
+            .and_then(|h| h.peel_to_commit().ok());
+        let parents: Vec<&git2::Commit> = parent.iter().collect();
+
+        repo.commit(
+            Some("HEAD"),
+            &signature,
+            &signature,
+            message,
+            &tree,
+            &parents,
+        )
+        .map_err(|e| e.to_string())?;
+
+        Ok(())
+    }
+
+    pub fn get_branches(repo_path: &str) -> Result<Vec<Branch>, String> {
+        let repo = Repository::open(repo_path).map_err(|e| e.to_string())?;
+        let mut branches = Vec::new();
+
+        let head = repo.head().ok();
+        let head_name = head.as_ref().and_then(|h| h.shorthand()).map(|s| s.to_string());
+
+        for branch in repo
+            .branches(None)
+            .map_err(|e| e.to_string())?
+        {
+            let (branch, branch_type) = branch.map_err(|e| e.to_string())?;
+            let name = branch
+                .name()
+                .map_err(|e| e.to_string())?
+                .unwrap_or("")
+                .to_string();
+
+            let is_remote = matches!(branch_type, git2::BranchType::Remote);
+            let is_head = head_name.as_ref().map(|h| h == &name).unwrap_or(false);
+
+            let upstream = branch
+                .upstream()
+                .ok()
+                .and_then(|u| u.name().ok().flatten().map(|s| s.to_string()));
+
+            branches.push(Branch {
+                name,
+                is_head,
+                is_remote,
+                upstream,
+            });
+        }
+
+        Ok(branches)
+    }
+
+    pub fn checkout_branch(repo_path: &str, branch: &str) -> Result<(), String> {
+        let repo = Repository::open(repo_path).map_err(|e| e.to_string())?;
+
+        let (object, reference) = repo
+            .revparse_ext(branch)
+            .map_err(|e| e.to_string())?;
+
+        repo.checkout_tree(&object, None)
+            .map_err(|e| e.to_string())?;
+
+        match reference {
+            Some(gref) => {
+                repo.set_head(gref.name().unwrap())
+                    .map_err(|e| e.to_string())?;
+            }
+            None => {
+                repo.set_head_detached(object.id())
+                    .map_err(|e| e.to_string())?;
+            }
+        }
+
+        Ok(())
+    }
+
+    pub fn create_branch(repo_path: &str, name: &str) -> Result<(), String> {
+        let repo = Repository::open(repo_path).map_err(|e| e.to_string())?;
+
+        let head = repo.head().map_err(|e| e.to_string())?;
+        let commit = head.peel_to_commit().map_err(|e| e.to_string())?;
+
+        repo.branch(name, &commit, false)
+            .map_err(|e| e.to_string())?;
+
+        Ok(())
+    }
+
+    pub fn get_history(repo_path: &str, limit: u32) -> Result<Vec<Commit>, String> {
+        let repo = Repository::open(repo_path).map_err(|e| e.to_string())?;
+        let mut commits = Vec::new();
+
+        let head = match repo.head() {
+            Ok(h) => h,
+            Err(_) => return Ok(commits), // Empty repo
+        };
+
+        let oid = head.target().ok_or("Failed to get HEAD target")?;
+        let mut revwalk = repo.revwalk().map_err(|e| e.to_string())?;
+        revwalk.push(oid).map_err(|e| e.to_string())?;
+        revwalk.set_sorting(git2::Sort::TIME).map_err(|e| e.to_string())?;
+
+        for (i, oid) in revwalk.enumerate() {
+            if i >= limit as usize {
+                break;
+            }
+
+            let oid = oid.map_err(|e| e.to_string())?;
+            let commit = repo.find_commit(oid).map_err(|e| e.to_string())?;
+
+            let id = oid.to_string();
+            let short_id = id[..7.min(id.len())].to_string();
+            let message = commit
+                .message()
+                .unwrap_or("")
+                .lines()
+                .next()
+                .unwrap_or("")
+                .to_string();
+            let author = commit.author().name().unwrap_or("").to_string();
+            let author_email = commit.author().email().unwrap_or("").to_string();
+            let timestamp = commit.time().seconds().to_string();
+
+            commits.push(Commit {
+                id,
+                short_id,
+                message,
+                author,
+                author_email,
+                timestamp,
+                summary: None,
+            });
+        }
+
+        Ok(commits)
+    }
+
+    pub fn discard_file(repo_path: &str, file_path: &str) -> Result<(), String> {
+        let repo = Repository::open(repo_path).map_err(|e| e.to_string())?;
+
+        let mut checkout_builder = git2::build::CheckoutBuilder::new();
+        checkout_builder.path(file_path);
+        checkout_builder.force();
+
+        repo.checkout_head(Some(&mut checkout_builder))
+            .map_err(|e| e.to_string())?;
+
+        Ok(())
+    }
+
+    pub fn checkout_commit(repo_path: &str, commit_id: &str) -> Result<(), String> {
+        let repo = Repository::open(repo_path).map_err(|e| e.to_string())?;
+
+        let oid = git2::Oid::from_str(commit_id).map_err(|e| e.to_string())?;
+        let commit = repo.find_commit(oid).map_err(|e| e.to_string())?;
+
+        repo.checkout_tree(commit.as_object(), None)
+            .map_err(|e| e.to_string())?;
+
+        repo.set_head_detached(oid)
+            .map_err(|e| e.to_string())?;
+
+        Ok(())
+    }
+
+    pub fn reset_to_commit(repo_path: &str, commit_id: &str) -> Result<(), String> {
+        let repo = Repository::open(repo_path).map_err(|e| e.to_string())?;
+
+        let oid = git2::Oid::from_str(commit_id).map_err(|e| e.to_string())?;
+        let commit = repo.find_commit(oid).map_err(|e| e.to_string())?;
+        let object = commit.as_object();
+
+        repo.reset(object, git2::ResetType::Hard, None)
+            .map_err(|e| e.to_string())?;
+
+        Ok(())
+    }
+
+    pub fn init_repo(path: &str) -> Result<(), String> {
+        std::fs::create_dir_all(path).map_err(|e| e.to_string())?;
+        Repository::init(path).map_err(|e| e.to_string())?;
+        Ok(())
+    }
+
+    pub fn clone_repo(url: &str, path: &str) -> Result<String, String> {
+        std::fs::create_dir_all(path).map_err(|e| e.to_string())?;
+        Repository::clone(url, path).map_err(|e| e.to_string())?;
+        Ok(path.to_string())
+    }
+}

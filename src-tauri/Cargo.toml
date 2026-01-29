@@ -1,0 +1,32 @@
+[package]
+name = "chell"
+version = "0.1.0"
+description = "A cross-platform visual git client with integrated terminal for AI coding assistants"
+authors = ["you"]
+edition = "2021"
+
+[lib]
+name = "chell_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["tray-icon"] }
+tauri-plugin-opener = "2"
+tauri-plugin-dialog = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+git2 = "0.19"
+portable-pty = "0.8"
+tokio = { version = "1", features = ["full"] }
+parking_lot = "0.12"
+uuid = { version = "1", features = ["v4"] }
+dirs = "5"
+rusqlite = { version = "0.31", features = ["bundled"] }
+thiserror = "1"
+log = "0.4"
+env_logger = "0.11"
+which = "6"
+reqwest = { version = "0.12", features = ["json"] }
