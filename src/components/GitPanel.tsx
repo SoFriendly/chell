@@ -55,6 +55,7 @@ const GROQ_API_KEY = "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";
 
 interface GitPanelProps {
   projectPath: string;
+  projectName: string;
   onRefresh: () => void;
 }
 
@@ -63,7 +64,7 @@ interface CommitSuggestion {
   description: string;
 }
 
-export default function GitPanel({ projectPath, onRefresh }: GitPanelProps) {
+export default function GitPanel({ projectPath, projectName, onRefresh }: GitPanelProps) {
   const { diffs, branches, loading, status } = useGitStore();
   const [commitSubject, setCommitSubject] = useState("");
   const [commitDescription, setCommitDescription] = useState("");
@@ -76,9 +77,13 @@ export default function GitPanel({ projectPath, onRefresh }: GitPanelProps) {
   const [isCreatingBranch, setIsCreatingBranch] = useState(false);
   const [isSwitchingBranch, setIsSwitchingBranch] = useState(false);
   const [expandedFiles, setExpandedFiles] = useState<Set<string>>(new Set());
+  const [selectedFiles, setSelectedFiles] = useState<Set<string>>(new Set());
+  const [showDiscardSelectedDialog, setShowDiscardSelectedDialog] = useState(false);
+  const [isDiscardingSelected, setIsDiscardingSelected] = useState(false);
   const lastDiffsHash = useRef<string>("");
   const refreshIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const hasGeneratedInitialMessage = useRef(false);
+  const lastClickedIndex = useRef<number>(-1);
 
   const currentBranch = branches.find((b) => b.isHead);
   const localBranches = branches.filter((b) => !b.isRemote);
@@ -108,12 +113,23 @@ export default function GitPanel({ projectPath, onRefresh }: GitPanelProps) {
       // Reset when no changes
       setCommitSubject("");
       setCommitDescription("");
+      setSelectedFiles(new Set());
       lastDiffsHash.current = "";
       hasGeneratedInitialMessage.current = false;
     } else if (diffsHash !== lastDiffsHash.current) {
       // Files changed - generate new message
       const previousHash = lastDiffsHash.current;
       lastDiffsHash.current = diffsHash;
+
+      // Clear selection of files that no longer exist
+      const currentPaths = new Set(diffs.map(d => d.path));
+      setSelectedFiles(prev => {
+        const next = new Set<string>();
+        prev.forEach(path => {
+          if (currentPaths.has(path)) next.add(path);
+        });
+        return next;
+      });
 
       // Only auto-generate on first load or when files actually change
       if (!previousHash || !hasGeneratedInitialMessage.current) {
@@ -204,11 +220,77 @@ export default function GitPanel({ projectPath, onRefresh }: GitPanelProps) {
     try {
       await invoke("discard_file", { repoPath: projectPath, filePath });
       toast.success("Changes discarded");
+      setSelectedFiles(prev => {
+        const next = new Set(prev);
+        next.delete(filePath);
+        return next;
+      });
       onRefresh();
     } catch (error) {
       toast.error("Failed to discard changes");
       console.error(error);
     }
+  };
+
+  const handleDiscardSelected = async () => {
+    if (selectedFiles.size === 0) return;
+    setIsDiscardingSelected(true);
+    try {
+      const filesToDiscard = Array.from(selectedFiles);
+      for (const filePath of filesToDiscard) {
+        await invoke("discard_file", { repoPath: projectPath, filePath });
+      }
+      toast.success(`Discarded changes to ${filesToDiscard.length} file${filesToDiscard.length > 1 ? 's' : ''}`);
+      setSelectedFiles(new Set());
+      setShowDiscardSelectedDialog(false);
+      onRefresh();
+    } catch (error) {
+      toast.error("Failed to discard some changes");
+      console.error(error);
+    } finally {
+      setIsDiscardingSelected(false);
+    }
+  };
+
+  const handleFileSelect = (filePath: string, index: number, e: React.MouseEvent) => {
+    e.stopPropagation();
+
+    const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+    const isMultiSelectKey = isMac ? e.metaKey : e.ctrlKey;
+    const isRangeSelectKey = e.shiftKey;
+
+    setSelectedFiles(prev => {
+      const next = new Set(prev);
+
+      if (isRangeSelectKey && lastClickedIndex.current >= 0) {
+        // Shift-click: select range
+        const start = Math.min(lastClickedIndex.current, index);
+        const end = Math.max(lastClickedIndex.current, index);
+        for (let i = start; i <= end; i++) {
+          next.add(diffs[i].path);
+        }
+      } else if (isMultiSelectKey) {
+        // Cmd/Ctrl-click: toggle individual selection
+        if (next.has(filePath)) {
+          next.delete(filePath);
+        } else {
+          next.add(filePath);
+        }
+      } else {
+        // Regular click: clear and select only this one
+        next.clear();
+        next.add(filePath);
+      }
+
+      return next;
+    });
+
+    lastClickedIndex.current = index;
+  };
+
+  const clearSelection = () => {
+    setSelectedFiles(new Set());
+    lastClickedIndex.current = -1;
   };
 
   const handleCreateBranch = async () => {
@@ -269,125 +351,101 @@ export default function GitPanel({ projectPath, onRefresh }: GitPanelProps) {
     }
   };
 
-  const FileItem = ({ diff }: { diff: FileDiff }) => (
-    <div className="group">
-      <div
-        className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 hover:bg-muted/50"
-        onClick={() => toggleFileExpanded(diff.path)}
-      >
-        {expandedFiles.has(diff.path) ? (
-          <ChevronDown className="h-3 w-3 shrink-0 text-muted-foreground" />
-        ) : (
-          <ChevronRight className="h-3 w-3 shrink-0 text-muted-foreground" />
-        )}
-        <span className={cn("h-2 w-2 shrink-0 rounded-sm", getStatusColor(diff.status))} />
-        <span className="flex-1 truncate font-mono text-xs">{diff.path}</span>
-        <AlertDialog>
-          <AlertDialogTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-5 w-5 opacity-0 group-hover:opacity-100"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <Undo2 className="h-3 w-3 text-muted-foreground hover:text-destructive" />
-            </Button>
-          </AlertDialogTrigger>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Discard changes?</AlertDialogTitle>
-              <AlertDialogDescription>
-                This will discard all changes to {diff.path}. This cannot be undone.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Cancel</AlertDialogCancel>
-              <AlertDialogAction
-                onClick={() => handleDiscardFile(diff.path)}
-                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              >
-                Discard
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
-      </div>
+  const FileItem = ({ diff, index }: { diff: FileDiff; index: number }) => {
+    const isSelected = selectedFiles.has(diff.path);
 
-      {/* Inline diff view */}
-      {expandedFiles.has(diff.path) && (
-        <div className="ml-5 mt-1 rounded bg-[#0d0d0d] p-2">
-          <pre className="overflow-x-auto font-mono text-[10px] leading-relaxed">
-            {diff.hunks.map((hunk, hi) => (
-              <div key={hi}>
-                <div className="text-muted-foreground">
-                  @@ -{hunk.oldStart},{hunk.oldLines} +{hunk.newStart},{hunk.newLines} @@
-                </div>
-                {hunk.lines.map((line, li) => (
-                  <div
-                    key={li}
-                    className={cn(
-                      line.type === "addition" && "bg-green-500/10 text-green-400",
-                      line.type === "deletion" && "bg-red-500/10 text-red-400",
-                      line.type === "context" && "text-muted-foreground"
-                    )}
-                  >
-                    {line.type === "addition" && "+"}
-                    {line.type === "deletion" && "-"}
-                    {line.type === "context" && " "}
-                    {line.content}
-                  </div>
-                ))}
-              </div>
-            ))}
-          </pre>
+    return (
+      <div className="group">
+        <div
+          className={cn(
+            "flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 transition-colors",
+            isSelected ? "bg-portal-orange/20" : "hover:bg-muted/50"
+          )}
+          onClick={(e) => handleFileSelect(diff.path, index, e)}
+        >
+          <button
+            className="shrink-0 p-0.5 hover:bg-muted rounded"
+            onClick={(e) => {
+              e.stopPropagation();
+              toggleFileExpanded(diff.path);
+            }}
+          >
+            {expandedFiles.has(diff.path) ? (
+              <ChevronDown className="h-3 w-3 text-muted-foreground" />
+            ) : (
+              <ChevronRight className="h-3 w-3 text-muted-foreground" />
+            )}
+          </button>
+          <span className={cn("h-2 w-2 shrink-0 rounded-sm", getStatusColor(diff.status))} />
+          <span className="flex-1 truncate font-mono text-xs">{diff.path}</span>
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-5 w-5 opacity-0 group-hover:opacity-100"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <Undo2 className="h-3 w-3 text-muted-foreground hover:text-destructive" />
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Discard changes?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  This will discard all changes to {diff.path}. This cannot be undone.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={() => handleDiscardFile(diff.path)}
+                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                >
+                  Discard
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </div>
-      )}
-    </div>
-  );
+
+        {/* Inline diff view */}
+        {expandedFiles.has(diff.path) && (
+          <div className="ml-5 mt-1 rounded bg-[#0d0d0d] p-2">
+            <pre className="overflow-x-auto font-mono text-[10px] leading-relaxed">
+              {diff.hunks.map((hunk, hi) => (
+                <div key={hi}>
+                  <div className="text-muted-foreground">
+                    @@ -{hunk.oldStart},{hunk.oldLines} +{hunk.newStart},{hunk.newLines} @@
+                  </div>
+                  {hunk.lines.map((line, li) => (
+                    <div
+                      key={li}
+                      className={cn(
+                        line.type === "addition" && "bg-green-500/10 text-green-400",
+                        line.type === "deletion" && "bg-red-500/10 text-red-400",
+                        line.type === "context" && "text-muted-foreground"
+                      )}
+                    >
+                      {line.type === "addition" && "+"}
+                      {line.type === "deletion" && "-"}
+                      {line.type === "context" && " "}
+                      {line.content}
+                    </div>
+                  ))}
+                </div>
+              ))}
+            </pre>
+          </div>
+        )}
+      </div>
+    );
+  };
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
-      {/* Branch selector and actions */}
-      <div className="flex items-center justify-between gap-2 border-b border-border px-4 py-2">
-        {/* Branch dropdown */}
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-7 gap-1.5 px-2 text-xs font-normal"
-              disabled={isSwitchingBranch}
-            >
-              <GitBranch className="h-3 w-3" />
-              <span className="max-w-[100px] truncate">{currentBranch?.name || "main"}</span>
-              {isSwitchingBranch ? (
-                <Loader2 className="h-3 w-3 animate-spin" />
-              ) : (
-                <ChevronDown className="h-3 w-3" />
-              )}
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="w-56">
-            {localBranches.map((branch) => (
-              <DropdownMenuItem
-                key={branch.name}
-                onClick={() => handleSwitchBranch(branch.name)}
-                className="flex items-center justify-between"
-              >
-                <span className="truncate">{branch.name}</span>
-                {branch.isHead && <Check className="h-3 w-3 text-portal-orange" />}
-              </DropdownMenuItem>
-            ))}
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={() => setShowBranchDialog(true)}>
-              <Plus className="mr-2 h-3 w-3" />
-              New branch
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-
-        {/* Actions */}
-        <div className="flex items-center gap-1">
+      {/* Header with actions only */}
+      <div className="flex h-10 items-center justify-end gap-1 px-4">
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
@@ -454,12 +512,80 @@ export default function GitPanel({ projectPath, onRefresh }: GitPanelProps) {
             </TooltipTrigger>
             <TooltipContent>Refresh</TooltipContent>
           </Tooltip>
-        </div>
       </div>
 
       {/* Scrollable content */}
       <ScrollArea className="flex-1">
-        <div className="px-4 pb-4 pt-2">
+        <div className="px-4 pb-4 pt-4">
+          {/* Project name and branch */}
+          <div className="flex items-center gap-1.5 mb-4">
+            <span className="text-sm font-medium truncate">{projectName}</span>
+            <span className="text-muted-foreground">/</span>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 gap-1 px-1.5 text-xs font-normal text-muted-foreground hover:text-foreground"
+                  disabled={isSwitchingBranch}
+                >
+                  <GitBranch className="h-3 w-3" />
+                  <span className="max-w-[100px] truncate">{currentBranch?.name || "main"}</span>
+                  {isSwitchingBranch ? (
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                  ) : (
+                    <ChevronDown className="h-3 w-3" />
+                  )}
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="w-56">
+                {localBranches.map((branch) => (
+                  <DropdownMenuItem
+                    key={branch.name}
+                    onClick={() => handleSwitchBranch(branch.name)}
+                    className="flex items-center justify-between"
+                  >
+                    <span className="truncate">{branch.name}</span>
+                    {branch.isHead && <Check className="h-3 w-3 text-portal-orange" />}
+                  </DropdownMenuItem>
+                ))}
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => setShowBranchDialog(true)}>
+                  <Plus className="mr-2 h-3 w-3" />
+                  New branch
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+
+          {/* Selection actions */}
+          {selectedFiles.size > 0 && (
+            <div className="mb-3 flex items-center justify-between rounded-lg bg-muted/50 px-3 py-2">
+              <span className="text-xs text-muted-foreground">
+                {selectedFiles.size} file{selectedFiles.size > 1 ? 's' : ''} selected
+              </span>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 px-2 text-xs"
+                  onClick={clearSelection}
+                >
+                  Clear
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 px-2 text-xs text-destructive hover:text-destructive"
+                  onClick={() => setShowDiscardSelectedDialog(true)}
+                >
+                  <Undo2 className="mr-1 h-3 w-3" />
+                  Discard
+                </Button>
+              </div>
+            </div>
+          )}
+
           {/* Unstaged Changes */}
           {unstagedChanges.length > 0 && (
             <div className="mb-4">
@@ -467,8 +593,8 @@ export default function GitPanel({ projectPath, onRefresh }: GitPanelProps) {
                 Unstaged Changes
               </h3>
               <div className="space-y-0.5">
-                {unstagedChanges.map((diff) => (
-                  <FileItem key={diff.path} diff={diff} />
+                {unstagedChanges.map((diff, index) => (
+                  <FileItem key={diff.path} diff={diff} index={index} />
                 ))}
               </div>
             </div>
@@ -481,8 +607,8 @@ export default function GitPanel({ projectPath, onRefresh }: GitPanelProps) {
                 Staged Changes
               </h3>
               <div className="space-y-0.5">
-                {stagedChanges.map((diff) => (
-                  <FileItem key={diff.path} diff={diff} />
+                {stagedChanges.map((diff, index) => (
+                  <FileItem key={diff.path} diff={diff} index={unstagedChanges.length + index} />
                 ))}
               </div>
             </div>
@@ -576,6 +702,33 @@ export default function GitPanel({ projectPath, onRefresh }: GitPanelProps) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Discard selected files dialog */}
+      <AlertDialog open={showDiscardSelectedDialog} onOpenChange={setShowDiscardSelectedDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Discard changes to {selectedFiles.size} file{selectedFiles.size > 1 ? 's' : ''}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will discard all changes to the following files. This cannot be undone.
+              <ul className="mt-2 max-h-32 overflow-auto rounded bg-muted p-2 font-mono text-xs">
+                {Array.from(selectedFiles).map(file => (
+                  <li key={file} className="truncate">{file}</li>
+                ))}
+              </ul>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDiscardingSelected}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDiscardSelected}
+              disabled={isDiscardingSelected}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {isDiscardingSelected ? "Discarding..." : "Discard All"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

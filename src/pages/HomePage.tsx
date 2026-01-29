@@ -257,11 +257,21 @@ export default function HomePage() {
   };
 
   return (
-    <div className="flex h-full bg-background">
+    <div className="relative flex h-full bg-background">
+      {/* Single horizontal divider line spanning full width */}
+      <div className="absolute left-0 right-0 top-10 h-px bg-border" />
+      {/* Vertical divider for sidebar */}
+      <div className="absolute left-12 top-10 bottom-0 w-px bg-border" />
+
       {/* Left icon sidebar */}
-      <div className="flex w-12 flex-col items-center border-r border-border bg-background py-3">
-        {/* Top icons */}
-        <div className="flex flex-col items-center gap-1">
+      <div
+        data-tauri-drag-region
+        className="flex w-12 flex-col bg-background pt-8 pb-3"
+      >
+        {/* Inner container */}
+        <div className="flex flex-1 flex-col items-center mt-[9px] pt-3">
+          {/* Top icons */}
+          <div className="flex flex-col items-center gap-1">
           <Tooltip delayDuration={0}>
             <TooltipTrigger asChild>
               <button
@@ -327,6 +337,7 @@ export default function HomePage() {
             </TooltipTrigger>
             <TooltipContent side="right">Help</TooltipContent>
           </Tooltip>
+        </div>
         </div>
       </div>
 

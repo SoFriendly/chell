@@ -3,7 +3,6 @@ import { useParams, useNavigate } from "react-router-dom";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import {
-  Home,
   Settings,
   Terminal as TerminalIcon,
   X,
@@ -336,11 +335,21 @@ export default function ProjectPage() {
   const assistantOptions = getAssistantOptions();
 
   return (
-    <div className="flex h-full bg-background">
+    <div className="relative flex h-full bg-background">
+      {/* Single horizontal divider line spanning full width */}
+      <div className="absolute left-0 right-0 top-10 h-px bg-border" />
+      {/* Vertical divider for sidebar */}
+      <div className="absolute left-12 top-10 bottom-0 w-px bg-border" />
+
       {/* Left icon sidebar */}
-      <div className="flex w-12 flex-col items-center border-r border-border bg-background py-3">
-        {/* Top icons */}
-        <div className="flex flex-col items-center gap-1">
+      <div
+        data-tauri-drag-region
+        className="flex w-12 flex-col bg-background pt-8 pb-3"
+      >
+        {/* Inner container */}
+        <div className="flex flex-1 flex-col items-center mt-[9px] pt-3">
+          {/* Top icons */}
+          <div className="flex flex-col items-center gap-1">
           <Tooltip delayDuration={0}>
             <TooltipTrigger asChild>
               <button
@@ -407,6 +416,7 @@ export default function ProjectPage() {
             <TooltipContent side="right">Help</TooltipContent>
           </Tooltip>
         </div>
+        </div>
       </div>
 
       {/* Main content area */}
@@ -415,24 +425,9 @@ export default function ProjectPage() {
           {/* Left sidebar - Git panel */}
           <ResizablePanel defaultSize={22} minSize={18} maxSize={35}>
             <div className="flex h-full flex-col">
-              {/* Project header */}
-              <div className="flex items-center gap-3 border-b border-border px-4 py-3">
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-muted">
-                  <Home className="h-4 w-4 text-muted-foreground" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <h1 className="truncate text-sm font-semibold">{currentProject.name}</h1>
-                  {currentBranch && (
-                    <p className="truncate text-[11px] text-muted-foreground">
-                      {currentBranch.name}
-                    </p>
-                  )}
-                </div>
-              </div>
-
-              {/* Git panel */}
               <GitPanel
                 projectPath={currentProject.path}
+                projectName={currentProject.name}
                 onRefresh={refreshGitData}
               />
             </div>
@@ -444,7 +439,7 @@ export default function ProjectPage() {
           <ResizablePanel defaultSize={56} minSize={35}>
             <div className="flex h-full flex-col">
               {/* Tab bar */}
-              <div className="flex items-center border-b border-border">
+              <div className="flex h-10 items-center">
                 <div className="flex flex-1 items-center overflow-x-auto">
                   {terminalTabs.map((tab) => (
                     <div
@@ -557,7 +552,7 @@ export default function ProjectPage() {
           <ResizablePanel defaultSize={22} minSize={15} maxSize={40}>
             <div className="flex h-full flex-col">
               {/* Header */}
-              <div className="flex items-center justify-between border-b border-border px-4 py-2.5">
+              <div className="flex h-10 items-center justify-between px-4">
                 <div className="flex items-center gap-2">
                   <TerminalIcon className="h-4 w-4 text-portal-orange" />
                   <span className="text-sm font-medium">Shell</span>
