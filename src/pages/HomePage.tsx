@@ -38,11 +38,12 @@ import { useSettingsStore } from "@/stores/settingsStore";
 import { cn } from "@/lib/utils";
 import type { Project } from "@/types";
 import SettingsSheet from "@/components/SettingsSheet";
+import Onboarding from "@/components/Onboarding";
 
 export default function HomePage() {
   const navigate = useNavigate();
   const { projects, addProject, removeProject } = useProjectStore();
-  const { defaultClonePath } = useSettingsStore();
+  const { defaultClonePath, hasSeenOnboarding, setHasSeenOnboarding } = useSettingsStore();
   const [cloneUrl, setCloneUrl] = useState("");
   const [clonePath, setClonePath] = useState("");
   const [isCloning, setIsCloning] = useState(false);
@@ -322,12 +323,13 @@ export default function HomePage() {
           <Tooltip delayDuration={0}>
             <TooltipTrigger asChild>
               <button
+                onClick={() => setHasSeenOnboarding(false)}
                 className="flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
               >
                 <HelpCircle className="h-5 w-5" />
               </button>
             </TooltipTrigger>
-            <TooltipContent side="right">Help</TooltipContent>
+            <TooltipContent side="right">Show Tour</TooltipContent>
           </Tooltip>
         </div>
       </div>
@@ -556,6 +558,11 @@ export default function HomePage() {
           }
         }}
       />
+
+      {/* Onboarding */}
+      {!hasSeenOnboarding && (
+        <Onboarding onComplete={() => setHasSeenOnboarding(true)} />
+      )}
     </div>
   );
 }

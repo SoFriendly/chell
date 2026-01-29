@@ -22,6 +22,10 @@ import {
   Folder,
   File,
   GripVertical,
+  Trash2,
+  Pencil,
+  Copy,
+  FolderOpen,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -73,6 +77,8 @@ interface GitPanelProps {
   projectPath: string;
   projectName: string;
   onRefresh: () => void;
+  onFileDragStart?: (filePath: string) => void;
+  onFileDragEnd?: () => void;
 }
 
 interface CommitSuggestion {
@@ -92,7 +98,7 @@ interface FileTreeNode {
   children?: FileTreeNode[];
 }
 
-export default function GitPanel({ projectPath, projectName, onRefresh }: GitPanelProps) {
+export default function GitPanel({ projectPath, projectName, onRefresh, onFileDragStart, onFileDragEnd }: GitPanelProps) {
   const { diffs, branches, loading, status, history } = useGitStore();
   const { autoCommitMessage } = useSettingsStore();
   const [commitSubject, setCommitSubject] = useState("");
@@ -115,6 +121,8 @@ export default function GitPanel({ projectPath, projectName, onRefresh }: GitPan
   const [fileTree, setFileTree] = useState<FileTreeNode[]>([]);
   const [expandedDirs, setExpandedDirs] = useState<Set<string>>(new Set());
   const [isLoadingFiles, setIsLoadingFiles] = useState(false);
+  const [renamingFile, setRenamingFile] = useState<string | null>(null);
+  const [renameValue, setRenameValue] = useState("");
   const lastDiffsHash = useRef<string>("");
   const refreshIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const hasGeneratedInitialMessage = useRef(false);
@@ -207,8 +215,65 @@ export default function GitPanel({ projectPath, projectName, onRefresh }: GitPan
   };
 
   const handleDragStart = (e: React.DragEvent, filePath: string) => {
-    e.dataTransfer.setData("text/plain", `"${projectPath}/${filePath}"`);
+    const fullPath = `"${projectPath}/${filePath}"`;
+    e.dataTransfer.setData("text/plain", fullPath);
     e.dataTransfer.effectAllowed = "copy";
+    onFileDragStart?.(fullPath);
+  };
+
+  const handleDragEnd = () => {
+    onFileDragEnd?.();
+  };
+
+  const handleCopyPath = (filePath: string) => {
+    const fullPath = `${projectPath}/${filePath}`;
+    navigator.clipboard.writeText(fullPath);
+    toast.success("Path copied to clipboard");
+  };
+
+  const handleDeleteFile = async (filePath: string) => {
+    try {
+      await invoke("delete_file", { path: `${projectPath}/${filePath}` });
+      toast.success("File deleted");
+      loadFileTree();
+      onRefresh();
+    } catch (error) {
+      toast.error("Failed to delete file");
+      console.error(error);
+    }
+  };
+
+  const handleStartRename = (filePath: string, currentName: string) => {
+    setRenamingFile(filePath);
+    setRenameValue(currentName);
+  };
+
+  const handleFinishRename = async (oldPath: string) => {
+    if (!renameValue.trim() || renameValue === oldPath.split('/').pop()) {
+      setRenamingFile(null);
+      return;
+    }
+
+    const dir = oldPath.includes('/') ? oldPath.substring(0, oldPath.lastIndexOf('/') + 1) : '';
+    const newPath = dir + renameValue;
+
+    try {
+      await invoke("rename_file", {
+        oldPath: `${projectPath}/${oldPath}`,
+        newPath: `${projectPath}/${newPath}`
+      });
+      toast.success("File renamed");
+      setRenamingFile(null);
+      loadFileTree();
+      onRefresh();
+    } catch (error) {
+      toast.error("Failed to rename file");
+      console.error(error);
+    }
+  };
+
+  const handleRevealInFinder = (filePath: string) => {
+    invoke("open_in_finder", { path: `${projectPath}/${filePath}` });
   };
 
   const generateCommitMessage = async () => {
@@ -723,15 +788,58 @@ export default function GitPanel({ projectPath, projectName, onRefresh }: GitPan
               )}
             </>
           ) : (
-            <div
-              className="flex items-center gap-1.5 py-1 px-1 pl-5 rounded hover:bg-muted/50 cursor-grab active:cursor-grabbing"
-              draggable
-              onDragStart={(e) => onDragStart(e, node.path)}
-            >
-              <GripVertical className="h-3 w-3 text-muted-foreground/50 shrink-0" />
-              <File className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-              <span className="text-xs truncate">{node.name}</span>
-            </div>
+            <ContextMenu>
+              <ContextMenuTrigger asChild>
+                <div
+                  className="flex items-center gap-1.5 py-1 px-1 pl-5 rounded hover:bg-muted/50 cursor-grab active:cursor-grabbing"
+                  draggable={renamingFile !== node.path}
+                  onDragStart={(e) => onDragStart(e, node.path)}
+                  onDragEnd={handleDragEnd}
+                >
+                  <GripVertical className="h-3 w-3 text-muted-foreground/50 shrink-0" />
+                  <File className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                  {renamingFile === node.path ? (
+                    <input
+                      type="text"
+                      value={renameValue}
+                      onChange={(e) => setRenameValue(e.target.value)}
+                      onBlur={() => handleFinishRename(node.path)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") handleFinishRename(node.path);
+                        if (e.key === "Escape") setRenamingFile(null);
+                      }}
+                      autoFocus
+                      className="text-xs bg-muted border border-border rounded px-1 py-0.5 outline-none focus:ring-1 focus:ring-primary w-full"
+                      onClick={(e) => e.stopPropagation()}
+                    />
+                  ) : (
+                    <span className="text-xs truncate">{node.name}</span>
+                  )}
+                </div>
+              </ContextMenuTrigger>
+              <ContextMenuContent>
+                <ContextMenuItem onClick={() => handleCopyPath(node.path)}>
+                  <Copy className="mr-2 h-4 w-4" />
+                  Copy Path
+                </ContextMenuItem>
+                <ContextMenuItem onClick={() => handleStartRename(node.path, node.name)}>
+                  <Pencil className="mr-2 h-4 w-4" />
+                  Rename
+                </ContextMenuItem>
+                <ContextMenuItem onClick={() => handleRevealInFinder(node.path)}>
+                  <FolderOpen className="mr-2 h-4 w-4" />
+                  Reveal in Finder
+                </ContextMenuItem>
+                <ContextMenuSeparator />
+                <ContextMenuItem
+                  onClick={() => handleDeleteFile(node.path)}
+                  className="text-destructive focus:text-destructive"
+                >
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  Delete
+                </ContextMenuItem>
+              </ContextMenuContent>
+            </ContextMenu>
           )}
         </div>
       ))}

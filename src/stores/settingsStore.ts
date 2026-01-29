@@ -4,6 +4,7 @@ import type { Settings, AIProvider, Snippet, ThemeOption } from '@/types';
 
 interface SettingsState extends Settings {
   defaultAssistant: string;
+  hasSeenOnboarding: boolean;
   // Actions
   setTheme: (theme: ThemeOption) => void;
   setAIProvider: (provider: AIProvider | undefined) => void;
@@ -15,6 +16,7 @@ interface SettingsState extends Settings {
   setDefaultAssistant: (assistantId: string) => void;
   setAutoCommitMessage: (enabled: boolean) => void;
   setAutoFetchRemote: (enabled: boolean) => void;
+  setHasSeenOnboarding: (seen: boolean) => void;
 }
 
 // Apply theme to document
@@ -42,6 +44,7 @@ export const useSettingsStore = create<SettingsState>()(
       defaultAssistant: 'claude',
       autoCommitMessage: true,
       autoFetchRemote: false,
+      hasSeenOnboarding: false,
 
       setTheme: (theme) => {
         applyTheme(theme);
@@ -75,6 +78,8 @@ export const useSettingsStore = create<SettingsState>()(
       setAutoCommitMessage: (enabled) => set({ autoCommitMessage: enabled }),
 
       setAutoFetchRemote: (enabled) => set({ autoFetchRemote: enabled }),
+
+      setHasSeenOnboarding: (seen) => set({ hasSeenOnboarding: seen }),
     }),
     {
       name: 'chell-settings',

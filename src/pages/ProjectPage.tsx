@@ -164,6 +164,67 @@ export default function ProjectPage() {
     document.body.style.cursor = 'col-resize';
     document.body.style.userSelect = 'none';
   };
+
+
+  const [isDraggingFile, setIsDraggingFile] = useState(false);
+  const draggedFilePath = useRef<string | null>(null);
+
+  // Use document-level listeners for more reliable drop handling
+  useEffect(() => {
+    const handleDrop = (e: DragEvent) => {
+      if (!isDraggingFile || !draggedFilePath.current) return;
+
+      e.preventDefault();
+      const filePath = draggedFilePath.current;
+
+      // Check which panel the drop occurred in
+      const assistantRect = assistantPanelRef.current?.getBoundingClientRect();
+      const shellRect = shellPanelRef.current?.getBoundingClientRect();
+
+      if (assistantRect && showAssistantPanel &&
+          e.clientX >= assistantRect.left && e.clientX <= assistantRect.right &&
+          e.clientY >= assistantRect.top && e.clientY <= assistantRect.bottom) {
+        const activeTab = terminalTabs.find(t => t.id === activeTabId);
+        if (activeTab?.terminalId) {
+          invoke("write_terminal", { id: activeTab.terminalId, data: filePath + " " });
+        }
+      } else if (shellRect && showShellPanel &&
+          e.clientX >= shellRect.left && e.clientX <= shellRect.right &&
+          e.clientY >= shellRect.top && e.clientY <= shellRect.bottom) {
+        if (utilityTerminalId && utilityTerminalId !== "closed") {
+          invoke("write_terminal", { id: utilityTerminalId, data: filePath + " " });
+        }
+      }
+
+      setIsDraggingFile(false);
+      draggedFilePath.current = null;
+    };
+
+    const handleDragOver = (e: DragEvent) => {
+      if (isDraggingFile) {
+        e.preventDefault();
+      }
+    };
+
+    document.addEventListener('drop', handleDrop);
+    document.addEventListener('dragover', handleDragOver);
+
+    return () => {
+      document.removeEventListener('drop', handleDrop);
+      document.removeEventListener('dragover', handleDragOver);
+    };
+  }, [isDraggingFile, terminalTabs, activeTabId, utilityTerminalId, showAssistantPanel, showShellPanel]);
+
+  const handleFileDragStart = (filePath: string) => {
+    setIsDraggingFile(true);
+    draggedFilePath.current = filePath;
+  };
+
+  const handleFileDragEnd = () => {
+    setIsDraggingFile(false);
+    draggedFilePath.current = null;
+  };
+
   const terminalsStarted = useRef(false);
   const editInputRef = useRef<HTMLInputElement>(null);
   const assistantPanelRef = useRef<HTMLDivElement>(null);
@@ -708,7 +769,10 @@ export default function ProjectPage() {
       </div>
 
       {/* Main content area */}
-      <div ref={containerRef} className="flex-1 flex overflow-hidden">
+      <div
+        ref={containerRef}
+        className="flex-1 flex overflow-hidden"
+      >
         {/* Left sidebar - Git panel */}
         <div
           className={cn("h-full flex flex-col overflow-hidden shrink-0", !showGitPanel && "hidden")}
@@ -718,6 +782,8 @@ export default function ProjectPage() {
             projectPath={currentProject.path}
             projectName={currentProject.name}
             onRefresh={refreshGitData}
+            onFileDragStart={handleFileDragStart}
+            onFileDragEnd={handleFileDragEnd}
           />
         </div>
         {/* Resize handle for git panel */}
@@ -731,7 +797,11 @@ export default function ProjectPage() {
         {/* Center - Terminal area */}
         <div
           ref={assistantPanelRef}
-          className={cn("flex-1 h-full overflow-hidden min-w-0", !showAssistantPanel && "hidden")}
+          className={cn(
+            "flex-1 h-full overflow-hidden min-w-0",
+            !showAssistantPanel && "hidden",
+            isDraggingFile && "ring-2 ring-primary ring-inset"
+          )}
         >
           <div className="flex h-full flex-col select-none overflow-hidden">
           {/* Tab bar */}
@@ -819,7 +889,10 @@ export default function ProjectPage() {
                 !(activeTabId === tab.id || (activeTabId === null && index === 0)) && "hidden"
               )}
             >
-              <div className="flex-1 overflow-hidden" style={{ backgroundColor: terminalBg }}>
+              <div
+                className={cn("flex-1 overflow-hidden", isDraggingFile && "pointer-events-none")}
+                style={{ backgroundColor: terminalBg }}
+              >
                 <Terminal
                   id={tab.terminalId || undefined}
                   command={tab.command}
@@ -854,7 +927,8 @@ export default function ProjectPage() {
           className={cn(
             "h-full flex flex-col overflow-hidden",
             !showShellPanel && "hidden",
-            !showAssistantPanel ? "flex-1 min-w-0" : "shrink-0"
+            !showAssistantPanel ? "flex-1 min-w-0" : "shrink-0",
+            isDraggingFile && "ring-2 ring-primary ring-inset"
           )}
           style={showAssistantPanel ? { width: shellPanelWidth } : undefined}
         >
@@ -909,7 +983,10 @@ export default function ProjectPage() {
           </div>
 
           {/* Utility terminal content */}
-          <div className="flex-1 overflow-hidden" style={{ backgroundColor: terminalBg }}>
+          <div
+            className={cn("flex-1 overflow-hidden", isDraggingFile && "pointer-events-none")}
+            style={{ backgroundColor: terminalBg }}
+          >
             {utilityTerminalId !== "closed" ? (
               <Terminal
                 id={utilityTerminalId || undefined}

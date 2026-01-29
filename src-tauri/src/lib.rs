@@ -388,6 +388,26 @@ fn get_file_tree(path: String) -> Result<Vec<FileTreeNode>, String> {
 }
 
 #[tauri::command]
+fn delete_file(path: String) -> Result<(), String> {
+    use std::fs;
+    use std::path::Path;
+
+    let path = Path::new(&path);
+    if path.is_dir() {
+        fs::remove_dir_all(path).map_err(|e| e.to_string())
+    } else {
+        fs::remove_file(path).map_err(|e| e.to_string())
+    }
+}
+
+#[tauri::command]
+fn rename_file(old_path: String, new_path: String) -> Result<(), String> {
+    use std::fs;
+
+    fs::rename(&old_path, &new_path).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 fn edit_file_line(file_path: String, line_number: usize, new_content: String) -> Result<(), String> {
     use std::fs;
     use std::path::Path;
@@ -749,6 +769,8 @@ pub fn run() {
             open_in_finder,
             list_directories,
             get_file_tree,
+            delete_file,
+            rename_file,
             // Assistants
             check_installed_assistants,
             install_assistant,
