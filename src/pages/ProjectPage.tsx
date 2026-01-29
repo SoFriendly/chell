@@ -7,9 +7,10 @@ import {
   Settings,
   Terminal as TerminalIcon,
   X,
-  GitBranch,
   HelpCircle,
   Plus,
+  Bot,
+  Square,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -18,7 +19,14 @@ import {
   ResizablePanel,
   ResizableHandle,
 } from "@/components/ui/resizable";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { Input } from "@/components/ui/input";
 import Terminal from "@/components/Terminal";
 import GitPanel from "@/components/GitPanel";
 import SettingsSheet from "@/components/SettingsSheet";
@@ -34,6 +42,14 @@ interface TerminalTab {
   terminalId: string | null;
 }
 
+interface AssistantOption {
+  id: string;
+  name: string;
+  command: string;
+  icon: React.ReactNode;
+  installed: boolean;
+}
+
 export default function ProjectPage() {
   const { projectId } = useParams<{ projectId: string }>();
   const navigate = useNavigate();
@@ -46,8 +62,12 @@ export default function ProjectPage() {
   const [activeTabId, setActiveTabId] = useState<string | null>(null);
   const [utilityTerminalId, setUtilityTerminalId] = useState<string | null>(null);
   const [activeSidebarItem, setActiveSidebarItem] = useState<"terminal" | "settings">("terminal");
+  const [editingTabId, setEditingTabId] = useState<string | null>(null);
+  const [editingTabName, setEditingTabName] = useState("");
+  const [installedAssistants, setInstalledAssistants] = useState<string[]>([]);
   const terminalsStarted = useRef(false);
   const tabCounter = useRef(1);
+  const editInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const project = projects.find((p) => p.id === projectId);
@@ -60,6 +80,15 @@ export default function ProjectPage() {
     }
   }, [projectId, projects]);
 
+  // Check installed assistants on mount
+  useEffect(() => {
+    const checkAssistants = async () => {
+      const installed = await invoke<string[]>("check_installed_assistants");
+      setInstalledAssistants(installed);
+    };
+    checkAssistants();
+  }, []);
+
   // Auto-start terminals when project loads
   useEffect(() => {
     if (currentProject && !terminalsStarted.current) {
@@ -68,27 +97,74 @@ export default function ProjectPage() {
     }
   }, [currentProject]);
 
-  const getAssistantCommand = async (): Promise<{ command: string; name: string }> => {
-    const installed = await invoke<string[]>("check_installed_assistants");
-
-    if (installed.includes("claude")) {
-      let command = "claude";
-      const args = assistantArgs["claude-code"] || "";
-      if (args) command = `${command} ${args}`;
-      return { command, name: "Claude Code" };
-    } else if (installed.includes("aider")) {
-      let command = "aider";
-      const args = assistantArgs["aider"] || "";
-      if (args) command = `${command} ${args}`;
-      return { command, name: "Aider" };
+  // Focus input when editing starts
+  useEffect(() => {
+    if (editingTabId && editInputRef.current) {
+      editInputRef.current.focus();
+      editInputRef.current.select();
     }
+  }, [editingTabId]);
 
-    return { command: "", name: "Shell" };
+  const getAssistantOptions = (): AssistantOption[] => {
+    return [
+      {
+        id: "claude",
+        name: "Claude Code",
+        command: "claude",
+        icon: <Bot className="h-4 w-4" />,
+        installed: installedAssistants.includes("claude"),
+      },
+      {
+        id: "aider",
+        name: "Aider",
+        command: "aider",
+        icon: <Bot className="h-4 w-4" />,
+        installed: installedAssistants.includes("aider"),
+      },
+      {
+        id: "shell",
+        name: "Shell",
+        command: "",
+        icon: <Square className="h-4 w-4" />,
+        installed: true,
+      },
+    ];
   };
 
-  const createNewTab = async (projectPath: string) => {
+  const createNewTab = async (projectPath: string, assistantId?: string) => {
     try {
-      const { command, name } = await getAssistantCommand();
+      let command = "";
+      let name = "Shell";
+
+      if (assistantId) {
+        const options = getAssistantOptions();
+        const assistant = options.find(a => a.id === assistantId);
+        if (assistant) {
+          command = assistant.command;
+          name = assistant.name;
+          if (assistantId === "claude") {
+            const args = assistantArgs["claude-code"] || "";
+            if (args) command = `${command} ${args}`;
+          } else if (assistantId === "aider") {
+            const args = assistantArgs["aider"] || "";
+            if (args) command = `${command} ${args}`;
+          }
+        }
+      } else {
+        // Default to first installed assistant
+        if (installedAssistants.includes("claude")) {
+          command = "claude";
+          name = "Claude Code";
+          const args = assistantArgs["claude-code"] || "";
+          if (args) command = `${command} ${args}`;
+        } else if (installedAssistants.includes("aider")) {
+          command = "aider";
+          name = "Aider";
+          const args = assistantArgs["aider"] || "";
+          if (args) command = `${command} ${args}`;
+        }
+      }
+
       const terminalId = await invoke<string>("spawn_terminal", {
         shell: command,
         cwd: projectPath,
@@ -130,6 +206,32 @@ export default function ProjectPage() {
       }
       return newTabs;
     });
+  };
+
+  const startEditingTab = (tab: TerminalTab) => {
+    setEditingTabId(tab.id);
+    setEditingTabName(tab.name);
+  };
+
+  const finishEditingTab = () => {
+    if (editingTabId && editingTabName.trim()) {
+      setTerminalTabs(prev =>
+        prev.map(tab =>
+          tab.id === editingTabId ? { ...tab, name: editingTabName.trim() } : tab
+        )
+      );
+    }
+    setEditingTabId(null);
+    setEditingTabName("");
+  };
+
+  const handleTabNameKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter") {
+      finishEditingTab();
+    } else if (e.key === "Escape") {
+      setEditingTabId(null);
+      setEditingTabName("");
+    }
   };
 
   const startTerminals = async (projectPath: string) => {
@@ -210,6 +312,7 @@ export default function ProjectPage() {
   }
 
   const currentBranch = useGitStore.getState().branches.find((b) => b.isHead);
+  const assistantOptions = getAssistantOptions();
 
   return (
     <div className="flex h-full bg-background">
@@ -334,7 +437,27 @@ export default function ProjectPage() {
                       onClick={() => setActiveTabId(tab.id)}
                     >
                       <TerminalIcon className="h-3.5 w-3.5 shrink-0" />
-                      <span className="truncate max-w-[120px]">{tab.name}</span>
+                      {editingTabId === tab.id ? (
+                        <Input
+                          ref={editInputRef}
+                          value={editingTabName}
+                          onChange={(e) => setEditingTabName(e.target.value)}
+                          onBlur={finishEditingTab}
+                          onKeyDown={handleTabNameKeyDown}
+                          onClick={(e) => e.stopPropagation()}
+                          className="h-5 w-24 px-1 py-0 text-sm"
+                        />
+                      ) : (
+                        <span
+                          className="truncate max-w-[120px] cursor-text"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            startEditingTab(tab);
+                          }}
+                        >
+                          {tab.name}
+                        </span>
+                      )}
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
@@ -347,17 +470,31 @@ export default function ProjectPage() {
                     </div>
                   ))}
                 </div>
-                <Tooltip delayDuration={0}>
-                  <TooltipTrigger asChild>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
                     <button
-                      onClick={() => currentProject && createNewTab(currentProject.path)}
                       className="flex h-full items-center px-3 py-2 text-muted-foreground transition-colors hover:bg-muted/30 hover:text-foreground"
                     >
                       <Plus className="h-4 w-4" />
                     </button>
-                  </TooltipTrigger>
-                  <TooltipContent>New AI Terminal</TooltipContent>
-                </Tooltip>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    {assistantOptions.map((assistant) => (
+                      <DropdownMenuItem
+                        key={assistant.id}
+                        onClick={() => currentProject && createNewTab(currentProject.path, assistant.id)}
+                        disabled={!assistant.installed}
+                        className="flex items-center gap-2"
+                      >
+                        {assistant.icon}
+                        <span>{assistant.name}</span>
+                        {!assistant.installed && (
+                          <span className="text-xs text-muted-foreground ml-auto">(not installed)</span>
+                        )}
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
 
               {/* Tab content - keep all terminals mounted, hide with CSS */}

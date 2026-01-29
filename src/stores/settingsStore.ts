@@ -3,6 +3,7 @@ import { persist } from 'zustand/middleware';
 import type { Settings, AIProvider, Snippet } from '@/types';
 
 interface SettingsState extends Settings {
+  defaultAssistant: string;
   // Actions
   setTheme: (theme: Settings['theme']) => void;
   setAIProvider: (provider: AIProvider | undefined) => void;
@@ -11,6 +12,7 @@ interface SettingsState extends Settings {
   removeGlobalSnippet: (id: string) => void;
   updateGlobalSnippet: (id: string, updates: Partial<Snippet>) => void;
   setDefaultClonePath: (path: string | undefined) => void;
+  setDefaultAssistant: (assistantId: string) => void;
 }
 
 export const useSettingsStore = create<SettingsState>()(
@@ -21,6 +23,7 @@ export const useSettingsStore = create<SettingsState>()(
       assistantArgs: {},
       globalSnippets: [],
       defaultClonePath: undefined,
+      defaultAssistant: 'claude', // Default to Claude Code
 
       setTheme: (theme) => set({ theme }),
 
@@ -45,6 +48,8 @@ export const useSettingsStore = create<SettingsState>()(
       })),
 
       setDefaultClonePath: (path) => set({ defaultClonePath: path }),
+
+      setDefaultAssistant: (assistantId) => set({ defaultAssistant: assistantId }),
     }),
     {
       name: 'chell-settings',

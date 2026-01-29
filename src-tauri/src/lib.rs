@@ -381,29 +381,31 @@ fn check_installed_assistants() -> Result<Vec<String>, String> {
         installed.push("aider".to_string());
     }
 
+    // Check for Gemini CLI
+    if which::which("gemini").is_ok() {
+        installed.push("gemini".to_string());
+    }
+
+    // Check for OpenAI Codex CLI
+    if which::which("codex").is_ok() {
+        installed.push("codex".to_string());
+    }
+
     Ok(installed)
 }
 
 #[tauri::command]
-fn install_assistant(command: String) -> Result<(), String> {
-    match command.as_str() {
-        "claude" => {
-            // Install via npm
-            std::process::Command::new("npm")
-                .args(["install", "-g", "@anthropic-ai/claude-code"])
-                .output()
-                .map_err(|e| e.to_string())?;
-        }
-        "aider" => {
-            // Install via pip
-            std::process::Command::new("pip")
-                .args(["install", "aider-chat"])
-                .output()
-                .map_err(|e| e.to_string())?;
-        }
+fn install_assistant(command: String) -> Result<String, String> {
+    let install_cmd = match command.as_str() {
+        "claude" => "npm install -g @anthropic-ai/claude-code",
+        "aider" => "pip install aider-chat",
+        "gemini" => "npm install -g @anthropic-ai/gemini-cli",
+        "codex" => "npm install -g @openai/codex",
         _ => return Err(format!("Unknown assistant: {}", command)),
-    }
-    Ok(())
+    };
+
+    // Return the install command for the user to run in terminal
+    Ok(install_cmd.to_string())
 }
 
 // AI commands using Groq
