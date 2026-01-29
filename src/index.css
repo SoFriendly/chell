@@ -108,10 +108,26 @@
   * {
     @apply border-border;
   }
+
+  /* Prevent white flash - start with dark background */
+  html {
+    background-color: #121212;
+  }
+
   body {
     @apply bg-background text-foreground;
     font-feature-settings: "rlig" 1, "calt" 1;
     overflow: hidden;
+    animation: fadeIn 0.2s ease-out;
+  }
+
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
   }
 }
 

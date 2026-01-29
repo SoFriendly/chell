@@ -3,6 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
+import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import {
   Settings,
   Terminal as TerminalIcon,
@@ -107,6 +108,30 @@ export default function ProjectPage() {
       setShellPanelWidth(savedShellWidth.current);
     }
     setShowShellPanel(!showShellPanel);
+  };
+
+  // Open new window for another project
+  const openNewWindow = async () => {
+    try {
+      const webview = new WebviewWindow(`chell-${Date.now()}`, {
+        url: "/",
+        title: "Chell",
+        width: 1400,
+        height: 900,
+        center: true,
+        titleBarStyle: "Overlay",
+        hiddenTitle: true,
+        visible: false,
+        backgroundColor: "#121212",
+      });
+      webview.once("tauri://error", (e) => {
+        console.error("Failed to create window:", e);
+        toast.error("Failed to open new window");
+      });
+    } catch (error) {
+      console.error("Error creating window:", error);
+      toast.error("Failed to open new window");
+    }
   };
 
   // Resize handle drag handler
@@ -563,13 +588,13 @@ export default function ProjectPage() {
           <Tooltip delayDuration={0}>
             <TooltipTrigger asChild>
               <button
-                onClick={() => navigate("/")}
+                onClick={openNewWindow}
                 className="flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
               >
                 <Plus className="h-5 w-5" />
               </button>
             </TooltipTrigger>
-            <TooltipContent side="right">New Project</TooltipContent>
+            <TooltipContent side="right">Open New Window</TooltipContent>
           </Tooltip>
 
           <Tooltip delayDuration={0}>
