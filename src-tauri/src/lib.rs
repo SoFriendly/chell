@@ -432,6 +432,35 @@ fn open_in_finder(path: String) -> Result<(), String> {
     Ok(())
 }
 
+// List directories in a path
+#[tauri::command]
+fn list_directories(path: String) -> Result<Vec<String>, String> {
+    let mut dirs = Vec::new();
+
+    // Add parent directory option
+    dirs.push("..".to_string());
+
+    let entries = std::fs::read_dir(&path).map_err(|e| e.to_string())?;
+
+    for entry in entries {
+        if let Ok(entry) = entry {
+            if let Ok(file_type) = entry.file_type() {
+                if file_type.is_dir() {
+                    if let Some(name) = entry.file_name().to_str() {
+                        // Skip hidden directories
+                        if !name.starts_with('.') {
+                            dirs.push(name.to_string());
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    dirs.sort();
+    Ok(dirs)
+}
+
 // Assistant commands
 #[tauri::command]
 fn check_installed_assistants() -> Result<Vec<String>, String> {
@@ -651,6 +680,7 @@ pub fn run() {
             // File system
             open_folder_dialog,
             open_in_finder,
+            list_directories,
             // Assistants
             check_installed_assistants,
             install_assistant,

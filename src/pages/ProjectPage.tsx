@@ -11,6 +11,8 @@ import {
   Bot,
   GitBranch,
   PanelRightClose,
+  Folder,
+  ChevronDown,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -72,6 +74,8 @@ export default function ProjectPage() {
   const [showGitPanel, setShowGitPanel] = useState(true);
   const [showAssistantPanel, setShowAssistantPanel] = useState(true);
   const [showShellPanel, setShowShellPanel] = useState(true);
+  const [shellCwd, setShellCwd] = useState<string>("");
+  const [shellDirs, setShellDirs] = useState<string[]>([]);
 
   // Count visible panels - must always have at least one
   const visiblePanelCount = [showGitPanel, showAssistantPanel, showShellPanel].filter(Boolean).length;
@@ -123,6 +127,46 @@ export default function ProjectPage() {
       startTerminals(currentProject.path);
     }
   }, [currentProject]);
+
+  // Initialize shell cwd when project loads
+  useEffect(() => {
+    if (currentProject) {
+      setShellCwd(currentProject.path);
+      loadShellDirectories(currentProject.path);
+    }
+  }, [currentProject]);
+
+  const loadShellDirectories = async (path: string) => {
+    try {
+      const dirs = await invoke<string[]>("list_directories", { path });
+      setShellDirs(dirs);
+    } catch (error) {
+      console.error("Failed to list directories:", error);
+      setShellDirs([]);
+    }
+  };
+
+  const handleShellCd = async (dirName: string) => {
+    if (!utilityTerminalId || utilityTerminalId === "closed") return;
+
+    let newPath: string;
+    if (dirName === "..") {
+      // Go up one directory
+      const parts = shellCwd.split("/").filter(Boolean);
+      parts.pop();
+      newPath = "/" + parts.join("/");
+    } else {
+      newPath = `${shellCwd}/${dirName}`;
+    }
+
+    // Send cd command to the shell
+    const cdCommand = `cd "${newPath}"\n`;
+    await invoke("write_terminal", { id: utilityTerminalId, data: cdCommand });
+
+    // Update state
+    setShellCwd(newPath);
+    loadShellDirectories(newPath);
+  };
 
   // Focus input when editing starts
   useEffect(() => {
@@ -681,16 +725,45 @@ export default function ProjectPage() {
           )}
         >
           {/* Header */}
-          <div className="flex h-10 items-center justify-between px-4 border-b border-border">
-            <div className="flex items-center gap-2">
-              <TerminalIcon className="h-4 w-4 text-portal-orange" />
-              <span className="text-sm font-medium">Shell</span>
+          <div className="flex h-10 items-center justify-between px-2 border-b border-border">
+            <div className="flex items-center gap-2 min-w-0 flex-1">
+              <TerminalIcon className="h-4 w-4 shrink-0 text-portal-orange" />
+              <DropdownMenu onOpenChange={(open) => open && loadShellDirectories(shellCwd)}>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 gap-1 px-1.5 text-xs font-normal text-muted-foreground hover:text-foreground min-w-0"
+                  >
+                    <Folder className="h-3 w-3 shrink-0" />
+                    <span className="truncate max-w-[120px]">
+                      {shellCwd.split("/").pop() || "/"}
+                    </span>
+                    <ChevronDown className="h-3 w-3 shrink-0" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="max-h-64 overflow-auto">
+                  {shellDirs.map((dir) => (
+                    <DropdownMenuItem
+                      key={dir}
+                      onClick={() => handleShellCd(dir)}
+                      className="flex items-center gap-2"
+                    >
+                      <Folder className="h-3 w-3" />
+                      <span className="truncate">{dir}</span>
+                    </DropdownMenuItem>
+                  ))}
+                  {shellDirs.length === 0 && (
+                    <DropdownMenuItem disabled>No subdirectories</DropdownMenuItem>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
             {utilityTerminalId && utilityTerminalId !== "closed" && (
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-6 w-6"
+                className="h-6 w-6 shrink-0"
                 onClick={() => {
                   invoke("kill_terminal", { id: utilityTerminalId });
                   setUtilityTerminalId("closed");
