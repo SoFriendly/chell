@@ -320,6 +320,16 @@ export default function Terminal({ id, command = "", cwd, onTerminalReady, visib
       invoke("write_terminal", { id: terminalId, data }).catch(console.error);
     });
 
+    // Handle paste events
+    const handlePaste = async (e: ClipboardEvent) => {
+      e.preventDefault();
+      const text = e.clipboardData?.getData('text');
+      if (text) {
+        invoke("write_terminal", { id: terminalId, data: text }).catch(console.error);
+      }
+    };
+    containerRef.current?.addEventListener('paste', handlePaste);
+
     // Handle terminal resize
     const resizeDisposable = terminal.onResize(({ cols, rows }) => {
       invoke("resize_terminal", { id: terminalId, cols, rows }).catch(console.error);
@@ -367,6 +377,7 @@ export default function Terminal({ id, command = "", cwd, onTerminalReady, visib
       setTimeout(() => safeFit(`delayed-${delay}ms`), delay)
     );
 
+    const container = containerRef.current;
     return () => {
       resizeTimers.forEach(timer => clearTimeout(timer));
       dataDisposable.dispose();
@@ -375,6 +386,7 @@ export default function Terminal({ id, command = "", cwd, onTerminalReady, visib
       window.removeEventListener("resize", handleResize);
       resizeObserver.disconnect();
       intersectionObserver.disconnect();
+      container?.removeEventListener('paste', handlePaste);
     };
   }, [terminalId]);
 
