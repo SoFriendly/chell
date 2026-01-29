@@ -332,23 +332,21 @@ export default function ProjectPage() {
     }
   };
 
-  const closeTab = async (tabId: string) => {
+  const closeTab = (tabId: string) => {
     const tab = terminalTabs.find(t => t.id === tabId);
+    const remaining = terminalTabs.filter(t => t.id !== tabId);
+
+    // Kill terminal in background
     if (tab?.terminalId) {
-      await invoke("kill_terminal", { id: tab.terminalId });
+      invoke("kill_terminal", { id: tab.terminalId }).catch(() => {});
     }
 
-    const newTabs = terminalTabs.filter(t => t.id !== tabId);
-    setTerminalTabs(newTabs);
-
-    // If we closed the active tab, switch to another tab or null
+    // Update both states - React 18 batches automatically
+    const newActiveId = remaining.length > 0 ? remaining[remaining.length - 1].id : null;
     if (activeTabId === tabId) {
-      if (newTabs.length > 0) {
-        setActiveTabId(newTabs[newTabs.length - 1].id);
-      } else {
-        setActiveTabId(null);
-      }
+      setActiveTabId(newActiveId);
     }
+    setTerminalTabs(remaining);
   };
 
   const startEditingTab = (tab: TerminalTab) => {
@@ -680,8 +678,8 @@ export default function ProjectPage() {
                     />
                   ) : (
                     <span
-                      className="truncate max-w-[120px] cursor-text"
-                      onClick={(e) => {
+                      className="truncate max-w-[120px]"
+                      onDoubleClick={(e) => {
                         e.stopPropagation();
                         startEditingTab(tab);
                       }}
@@ -729,12 +727,13 @@ export default function ProjectPage() {
           </div>
 
           {/* Tab content - keep all terminals mounted, hide with CSS */}
-          {terminalTabs.map((tab) => (
+          {terminalTabs.map((tab, index) => (
             <div
               key={tab.id}
               className={cn(
                 "flex flex-1 flex-col overflow-hidden",
-                activeTabId !== tab.id && "hidden"
+                // Show this tab if it's active, or if no tab is active show the first one
+                !(activeTabId === tab.id || (activeTabId === null && index === 0)) && "hidden"
               )}
             >
               <div className="flex-1 overflow-hidden" style={{ backgroundColor: terminalBg }}>

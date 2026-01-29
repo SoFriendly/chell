@@ -257,7 +257,11 @@ export default function Terminal({ id, command = "", cwd, onTerminalReady, visib
     });
 
     return () => {
-      terminal.dispose();
+      try {
+        terminal.dispose();
+      } catch (e) {
+        console.error("Error disposing terminal:", e);
+      }
       terminalRef.current = null;
       fitAddonRef.current = null;
     };
@@ -273,6 +277,7 @@ export default function Terminal({ id, command = "", cwd, onTerminalReady, visib
     }
 
     hasSpawnedRef.current = true;
+    let isMounted = true;
 
     const spawnTerminal = async () => {
       try {
@@ -282,14 +287,20 @@ export default function Terminal({ id, command = "", cwd, onTerminalReady, visib
           cols: initialDimensions.cols,
           rows: initialDimensions.rows,
         });
-        setTerminalId(newId);
-        onTerminalReady?.(newId);
+        if (isMounted) {
+          setTerminalId(newId);
+          onTerminalReady?.(newId);
+        }
       } catch (error) {
         console.error("Failed to spawn terminal:", error);
       }
     };
 
     spawnTerminal();
+
+    return () => {
+      isMounted = false;
+    };
   }, [initialDimensions, id, command, cwd, onTerminalReady]);
 
   // Phase 4: Connect to PTY and handle ongoing resize
@@ -379,14 +390,18 @@ export default function Terminal({ id, command = "", cwd, onTerminalReady, visib
 
     const container = containerRef.current;
     return () => {
-      resizeTimers.forEach(timer => clearTimeout(timer));
-      dataDisposable.dispose();
-      resizeDisposable.dispose();
-      unlisten.then((fn) => fn());
-      window.removeEventListener("resize", handleResize);
-      resizeObserver.disconnect();
-      intersectionObserver.disconnect();
-      container?.removeEventListener('paste', handlePaste);
+      try {
+        resizeTimers.forEach(timer => clearTimeout(timer));
+        dataDisposable.dispose();
+        resizeDisposable.dispose();
+        unlisten.then((fn) => fn()).catch(() => {});
+        window.removeEventListener("resize", handleResize);
+        resizeObserver.disconnect();
+        intersectionObserver.disconnect();
+        container?.removeEventListener('paste', handlePaste);
+      } catch (e) {
+        console.error("Error cleaning up terminal:", e);
+      }
     };
   }, [terminalId]);
 
