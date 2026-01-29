@@ -18,6 +18,10 @@ import {
   FileIcon,
   History,
   RotateCcw,
+  FolderTree,
+  Folder,
+  File,
+  GripVertical,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -81,6 +85,13 @@ interface HunkToDiscard {
   hunk: DiffHunk;
 }
 
+interface FileTreeNode {
+  name: string;
+  path: string;
+  isDir: boolean;
+  children?: FileTreeNode[];
+}
+
 export default function GitPanel({ projectPath, projectName, onRefresh }: GitPanelProps) {
   const { diffs, branches, loading, status, history } = useGitStore();
   const { autoCommitMessage } = useSettingsStore();
@@ -98,9 +109,12 @@ export default function GitPanel({ projectPath, projectName, onRefresh }: GitPan
   const [selectedFiles, setSelectedFiles] = useState<Set<string>>(new Set());
   const [showDiscardSelectedDialog, setShowDiscardSelectedDialog] = useState(false);
   const [isDiscardingSelected, setIsDiscardingSelected] = useState(false);
-  const [viewMode, setViewMode] = useState<"changes" | "history">("changes");
+  const [viewMode, setViewMode] = useState<"changes" | "history" | "files">("changes");
   const [commitToReset, setCommitToReset] = useState<string | null>(null);
   const [isResetting, setIsResetting] = useState(false);
+  const [fileTree, setFileTree] = useState<FileTreeNode[]>([]);
+  const [expandedDirs, setExpandedDirs] = useState<Set<string>>(new Set());
+  const [isLoadingFiles, setIsLoadingFiles] = useState(false);
   const lastDiffsHash = useRef<string>("");
   const refreshIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const hasGeneratedInitialMessage = useRef(false);
@@ -159,6 +173,43 @@ export default function GitPanel({ projectPath, projectName, onRefresh }: GitPan
       }
     }
   }, [diffs]);
+
+  // Load file tree when switching to files view
+  useEffect(() => {
+    if (viewMode === "files" && fileTree.length === 0) {
+      loadFileTree();
+    }
+  }, [viewMode]);
+
+  const loadFileTree = async () => {
+    setIsLoadingFiles(true);
+    try {
+      const tree = await invoke<FileTreeNode[]>("get_file_tree", { path: projectPath });
+      setFileTree(tree);
+    } catch (error) {
+      console.error("Failed to load file tree:", error);
+      toast.error("Failed to load files");
+    } finally {
+      setIsLoadingFiles(false);
+    }
+  };
+
+  const toggleDir = (path: string) => {
+    setExpandedDirs(prev => {
+      const next = new Set(prev);
+      if (next.has(path)) {
+        next.delete(path);
+      } else {
+        next.add(path);
+      }
+      return next;
+    });
+  };
+
+  const handleDragStart = (e: React.DragEvent, filePath: string) => {
+    e.dataTransfer.setData("text/plain", `"${projectPath}/${filePath}"`);
+    e.dataTransfer.effectAllowed = "copy";
+  };
 
   const generateCommitMessage = async () => {
     if (diffs.length === 0) return;
@@ -627,6 +678,66 @@ export default function GitPanel({ projectPath, projectName, onRefresh }: GitPan
     );
   };
 
+  // File tree recursive component
+  const FileTreeView = ({
+    nodes,
+    expandedDirs,
+    onToggleDir,
+    onDragStart,
+    projectPath,
+    depth = 0
+  }: {
+    nodes: FileTreeNode[];
+    expandedDirs: Set<string>;
+    onToggleDir: (path: string) => void;
+    onDragStart: (e: React.DragEvent, path: string) => void;
+    projectPath: string;
+    depth?: number;
+  }) => (
+    <div className={cn(depth > 0 && "ml-3 border-l border-border/50 pl-2")}>
+      {nodes.map((node) => (
+        <div key={node.path}>
+          {node.isDir ? (
+            <>
+              <div
+                className="flex items-center gap-1.5 py-1 px-1 rounded hover:bg-muted/50 cursor-pointer"
+                onClick={() => onToggleDir(node.path)}
+              >
+                {expandedDirs.has(node.path) ? (
+                  <ChevronDown className="h-3 w-3 text-muted-foreground shrink-0" />
+                ) : (
+                  <ChevronRight className="h-3 w-3 text-muted-foreground shrink-0" />
+                )}
+                <Folder className="h-3.5 w-3.5 text-portal-orange shrink-0" />
+                <span className="text-xs truncate">{node.name}</span>
+              </div>
+              {expandedDirs.has(node.path) && node.children && (
+                <FileTreeView
+                  nodes={node.children}
+                  expandedDirs={expandedDirs}
+                  onToggleDir={onToggleDir}
+                  onDragStart={onDragStart}
+                  projectPath={projectPath}
+                  depth={depth + 1}
+                />
+              )}
+            </>
+          ) : (
+            <div
+              className="flex items-center gap-1.5 py-1 px-1 pl-5 rounded hover:bg-muted/50 cursor-grab active:cursor-grabbing"
+              draggable
+              onDragStart={(e) => onDragStart(e, node.path)}
+            >
+              <GripVertical className="h-3 w-3 text-muted-foreground/50 shrink-0" />
+              <File className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+              <span className="text-xs truncate">{node.name}</span>
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+
   return (
     <div className="flex flex-1 flex-col overflow-hidden select-none">
       {/* Header with actions only */}
@@ -704,12 +815,26 @@ export default function GitPanel({ projectPath, projectName, onRefresh }: GitPan
                 variant="ghost"
                 size="icon"
                 className={cn("h-7 w-7", viewMode === "history" && "bg-muted text-foreground")}
-                onClick={() => setViewMode(viewMode === "changes" ? "history" : "changes")}
+                onClick={() => setViewMode(viewMode === "history" ? "changes" : "history")}
               >
                 <History className="h-3.5 w-3.5" />
               </Button>
             </TooltipTrigger>
-            <TooltipContent>{viewMode === "changes" ? "Show History" : "Show Changes"}</TooltipContent>
+            <TooltipContent>{viewMode === "history" ? "Show Changes" : "Show History"}</TooltipContent>
+          </Tooltip>
+
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className={cn("h-7 w-7", viewMode === "files" && "bg-muted text-foreground")}
+                onClick={() => setViewMode(viewMode === "files" ? "changes" : "files")}
+              >
+                <FolderTree className="h-3.5 w-3.5" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>{viewMode === "files" ? "Show Changes" : "Browse Files"}</TooltipContent>
           </Tooltip>
       </div>
 
@@ -757,7 +882,8 @@ export default function GitPanel({ projectPath, projectName, onRefresh }: GitPan
             </DropdownMenu>
           </div>
 
-          {viewMode === "changes" ? (
+          {/* Changes View */}
+          {viewMode === "changes" && (
             <>
               {/* Selection actions */}
               {selectedFiles.size > 0 && (
@@ -819,8 +945,10 @@ export default function GitPanel({ projectPath, projectName, onRefresh }: GitPan
                 </div>
               )}
             </>
-          ) : (
-            /* History View */
+          )}
+
+          {/* History View */}
+          {viewMode === "history" && (
             <div className="space-y-1">
               <h3 className="mb-2 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
                 Commit History
@@ -859,6 +987,44 @@ export default function GitPanel({ projectPath, projectName, onRefresh }: GitPan
                 <div className="flex flex-col items-center justify-center py-8 text-center">
                   <History className="mb-2 h-8 w-8 text-muted-foreground" />
                   <p className="text-sm text-muted-foreground">No commit history</p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Files View */}
+          {viewMode === "files" && (
+            <div className="space-y-1">
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                  Project Files
+                </h3>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-5 w-5"
+                  onClick={loadFileTree}
+                  disabled={isLoadingFiles}
+                >
+                  <RefreshCw className={cn("h-3 w-3", isLoadingFiles && "animate-spin")} />
+                </Button>
+              </div>
+              {isLoadingFiles ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                </div>
+              ) : fileTree.length > 0 ? (
+                <FileTreeView
+                  nodes={fileTree}
+                  expandedDirs={expandedDirs}
+                  onToggleDir={toggleDir}
+                  onDragStart={handleDragStart}
+                  projectPath={projectPath}
+                />
+              ) : (
+                <div className="flex flex-col items-center justify-center py-8 text-center">
+                  <FolderTree className="mb-2 h-8 w-8 text-muted-foreground" />
+                  <p className="text-sm text-muted-foreground">No files found</p>
                 </div>
               )}
             </div>

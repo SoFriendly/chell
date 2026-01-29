@@ -91,6 +91,15 @@ pub struct Commit {
     pub summary: Option<String>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FileTreeNode {
+    pub name: String,
+    pub path: String,
+    #[serde(rename = "isDir")]
+    pub is_dir: bool,
+    pub children: Option<Vec<FileTreeNode>>,
+}
+
 // Terminal state management
 struct TerminalState {
     pty_pair: PtyPair,
@@ -318,6 +327,64 @@ fn reset_to_commit(repo_path: String, commit_id: String, mode: String) -> Result
 #[tauri::command]
 fn revert_commit(repo_path: String, commit_id: String) -> Result<(), String> {
     GitService::revert_commit(&repo_path, &commit_id)
+}
+
+#[tauri::command]
+fn get_file_tree(path: String) -> Result<Vec<FileTreeNode>, String> {
+    use std::fs;
+    use std::path::Path;
+
+    fn build_tree(dir_path: &Path, base_path: &Path, depth: usize) -> Result<Vec<FileTreeNode>, String> {
+        if depth > 10 {
+            return Ok(vec![]); // Limit depth to prevent infinite recursion
+        }
+
+        let mut nodes = Vec::new();
+        let entries = fs::read_dir(dir_path).map_err(|e| e.to_string())?;
+
+        for entry in entries {
+            let entry = entry.map_err(|e| e.to_string())?;
+            let path = entry.path();
+            let name = entry.file_name().to_string_lossy().to_string();
+
+            // Skip hidden files/dirs and common ignore patterns
+            if name.starts_with('.') || name == "node_modules" || name == "target" || name == "__pycache__" || name == "dist" || name == "build" {
+                continue;
+            }
+
+            let relative_path = path.strip_prefix(base_path)
+                .map(|p| p.to_string_lossy().to_string())
+                .unwrap_or_else(|_| name.clone());
+
+            let is_dir = path.is_dir();
+            let children = if is_dir {
+                Some(build_tree(&path, base_path, depth + 1)?)
+            } else {
+                None
+            };
+
+            nodes.push(FileTreeNode {
+                name,
+                path: relative_path,
+                is_dir,
+                children,
+            });
+        }
+
+        // Sort: directories first, then alphabetically
+        nodes.sort_by(|a, b| {
+            match (a.is_dir, b.is_dir) {
+                (true, false) => std::cmp::Ordering::Less,
+                (false, true) => std::cmp::Ordering::Greater,
+                _ => a.name.to_lowercase().cmp(&b.name.to_lowercase()),
+            }
+        });
+
+        Ok(nodes)
+    }
+
+    let path = Path::new(&path);
+    build_tree(path, path, 0)
 }
 
 #[tauri::command]
@@ -681,6 +748,7 @@ pub fn run() {
             open_folder_dialog,
             open_in_finder,
             list_directories,
+            get_file_tree,
             // Assistants
             check_installed_assistants,
             install_assistant,
