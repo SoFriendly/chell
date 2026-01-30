@@ -55,7 +55,11 @@ if [ -n "$APP_DIR" ]; then
   # Sign if private key is available
   if [ -n "$TAURI_SIGNING_PRIVATE_KEY" ]; then
     echo "Signing update bundle..."
-    pnpm tauri signer sign "$TAR_FILE"
+    if [ -n "$TAURI_SIGNING_PRIVATE_KEY_PASSWORD" ]; then
+      pnpm tauri signer sign --private-key "$TAURI_SIGNING_PRIVATE_KEY" --password "$TAURI_SIGNING_PRIVATE_KEY_PASSWORD" "$TAR_FILE"
+    else
+      pnpm tauri signer sign --private-key "$TAURI_SIGNING_PRIVATE_KEY" "$TAR_FILE"
+    fi
     echo "Created: ${TAR_FILE}.sig"
   else
     echo "Skipping signing - TAURI_SIGNING_PRIVATE_KEY not set"

@@ -1,14 +1,14 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Chell",
-  "version": "0.1.4",
+  "version": "0.1.8",
   "identifier": "com.sofriendly.chell",
   "plugins": {
     "updater": {
       "endpoints": [
         "https://releases.chell.app/latest.json"
       ],
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEQzQUYxMjJCMjFGOURCQUUKUldTdTIva2hLeEt2MDlhN1pCVzNydFYveHFqR1dObkcvQTZPOGZVcGVlbFVoSkZUbU5WckZBUloK"
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEQ4MDhDNTE5RjQwNTVGN0UKUldSK1h3WDBHY1VJMk9LZExycFRNc2lSTGVLZEp1SG9acitNK3Z4Z3lmdllsczVzd0ZscFhRYWMK"
     }
   },
   "build": {
