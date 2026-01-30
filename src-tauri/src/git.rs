@@ -552,4 +552,32 @@ impl GitService {
 
         Ok(())
     }
+
+    pub fn add_to_gitignore(repo_path: &str, pattern: &str) -> Result<(), String> {
+        let gitignore_path = std::path::Path::new(repo_path).join(".gitignore");
+
+        // Read existing content if file exists
+        let mut content = if gitignore_path.exists() {
+            std::fs::read_to_string(&gitignore_path).map_err(|e| e.to_string())?
+        } else {
+            String::new()
+        };
+
+        // Check if pattern already exists
+        let pattern_line = pattern.trim();
+        let already_exists = content.lines().any(|line| line.trim() == pattern_line);
+
+        if !already_exists {
+            // Add newline if file doesn't end with one
+            if !content.is_empty() && !content.ends_with('\n') {
+                content.push('\n');
+            }
+            content.push_str(pattern_line);
+            content.push('\n');
+
+            std::fs::write(&gitignore_path, content).map_err(|e| e.to_string())?;
+        }
+
+        Ok(())
+    }
 }

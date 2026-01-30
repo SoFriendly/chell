@@ -3,6 +3,7 @@ import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import HomePage from "@/pages/HomePage";
 import ProjectPage from "@/pages/ProjectPage";
+import UpdateChecker from "@/components/UpdateChecker";
 
 function App() {
   return (
@@ -13,6 +14,7 @@ function App() {
           <Route path="/project/:projectId" element={<ProjectPage />} />
         </Routes>
         <Toaster position="bottom-right" />
+        <UpdateChecker />
       </div>
     </TooltipProvider>
   );

@@ -310,6 +310,11 @@ fn discard_file(repo_path: String, file_path: String) -> Result<(), String> {
 }
 
 #[tauri::command]
+fn add_to_gitignore(repo_path: String, pattern: String) -> Result<(), String> {
+    GitService::add_to_gitignore(&repo_path, &pattern)
+}
+
+#[tauri::command]
 fn discard_hunk(
     repo_path: String,
     file_path: String,
@@ -740,6 +745,8 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_process::init())
         .manage(state)
         .invoke_handler(tauri::generate_handler![
             // Debug
@@ -759,6 +766,7 @@ pub fn run() {
             create_branch,
             get_history,
             discard_file,
+            add_to_gitignore,
             discard_hunk,
             edit_file_line,
             checkout_commit,

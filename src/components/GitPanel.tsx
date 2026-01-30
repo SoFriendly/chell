@@ -26,6 +26,7 @@ import {
   Pencil,
   Copy,
   FolderOpen,
+  EyeOff,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -399,6 +400,17 @@ export default function GitPanel({ projectPath, projectName, onRefresh, onFileDr
     }
   };
 
+  const handleAddToGitignore = async (filePath: string) => {
+    try {
+      await invoke("add_to_gitignore", { repoPath: projectPath, pattern: filePath });
+      toast.success(`Added ${filePath} to .gitignore`);
+      onRefresh();
+    } catch (error) {
+      toast.error("Failed to add to .gitignore");
+      console.error(error);
+    }
+  };
+
   const handleDiscardSelected = async () => {
     if (selectedFiles.size === 0) return;
     setIsDiscardingSelected(true);
@@ -624,6 +636,11 @@ export default function GitPanel({ projectPath, projectName, onRefresh, onFileDr
               <Undo2 className="mr-2 h-4 w-4" />
               Discard changes
             </ContextMenuItem>
+            <ContextMenuSeparator />
+            <ContextMenuItem onClick={() => handleAddToGitignore(diff.path)}>
+              <EyeOff className="mr-2 h-4 w-4" />
+              Add to .gitignore
+            </ContextMenuItem>
           </ContextMenuContent>
         </ContextMenu>
 
@@ -724,6 +741,11 @@ export default function GitPanel({ projectPath, projectName, onRefresh, onFileDr
                         >
                           <Undo2 className="mr-2 h-4 w-4" />
                           Discard all changes to file
+                        </ContextMenuItem>
+                        <ContextMenuSeparator />
+                        <ContextMenuItem onClick={() => handleAddToGitignore(diff.path)}>
+                          <EyeOff className="mr-2 h-4 w-4" />
+                          Add to .gitignore
                         </ContextMenuItem>
                       </ContextMenuContent>
                     </ContextMenu>

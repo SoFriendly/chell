@@ -1,0 +1,133 @@
+#!/bin/bash
+set -e
+
+# Load environment variables from .env.local if it exists
+if [ -f .env.local ]; then
+  export $(cat .env.local | grep -v '^#' | xargs)
+fi
+
+# Check required environment variables
+if [ -z "$CLOUDFLARE_ACCOUNT_ID" ] || [ -z "$CLOUDFLARE_R2_ACCESS_KEY" ] || [ -z "$CLOUDFLARE_R2_SECRET_KEY" ]; then
+  echo "Error: Missing Cloudflare R2 credentials"
+  echo "Please set CLOUDFLARE_ACCOUNT_ID, CLOUDFLARE_R2_ACCESS_KEY, CLOUDFLARE_R2_SECRET_KEY in .env.local"
+  exit 1
+fi
+
+if [ -z "$CLOUDFLARE_R2_BUCKET" ]; then
+  CLOUDFLARE_R2_BUCKET="chell-releases"
+fi
+
+# Get version from tauri.conf.json
+VERSION=$(grep '"version"' src-tauri/tauri.conf.json | head -1 | sed 's/.*"version": "\(.*\)".*/\1/')
+echo "Uploading version: $VERSION"
+
+# R2 endpoint
+R2_ENDPOINT="https://${CLOUDFLARE_ACCOUNT_ID}.r2.cloudflarestorage.com"
+
+# Function to upload file to R2
+upload_file() {
+  local file=$1
+  local key=$2
+
+  if [ -f "$file" ]; then
+    echo "Uploading: $key"
+    AWS_ACCESS_KEY_ID=$CLOUDFLARE_R2_ACCESS_KEY \
+    AWS_SECRET_ACCESS_KEY=$CLOUDFLARE_R2_SECRET_KEY \
+    aws s3 cp "$file" "s3://${CLOUDFLARE_R2_BUCKET}/${key}" \
+      --endpoint-url "$R2_ENDPOINT" \
+      --no-progress
+  else
+    echo "Skipping (not found): $file"
+  fi
+}
+
+echo ""
+echo "=== Uploading macOS artifacts ==="
+
+# macOS DMG
+DMG_FILE=$(find src-tauri/target/release/bundle/dmg -name "*.dmg" 2>/dev/null | head -1)
+[ -n "$DMG_FILE" ] && upload_file "$DMG_FILE" "v${VERSION}/Chell_${VERSION}_aarch64.dmg"
+
+# macOS app bundle (for updates)
+APP_DIR=$(find src-tauri/target/release/bundle/macos -name "*.app" -type d 2>/dev/null | head -1)
+if [ -n "$APP_DIR" ]; then
+  TAR_FILE="src-tauri/target/release/bundle/Chell_${VERSION}_darwin-aarch64.app.tar.gz"
+  tar -czf "$TAR_FILE" -C "$(dirname "$APP_DIR")" "$(basename "$APP_DIR")"
+  upload_file "$TAR_FILE" "v${VERSION}/Chell_${VERSION}_darwin-aarch64.app.tar.gz"
+  [ -f "${TAR_FILE}.sig" ] && upload_file "${TAR_FILE}.sig" "v${VERSION}/Chell_${VERSION}_darwin-aarch64.app.tar.gz.sig"
+fi
+
+echo ""
+echo "=== Uploading Linux artifacts ==="
+
+# Linux AppImage
+APPIMAGE_FILE=$(find src-tauri/target/release/bundle/appimage -name "*.AppImage" 2>/dev/null | head -1)
+[ -n "$APPIMAGE_FILE" ] && upload_file "$APPIMAGE_FILE" "v${VERSION}/Chell_${VERSION}_amd64.AppImage"
+[ -f "${APPIMAGE_FILE}.sig" ] && upload_file "${APPIMAGE_FILE}.sig" "v${VERSION}/Chell_${VERSION}_amd64.AppImage.sig"
+
+# Linux .deb
+DEB_FILE=$(find src-tauri/target/release/bundle/deb -name "*.deb" 2>/dev/null | head -1)
+[ -n "$DEB_FILE" ] && upload_file "$DEB_FILE" "v${VERSION}/Chell_${VERSION}_amd64.deb"
+
+echo ""
+echo "=== Uploading Windows artifacts ==="
+
+# Windows MSI
+MSI_FILE=$(find src-tauri/target/release/bundle/msi -name "*.msi" 2>/dev/null | head -1)
+[ -n "$MSI_FILE" ] && upload_file "$MSI_FILE" "v${VERSION}/Chell_${VERSION}_x64-setup.msi"
+[ -f "${MSI_FILE}.sig" ] && upload_file "${MSI_FILE}.sig" "v${VERSION}/Chell_${VERSION}_x64-setup.msi.sig"
+
+# Windows NSIS installer
+NSIS_FILE=$(find src-tauri/target/release/bundle/nsis -name "*.exe" 2>/dev/null | head -1)
+[ -n "$NSIS_FILE" ] && upload_file "$NSIS_FILE" "v${VERSION}/Chell_${VERSION}_x64-setup.exe"
+[ -f "${NSIS_FILE}.sig" ] && upload_file "${NSIS_FILE}.sig" "v${VERSION}/Chell_${VERSION}_x64-setup.exe.sig"
+
+echo ""
+echo "=== Generating latest.json ==="
+
+# Collect signatures
+MAC_SIG=""
+LINUX_SIG=""
+WIN_SIG=""
+
+[ -f "src-tauri/target/release/bundle/Chell_${VERSION}_darwin-aarch64.app.tar.gz.sig" ] && \
+  MAC_SIG=$(cat "src-tauri/target/release/bundle/Chell_${VERSION}_darwin-aarch64.app.tar.gz.sig")
+[ -n "$APPIMAGE_FILE" ] && [ -f "${APPIMAGE_FILE}.sig" ] && \
+  LINUX_SIG=$(cat "${APPIMAGE_FILE}.sig")
+[ -n "$MSI_FILE" ] && [ -f "${MSI_FILE}.sig" ] && \
+  WIN_SIG=$(cat "${MSI_FILE}.sig")
+
+PUB_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+LATEST_JSON="src-tauri/target/release/bundle/latest.json"
+
+cat > "$LATEST_JSON" << EOF
+{
+  "version": "${VERSION}",
+  "notes": "Update to version ${VERSION}",
+  "pub_date": "${PUB_DATE}",
+  "platforms": {
+    "darwin-aarch64": {
+      "signature": "${MAC_SIG}",
+      "url": "https://releases.chell.app/v${VERSION}/Chell_${VERSION}_darwin-aarch64.app.tar.gz"
+    },
+    "darwin-x86_64": {
+      "signature": "${MAC_SIG}",
+      "url": "https://releases.chell.app/v${VERSION}/Chell_${VERSION}_darwin-x86_64.app.tar.gz"
+    },
+    "linux-x86_64": {
+      "signature": "${LINUX_SIG}",
+      "url": "https://releases.chell.app/v${VERSION}/Chell_${VERSION}_amd64.AppImage"
+    },
+    "windows-x86_64": {
+      "signature": "${WIN_SIG}",
+      "url": "https://releases.chell.app/v${VERSION}/Chell_${VERSION}_x64-setup.msi"
+    }
+  }
+}
+EOF
+
+upload_file "$LATEST_JSON" "latest.json"
+
+echo ""
+echo "=== Upload complete! ==="
+echo "Update endpoint: https://releases.chell.app/latest.json"
