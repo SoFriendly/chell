@@ -7,6 +7,7 @@ import { WebglAddon } from "@xterm/addon-webgl";
 import { CanvasAddon } from "@xterm/addon-canvas";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { open } from "@tauri-apps/plugin-shell";
 import { useSettingsStore } from "@/stores/settingsStore";
 import "@xterm/xterm/css/xterm.css";
 
@@ -166,7 +167,14 @@ export default function Terminal({ id, command = "", cwd, onTerminalReady, visib
     });
 
     const fitAddon = new FitAddon();
-    const webLinksAddon = new WebLinksAddon();
+    // Custom link handler that requires Ctrl/Cmd+Click to open URLs
+    const webLinksAddon = new WebLinksAddon((event: MouseEvent, uri: string) => {
+      const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+      const modifierPressed = isMac ? event.metaKey : event.ctrlKey;
+      if (modifierPressed) {
+        open(uri).catch(console.error);
+      }
+    });
     const unicode11Addon = new Unicode11Addon();
 
     terminal.loadAddon(fitAddon);
@@ -191,49 +199,67 @@ export default function Terminal({ id, command = "", cwd, onTerminalReady, visib
     terminalRef.current = terminal;
     fitAddonRef.current = fitAddon;
 
-    // Handle macOS keyboard shortcuts
+    // Handle keyboard shortcuts for copy/paste and macOS shortcuts
     terminal.attachCustomKeyEventHandler((event) => {
       const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
 
-      if (isMac && event.type === 'keydown') {
-        // Cmd+Backspace: Delete line (send Ctrl+U)
-        if (event.metaKey && event.key === 'Backspace') {
-          terminal.input('\x15'); // Ctrl+U
-          return false;
-        }
-        // Cmd+Left: Beginning of line (send Ctrl+A)
-        if (event.metaKey && event.key === 'ArrowLeft') {
-          terminal.input('\x01'); // Ctrl+A
-          return false;
-        }
-        // Cmd+Right: End of line (send Ctrl+E)
-        if (event.metaKey && event.key === 'ArrowRight') {
-          terminal.input('\x05'); // Ctrl+E
-          return false;
-        }
-        // Option+Backspace: Delete word (send Ctrl+W)
-        if (event.altKey && event.key === 'Backspace') {
-          terminal.input('\x17'); // Ctrl+W
-          return false;
-        }
-        // Option+Left: Move word left (send ESC+b)
-        if (event.altKey && event.key === 'ArrowLeft') {
-          terminal.input('\x1bb'); // ESC+b
-          return false;
-        }
-        // Option+Right: Move word right (send ESC+f)
-        if (event.altKey && event.key === 'ArrowRight') {
-          terminal.input('\x1bf'); // ESC+f
-          return false;
-        }
-        // Cmd+K: Clear screen
-        if (event.metaKey && event.key === 'k') {
-          terminal.clear();
-          return false;
-        }
-        // Allow Cmd+C, Cmd+V for copy/paste (let browser handle)
-        if (event.metaKey && (event.key === 'c' || event.key === 'v')) {
+      if (event.type === 'keydown') {
+        // Handle Ctrl+C on Windows/Linux - copy if text selected, otherwise send SIGINT
+        if (!isMac && event.ctrlKey && event.key === 'c') {
+          const selection = terminal.getSelection();
+          if (selection) {
+            navigator.clipboard.writeText(selection);
+            return false; // Prevent sending SIGINT when copying
+          }
+          // No selection, let terminal handle Ctrl+C (SIGINT)
           return true;
+        }
+
+        // Handle Ctrl+V on Windows/Linux for paste
+        if (!isMac && event.ctrlKey && event.key === 'v') {
+          return true; // Let browser handle paste
+        }
+
+        if (isMac) {
+          // Cmd+Backspace: Delete line (send Ctrl+U)
+          if (event.metaKey && event.key === 'Backspace') {
+            terminal.input('\x15'); // Ctrl+U
+            return false;
+          }
+          // Cmd+Left: Beginning of line (send Ctrl+A)
+          if (event.metaKey && event.key === 'ArrowLeft') {
+            terminal.input('\x01'); // Ctrl+A
+            return false;
+          }
+          // Cmd+Right: End of line (send Ctrl+E)
+          if (event.metaKey && event.key === 'ArrowRight') {
+            terminal.input('\x05'); // Ctrl+E
+            return false;
+          }
+          // Option+Backspace: Delete word (send Ctrl+W)
+          if (event.altKey && event.key === 'Backspace') {
+            terminal.input('\x17'); // Ctrl+W
+            return false;
+          }
+          // Option+Left: Move word left (send ESC+b)
+          if (event.altKey && event.key === 'ArrowLeft') {
+            terminal.input('\x1bb'); // ESC+b
+            return false;
+          }
+          // Option+Right: Move word right (send ESC+f)
+          if (event.altKey && event.key === 'ArrowRight') {
+            terminal.input('\x1bf'); // ESC+f
+            return false;
+          }
+          // Cmd+K: Clear screen
+          if (event.metaKey && event.key === 'k') {
+            terminal.clear();
+            return false;
+          }
+          // Allow Cmd+C, Cmd+V for copy/paste (let browser handle)
+          if (event.metaKey && (event.key === 'c' || event.key === 'v')) {
+            return true;
+          }
         }
       }
 
