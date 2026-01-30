@@ -53,15 +53,21 @@ export default function UpdateChecker() {
       const update = await check();
       if (!update) return;
 
+      let contentLength = 0;
+      let downloaded = 0;
+
       // Download the update
       await update.downloadAndInstall((event) => {
         switch (event.event) {
           case "Started":
+            contentLength = event.data.contentLength ?? 0;
+            downloaded = 0;
             setDownloadProgress(0);
             break;
           case "Progress":
-            const progress = event.data.contentLength
-              ? Math.round((event.data.chunkLength / event.data.contentLength) * 100)
+            downloaded += event.data.chunkLength;
+            const progress = contentLength > 0
+              ? Math.round((downloaded / contentLength) * 100)
               : 0;
             setDownloadProgress(progress);
             break;
