@@ -37,8 +37,34 @@ echo ""
 echo "Build complete!"
 echo "Artifacts are in: src-tauri/target/release/bundle/"
 
+# Get version for naming
+VERSION=$(grep '"version"' src-tauri/tauri.conf.json | head -1 | sed 's/.*"version": "\(.*\)".*/\1/')
+
+# Create and sign the update bundle
+echo ""
+echo "Creating update bundle..."
+
+APP_DIR=$(find src-tauri/target/release/bundle/macos -name "*.app" -type d 2>/dev/null | head -1)
+if [ -n "$APP_DIR" ]; then
+  TAR_FILE="src-tauri/target/release/bundle/Chell_${VERSION}_darwin-aarch64.app.tar.gz"
+
+  # Create tar.gz
+  tar -czf "$TAR_FILE" -C "$(dirname "$APP_DIR")" "$(basename "$APP_DIR")"
+  echo "Created: $TAR_FILE"
+
+  # Sign if private key is available
+  if [ -n "$TAURI_SIGNING_PRIVATE_KEY" ]; then
+    echo "Signing update bundle..."
+    pnpm tauri signer sign "$TAR_FILE"
+    echo "Created: ${TAR_FILE}.sig"
+  else
+    echo "Skipping signing - TAURI_SIGNING_PRIVATE_KEY not set"
+  fi
+fi
+
 # List the built artifacts
 echo ""
 echo "Built files:"
 ls -la src-tauri/target/release/bundle/macos/ 2>/dev/null || true
 ls -la src-tauri/target/release/bundle/dmg/ 2>/dev/null || true
+ls -la src-tauri/target/release/bundle/*.tar.gz* 2>/dev/null || true
