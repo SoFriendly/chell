@@ -612,8 +612,15 @@ export default function ProjectPage() {
     }
   };
 
-  const refreshGitData = useCallback(() => {
+  const refreshGitData = useCallback(async () => {
     if (currentProject) {
+      // Fetch from remote first to get new branches
+      try {
+        await invoke("fetch_remote", { repoPath: currentProject.path, remote: "origin" });
+      } catch (error) {
+        // Silently continue - fetch may fail if no remote configured
+        console.log("Fetch failed (may not have remote):", error);
+      }
       loadGitData(currentProject.path);
     }
   }, [currentProject]);
