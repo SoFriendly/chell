@@ -140,4 +140,25 @@ export interface Settings {
   autoCommitMessage: boolean;
   autoFetchRemote: boolean;
   groqApiKey?: string;
+  // Remote Portal settings
+  portalEnabled?: boolean;
+  portalRelayUrl?: string;
+}
+
+// Remote Portal types
+export interface LinkedDevice {
+  id: string;
+  name: string;
+  type: "mobile";
+  pairedAt: number;
+  lastSeen: number;
+}
+
+export interface PortalSession {
+  deviceId: string;
+  deviceName: string;
+  pairingCode: string;
+  pairingPassphrase: string;
+  linkedDevices: LinkedDevice[];
+  isConnected: boolean;
 }

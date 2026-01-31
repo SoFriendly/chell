@@ -1,0 +1,21 @@
+name = "chell-relay"
+main = "src/index.ts"
+compatibility_date = "2024-11-01"
+
+# Durable Objects for session management
+[[durable_objects.bindings]]
+name = "SESSIONS"
+class_name = "SessionDO"
+
+[[migrations]]
+tag = "v1"
+new_classes = ["SessionDO"]
+
+# KV for device registry
+[[kv_namespaces]]
+binding = "DEVICES"
+id = "your-kv-namespace-id"
+preview_id = "your-preview-kv-namespace-id"
+
+[vars]
+ENVIRONMENT = "production"
