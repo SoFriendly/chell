@@ -509,10 +509,14 @@ export default function Terminal({ id, command = "", cwd, onTerminalReady, visib
 
   return (
     <div
-      ref={containerRef}
-      onClick={handleClick}
       className="h-full w-full p-1"
       style={{ backgroundColor: bgColor }}
-    />
+      onClick={handleClick}
+    >
+      <div
+        ref={containerRef}
+        className="h-full w-full"
+      />
+    </div>
   );
 }
