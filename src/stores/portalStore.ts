@@ -87,7 +87,7 @@ export const usePortalStore = create<PortalState>()(
       // Initial state
       isEnabled: false,
       isConnected: false,
-      relayUrl: "wss://chell-relay.workers.dev",
+      relayUrl: "wss://relay.chell.app",
       error: null,
       deviceId: generateDeviceId(),
       deviceName: getDeviceName(),
