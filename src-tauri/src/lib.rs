@@ -162,7 +162,21 @@ fn spawn_terminal(
         if parts.is_empty() {
             return Err("Empty command".to_string());
         }
-        let mut cmd = CommandBuilder::new(parts[0]);
+
+        // Resolve full path for the command if it's not already an absolute path
+        let command = parts[0];
+        let resolved_command = if command.contains('/') {
+            command.to_string()
+        } else {
+            // Try to find the full path for this command
+            find_command_path(command)
+                .map(|p| p.to_string_lossy().to_string())
+                .unwrap_or_else(|| command.to_string())
+        };
+
+        println!("DEBUG spawn_terminal - resolved command: {:?}", resolved_command);
+
+        let mut cmd = CommandBuilder::new(&resolved_command);
         for arg in parts.iter().skip(1) {
             cmd.arg(*arg);
         }
@@ -665,11 +679,11 @@ fn get_shell_history(limit: Option<usize>) -> Result<Vec<String>, String> {
     Ok(Vec::new())
 }
 
-// Helper function to check if a command exists either in PATH or at common install locations
-fn command_exists(cmd: &str) -> bool {
+// Helper function to find the full path of a command
+fn find_command_path(cmd: &str) -> Option<std::path::PathBuf> {
     // First try the standard which lookup
-    if which::which(cmd).is_ok() {
-        return true;
+    if let Ok(path) = which::which(cmd) {
+        return Some(path);
     }
 
     // On macOS, GUI apps don't inherit shell profile paths, so check common locations
@@ -690,7 +704,7 @@ fn command_exists(cmd: &str) -> bool {
 
             for path in &common_paths {
                 if path.exists() {
-                    return true;
+                    return Some(path.clone());
                 }
             }
 
@@ -701,7 +715,7 @@ fn command_exists(cmd: &str) -> bool {
                     for entry in entries.flatten() {
                         let bin_path = entry.path().join("bin").join(cmd);
                         if bin_path.exists() {
-                            return true;
+                            return Some(bin_path);
                         }
                     }
                 }
@@ -716,12 +730,17 @@ fn command_exists(cmd: &str) -> bool {
 
         for path in &system_paths {
             if path.exists() {
-                return true;
+                return Some(path.clone());
             }
         }
     }
 
-    false
+    None
+}
+
+// Helper function to check if a command exists
+fn command_exists(cmd: &str) -> bool {
+    find_command_path(cmd).is_some()
 }
 
 // Assistant commands
