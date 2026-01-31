@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -26,8 +26,10 @@ import {
   Sun,
   Sparkles,
   Info,
+  FolderOpen,
+  Folder,
 } from "lucide-react-native";
-import { useConnectionStore, LinkedPortal } from "~/stores/connectionStore";
+import { useConnectionStore, LinkedPortal, DesktopProject } from "~/stores/connectionStore";
 import { useThemeStore, ThemeOption } from "~/stores/themeStore";
 import { useTheme } from "~/components/ThemeProvider";
 import {
@@ -51,10 +53,14 @@ export default function SettingsTabPage() {
     linkedPortals,
     activePortalId,
     desktopDeviceName,
+    activeProject,
+    availableProjects,
     pairFromQR,
     selectPortal,
     removePortal,
     disconnect,
+    selectProject,
+    requestStatus,
   } = useConnectionStore();
 
   const { theme, setTheme, syncWithDesktop, setSyncWithDesktop } = useThemeStore();
@@ -64,6 +70,20 @@ export default function SettingsTabPage() {
   const [isScanning, setIsScanning] = useState(false);
 
   const isConnected = status === "connected";
+
+  // Request status (including project list) when connected
+  useEffect(() => {
+    if (isConnected) {
+      requestStatus();
+    }
+  }, [isConnected]);
+
+  const handleSelectProject = (project: DesktopProject) => {
+    if (project.id === activeProject?.id) return;
+
+    selectProject(project.id);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  };
 
   const handleScanQR = async () => {
     if (!permission?.granted) {
@@ -225,6 +245,69 @@ export default function SettingsTabPage() {
           </CardFooter>
         )}
       </Card>
+
+      {/* Project Selector - only show when connected and have projects */}
+      {isConnected && availableProjects.length > 0 && (
+        <Card className="mb-4">
+          <CardHeader>
+            <View className="flex-row items-center">
+              <FolderOpen size={18} color="#22c55e" />
+              <CardTitle className="ml-2">
+                Projects ({availableProjects.length})
+              </CardTitle>
+            </View>
+            <CardDescription>
+              Select a project to control from this device
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <View className="gap-2">
+              {availableProjects.map((project) => {
+                const isActive = project.id === activeProject?.id;
+
+                return (
+                  <Pressable
+                    key={project.id}
+                    className={`flex-row items-center justify-between p-3 rounded-lg border ${
+                      isActive ? "border-primary bg-primary/5" : "border-border"
+                    }`}
+                    onPress={() => handleSelectProject(project)}
+                  >
+                    <View className="flex-row items-center flex-1">
+                      <View
+                        className={`w-10 h-10 rounded-lg items-center justify-center ${
+                          isActive ? "bg-primary/10" : "bg-muted"
+                        }`}
+                      >
+                        <Folder
+                          size={20}
+                          color={isActive ? colors.primary : colors.mutedForeground}
+                        />
+                      </View>
+                      <View className="ml-3 flex-1">
+                        <Text
+                          className={`font-medium ${
+                            isActive ? "text-foreground" : "text-muted-foreground"
+                          }`}
+                        >
+                          {project.name}
+                        </Text>
+                        <Text
+                          className="text-muted-foreground text-xs"
+                          numberOfLines={1}
+                        >
+                          {project.path}
+                        </Text>
+                      </View>
+                    </View>
+                    {isActive && <Check size={18} color={colors.primary} />}
+                  </Pressable>
+                );
+              })}
+            </View>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Scan QR Code */}
       <Card className="mb-4">

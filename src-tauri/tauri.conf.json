@@ -33,6 +33,10 @@
         "backgroundColor": "#121212"
       }
     ],
+    "trayIcon": {
+      "iconPath": "icons/icon.png",
+      "iconAsTemplate": true
+    },
     "security": {
       "csp": null,
       "assetProtocol": {

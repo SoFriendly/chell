@@ -10,7 +10,7 @@ import { useTerminalStore } from "~/stores/terminalStore";
 import { getWebSocket } from "~/lib/websocket";
 
 function RootLayoutContent() {
-  const { status, connect, wsUrl } = useConnectionStore();
+  const { status, connect, wsUrl, requestStatus } = useConnectionStore();
   const { appendOutput } = useTerminalStore();
   const { syncFromDesktop, syncWithDesktop } = useThemeStore();
   const { theme, colors } = useTheme();
@@ -21,6 +21,17 @@ function RootLayoutContent() {
       connect();
     }
   }, [wsUrl]);
+
+  // Request status (project list, theme, etc.) when connected
+  useEffect(() => {
+    if (status === "connected") {
+      // Small delay to ensure connection is fully established
+      const timer = setTimeout(() => {
+        requestStatus();
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [status]);
 
   // Listen for messages from desktop
   useEffect(() => {

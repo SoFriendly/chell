@@ -277,9 +277,17 @@ export const usePortalStore = create<PortalState>()(
           }
 
           case "request_status": {
-            // Send current status to mobile including theme and custom colors
-            import("@/stores/settingsStore").then(({ useSettingsStore }) => {
+            // Send current status to mobile including theme, custom colors, and project list
+            Promise.all([
+              import("@/stores/settingsStore"),
+              import("@/stores/projectStore"),
+            ]).then(([{ useSettingsStore }, { useProjectStore }]) => {
               const { theme, customTheme } = useSettingsStore.getState();
+              const { projects, tabs, activeTabId } = useProjectStore.getState();
+
+              // Find active project from active tab
+              const activeTab = tabs.find((t) => t.id === activeTabId);
+              const activeProjectId = activeTab?.projectId || null;
 
               const statusUpdate: Record<string, unknown> = {
                 type: "status_update",
@@ -287,6 +295,12 @@ export const usePortalStore = create<PortalState>()(
                 timestamp: Date.now(),
                 connectionStatus: "connected",
                 theme,
+                projects: projects.map((p) => ({
+                  id: p.id,
+                  name: p.name,
+                  path: p.path,
+                })),
+                activeProjectId,
               };
 
               // Include custom theme colors if using custom theme
@@ -298,6 +312,29 @@ export const usePortalStore = create<PortalState>()(
               }
 
               get().sendMessage(statusUpdate);
+            });
+            break;
+          }
+
+          case "select_project": {
+            // Mobile wants to switch to a different project
+            const { projectId } = message as { projectId: string };
+            import("@/stores/projectStore").then(({ useProjectStore }) => {
+              const { projects, openTab } = useProjectStore.getState();
+              const project = projects.find((p) => p.id === projectId);
+
+              if (project) {
+                // Open/switch to this project's tab
+                openTab(project);
+
+                // Send confirmation back
+                get().sendMessage({
+                  type: "project_changed",
+                  id: crypto.randomUUID(),
+                  timestamp: Date.now(),
+                  projectId,
+                });
+              }
             });
             break;
           }

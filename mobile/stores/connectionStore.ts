@@ -16,6 +16,13 @@ export interface LinkedPortal {
   isOnline: boolean;
 }
 
+// Simple project info from desktop
+export interface DesktopProject {
+  id: string;
+  name: string;
+  path: string;
+}
+
 interface ConnectionStore extends ConnectionState {
   // State
   wsUrl: string;
@@ -25,6 +32,9 @@ interface ConnectionStore extends ConnectionState {
   // Multi-portal support
   linkedPortals: LinkedPortal[];
   activePortalId: string | null;
+
+  // Project list from desktop
+  availableProjects: DesktopProject[];
 
   // Actions
   setWsUrl: (url: string) => void;
@@ -39,6 +49,10 @@ interface ConnectionStore extends ConnectionState {
   addPortal: (portal: LinkedPortal) => void;
   removePortal: (portalId: string) => void;
   selectPortal: (portalId: string) => Promise<void>;
+
+  // Project management
+  selectProject: (projectId: string) => void;
+  requestStatus: () => void;
 
   // Remote commands (proxy to desktop)
   invoke: <T>(command: string, params?: Record<string, unknown>) => Promise<T>;
@@ -68,6 +82,7 @@ export const useConnectionStore = create<ConnectionStore>()(
       gitStatus: null,
       linkedPortals: [],
       activePortalId: null,
+      availableProjects: [],
 
       setWsUrl: (url: string) => set({ wsUrl: url }),
 
@@ -129,10 +144,21 @@ export const useConnectionStore = create<ConnectionStore>()(
                 break;
 
               case "status_update":
-                // Update portal online status
+                // Update portal online status and project list
                 if (message.connectionStatus === "connected") {
+                  const projects = (message.projects as DesktopProject[]) || [];
+                  const activeProjectId = message.activeProjectId as string | undefined;
+
+                  // Find active project from list
+                  const activeProject = activeProjectId
+                    ? projects.find((p) => p.id === activeProjectId)
+                    : null;
+
                   set((state) => ({
-                    activeProject: message.activeProject || state.activeProject,
+                    availableProjects: projects,
+                    activeProject: activeProject
+                      ? { ...activeProject, lastOpened: "" }
+                      : state.activeProject,
                     gitStatus: message.gitStatus || state.gitStatus,
                     linkedPortals: state.linkedPortals.map((p) =>
                       p.id === state.activePortalId
@@ -149,6 +175,21 @@ export const useConnectionStore = create<ConnectionStore>()(
                     ),
                   }));
                 }
+                break;
+
+              case "project_changed":
+                // Desktop confirmed project change
+                const changedProjectId = message.projectId as string;
+                set((state) => {
+                  const project = state.availableProjects.find(
+                    (p) => p.id === changedProjectId
+                  );
+                  return {
+                    activeProject: project
+                      ? { ...project, lastOpened: "" }
+                      : state.activeProject,
+                  };
+                });
                 break;
 
               case "error":
@@ -341,6 +382,27 @@ export const useConnectionStore = create<ConnectionStore>()(
         set({ activeProject: project }),
 
       setGitStatus: (status: GitStatus | null) => set({ gitStatus: status }),
+
+      selectProject: (projectId: string) => {
+        const ws = getWebSocket();
+        ws.send({
+          type: "select_project",
+          id: Math.random().toString(36).substring(2, 15),
+          projectId,
+        });
+      },
+
+      requestStatus: () => {
+        try {
+          const ws = getWebSocket();
+          ws.send({
+            type: "request_status",
+            id: Math.random().toString(36).substring(2, 15),
+          });
+        } catch {
+          // WebSocket not initialized
+        }
+      },
 
       invoke: async <T>(
         command: string,
