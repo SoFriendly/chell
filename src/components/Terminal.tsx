@@ -110,10 +110,13 @@ export default function Terminal({ id, command = "", cwd, onTerminalReady, visib
     let lastWidth = 0;
     let lastHeight = 0;
     let stableCount = 0;
+    let checkCount = 0;
     let stabilityTimer: ReturnType<typeof setTimeout> | null = null;
+    let fallbackTimer: ReturnType<typeof setTimeout> | null = null;
 
     const checkStability = () => {
       if (!containerRef.current) return;
+      checkCount++;
 
       const width = containerRef.current.offsetWidth;
       const height = containerRef.current.offsetHeight;
@@ -124,6 +127,7 @@ export default function Terminal({ id, command = "", cwd, onTerminalReady, visib
           // Require dimensions to be stable for 8 consecutive checks (400ms)
           // This gives ResizablePanelGroup plenty of time to finish layout
           if (stableCount >= 8) {
+            if (fallbackTimer) clearTimeout(fallbackTimer);
             setIsContainerReady(true);
             return;
           }
@@ -134,14 +138,30 @@ export default function Terminal({ id, command = "", cwd, onTerminalReady, visib
         }
       }
 
-      stabilityTimer = setTimeout(checkStability, 50);
+      // Safety: stop checking after 60 attempts (3 seconds) to prevent infinite loop
+      if (checkCount < 60) {
+        stabilityTimer = setTimeout(checkStability, 50);
+      }
     };
 
     // Start checking after significant delay to let ResizablePanelGroup fully settle
     stabilityTimer = setTimeout(checkStability, 200);
 
+    // Fallback: force ready after 2 seconds even if not stable
+    fallbackTimer = setTimeout(() => {
+      if (!isContainerReady && containerRef.current) {
+        const width = containerRef.current.offsetWidth;
+        const height = containerRef.current.offsetHeight;
+        if (width > 0 && height > 0) {
+          console.warn("[Terminal] Forcing container ready after timeout");
+          setIsContainerReady(true);
+        }
+      }
+    }, 2000);
+
     return () => {
       if (stabilityTimer) clearTimeout(stabilityTimer);
+      if (fallbackTimer) clearTimeout(fallbackTimer);
     };
   }, []);
 
@@ -318,10 +338,12 @@ export default function Terminal({ id, command = "", cwd, onTerminalReady, visib
 
     hasSpawnedRef.current = true;
     let isMounted = true;
+    let retryCount = 0;
+    const maxRetries = 3;
 
     const spawnTerminal = async () => {
       try {
-        await invoke("debug_log", { message: `Terminal spawning with command: "${command}"` });
+        await invoke("debug_log", { message: `Terminal spawning with command: "${command}" (attempt ${retryCount + 1})` });
         const newId = await invoke<string>("spawn_terminal", {
           shell: command,
           cwd,
@@ -333,7 +355,14 @@ export default function Terminal({ id, command = "", cwd, onTerminalReady, visib
           onTerminalReady?.(newId);
         }
       } catch (error) {
-        console.error("Failed to spawn terminal:", error);
+        console.error(`Failed to spawn terminal (attempt ${retryCount + 1}):`, error);
+        retryCount++;
+        if (isMounted && retryCount < maxRetries) {
+          // Retry with exponential backoff
+          const delay = Math.min(1000 * Math.pow(2, retryCount - 1), 5000);
+          console.log(`[Terminal] Retrying in ${delay}ms...`);
+          setTimeout(spawnTerminal, delay);
+        }
       }
     };
 

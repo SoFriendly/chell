@@ -1026,13 +1026,15 @@ export default function ProjectPage() {
                   <TooltipContent>Search history (Ctrl+R)</TooltipContent>
                 </Tooltip>
               )}
-              {utilityTerminalId && utilityTerminalId !== "closed" && (
+              {utilityTerminalId !== "closed" && (
                 <Button
                   variant="ghost"
                   size="icon"
                   className="h-6 w-6 shrink-0"
                   onClick={() => {
-                    invoke("kill_terminal", { id: utilityTerminalId });
+                    if (utilityTerminalId) {
+                      invoke("kill_terminal", { id: utilityTerminalId });
+                    }
                     setUtilityTerminalId("closed");
                   }}
                 >
