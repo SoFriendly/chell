@@ -3,6 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import {
   Settings,
@@ -643,13 +644,18 @@ export default function ProjectPage() {
   const assistantOptions = getAssistantOptions();
 
   return (
-    <div className="relative flex h-full bg-background">
-      {/* Top drag region for window dragging */}
-      <div
-        data-tauri-drag-region
-        className="fixed inset-x-0 top-0 h-10 z-50"
-      />
-
+    <div
+      className="relative flex h-full bg-background"
+      onMouseDown={(e) => {
+        // Only start dragging if clicking in the top 40px and not on interactive elements
+        if (e.clientY <= 40) {
+          const target = e.target as HTMLElement;
+          if (!target.closest('button, a, input, [role="button"]')) {
+            getCurrentWindow().startDragging();
+          }
+        }
+      }}
+    >
       {/* Single horizontal divider line spanning full width */}
       <div className="absolute left-0 right-0 top-10 h-px bg-border" />
       {/* Vertical divider for sidebar */}

@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { invoke } from "@tauri-apps/api/core";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { open } from "@tauri-apps/plugin-dialog";
 import {
   FolderGit2,
@@ -257,18 +258,23 @@ export default function HomePage() {
   };
 
   return (
-    <div className="relative flex h-full bg-background">
-      {/* Top drag region for window dragging */}
-      <div
-        data-tauri-drag-region
-        className="fixed inset-x-0 top-0 h-8 z-50"
-      />
-
+    <div
+      className="relative flex h-full bg-background"
+      onMouseDown={(e) => {
+        // Only start dragging if clicking in the top 32px and not on interactive elements
+        if (e.clientY <= 32) {
+          const target = e.target as HTMLElement;
+          if (!target.closest('button, a, input, [role="button"]')) {
+            getCurrentWindow().startDragging();
+          }
+        }
+      }}
+    >
       {/* Left icon sidebar */}
       <div
         className="flex w-12 flex-col items-center bg-background pt-8 pb-3"
       >
-          {/* Top icons */}
+        {/* Top icons */}
           <div className="flex flex-col items-center gap-1">
           <Tooltip delayDuration={0}>
             <TooltipTrigger asChild>
