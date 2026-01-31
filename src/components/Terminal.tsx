@@ -206,6 +206,60 @@ export default function Terminal({ id, command = "", cwd, onTerminalReady, visib
 
     terminal.open(containerRef.current);
 
+    // Custom link provider for file paths (Cmd/Ctrl+Click to reveal in Finder/Explorer)
+    terminal.registerLinkProvider({
+      provideLinks: (lineNumber: number, callback) => {
+        const line = terminal.buffer.active.getLine(lineNumber);
+        if (!line) {
+          callback(undefined);
+          return;
+        }
+        const lineText = line.translateToString();
+        const links: Array<{
+          range: { start: { x: number; y: number }; end: { x: number; y: number } };
+          text: string;
+          activate: (event: MouseEvent, text: string) => void;
+        }> = [];
+
+        // Match file paths: absolute paths, relative paths, and paths with line numbers
+        // Examples: /Users/foo/bar.ts, ./src/index.js, src/file.ts:42:10
+        const pathRegex = /(?:^|[\s'"({\[])((\.{0,2}\/)?[\w./-]+\.\w+)(?::(\d+)(?::(\d+))?)?/g;
+        let match;
+
+        while ((match = pathRegex.exec(lineText)) !== null) {
+          const fullMatch = match[0];
+          const filePath = match[1];
+          const startOffset = match.index + (fullMatch.length - fullMatch.trimStart().length);
+          const matchLength = fullMatch.trimStart().length;
+
+          // Skip URLs (already handled by WebLinksAddon)
+          if (filePath.includes('://')) continue;
+
+          // Skip very short matches that are likely false positives
+          if (filePath.length < 3) continue;
+
+          links.push({
+            range: {
+              start: { x: startOffset + 1, y: lineNumber },
+              end: { x: startOffset + matchLength + 1, y: lineNumber },
+            },
+            text: filePath,
+            activate: (event: MouseEvent, text: string) => {
+              const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+              const modifierPressed = isMac ? event.metaKey : event.ctrlKey;
+              if (modifierPressed) {
+                // Resolve relative paths against cwd
+                const fullPath = text.startsWith('/') ? text : `${cwd}/${text}`;
+                invoke('reveal_in_file_manager', { path: fullPath }).catch(console.error);
+              }
+            },
+          });
+        }
+
+        callback(links.length > 0 ? links : undefined);
+      },
+    });
+
     // Block DEC mode 1004 (focus reporting) to prevent Claude Code from
     // switching to dashboard view when terminal loses focus.
     // See: https://github.com/anthropics/claude-code/issues/22086
