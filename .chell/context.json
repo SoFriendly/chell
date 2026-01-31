@@ -1,0 +1,12 @@
+{
+  "projectType": "node",
+  "packageManager": "pnpm",
+  "scripts": [
+    "build",
+    "dev",
+    "preview",
+    "tauri"
+  ],
+  "hasDocker": false,
+  "hasMakefile": false
+}
