@@ -501,7 +501,7 @@ fn edit_file_line(file_path: String, line_number: usize, new_content: String) ->
 
     let path = Path::new(&file_path);
     let content = fs::read_to_string(path).map_err(|e| e.to_string())?;
-    let mut lines: Vec<&str> = content.lines().collect();
+    let lines: Vec<&str> = content.lines().collect();
 
     if line_number == 0 || line_number > lines.len() {
         return Err(format!("Line number {} out of range (1-{})", line_number, lines.len()));

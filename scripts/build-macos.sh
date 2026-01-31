@@ -48,8 +48,8 @@ APP_DIR=$(find src-tauri/target/release/bundle/macos -name "*.app" -type d 2>/de
 if [ -n "$APP_DIR" ]; then
   TAR_FILE="src-tauri/target/release/bundle/Chell_${VERSION}_darwin-aarch64.app.tar.gz"
 
-  # Create tar.gz
-  tar -czf "$TAR_FILE" -C "$(dirname "$APP_DIR")" "$(basename "$APP_DIR")"
+  # Create tar.gz (COPYFILE_DISABLE prevents macOS resource forks like ._* files)
+  COPYFILE_DISABLE=1 tar -czf "$TAR_FILE" -C "$(dirname "$APP_DIR")" "$(basename "$APP_DIR")"
   echo "Created: $TAR_FILE"
 
   # Sign if private key is available
