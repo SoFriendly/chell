@@ -345,11 +345,7 @@ export default function GitPanel({ projectPath, projectName, onRefresh, onFileDr
       onRefresh();
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
-      if (errorMsg.includes("merge required")) {
-        toast.error("Cannot fast-forward. Merge or rebase required.");
-      } else {
-        toast.error("Failed to pull");
-      }
+      toast.error(errorMsg || "Failed to pull");
       console.error(error);
     } finally {
       setIsPulling(false);
@@ -365,7 +361,8 @@ export default function GitPanel({ projectPath, projectName, onRefresh, onFileDr
       toast.success("Pushed to remote");
       onRefresh();
     } catch (error) {
-      toast.error("Failed to push");
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      toast.error(errorMsg || "Failed to push");
       console.error(error);
     } finally {
       setIsPushing(false);
