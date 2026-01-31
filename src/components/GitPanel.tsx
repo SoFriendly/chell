@@ -27,6 +27,7 @@ import {
   Copy,
   FolderOpen,
   EyeOff,
+  ExternalLink,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -273,8 +274,20 @@ export default function GitPanel({ projectPath, projectName, onRefresh, onFileDr
     }
   };
 
-  const handleRevealInFinder = (filePath: string) => {
+  const handleOpenFile = (filePath: string) => {
     invoke("open_in_finder", { path: `${projectPath}/${filePath}` });
+  };
+
+  const handleRevealInFileManager = (filePath: string) => {
+    invoke("reveal_in_file_manager", { path: `${projectPath}/${filePath}` });
+  };
+
+  // Platform-specific label for revealing files in file manager
+  const getRevealLabel = () => {
+    const platform = navigator.platform.toUpperCase();
+    if (platform.indexOf('MAC') >= 0) return 'Reveal in Finder';
+    if (platform.indexOf('WIN') >= 0) return 'Show in Explorer';
+    return 'Show in File Manager';
   };
 
   const generateCommitMessage = async () => {
@@ -629,6 +642,15 @@ export default function GitPanel({ projectPath, projectName, onRefresh, onFileDr
             </div>
           </ContextMenuTrigger>
           <ContextMenuContent>
+            <ContextMenuItem onClick={() => handleOpenFile(diff.path)}>
+              <ExternalLink className="mr-2 h-4 w-4" />
+              Open
+            </ContextMenuItem>
+            <ContextMenuItem onClick={() => handleRevealInFileManager(diff.path)}>
+              <FolderOpen className="mr-2 h-4 w-4" />
+              {getRevealLabel()}
+            </ContextMenuItem>
+            <ContextMenuSeparator />
             <ContextMenuItem
               className="text-destructive focus:text-destructive"
               onClick={() => setFileToDiscard(diff.path)}
@@ -840,6 +862,15 @@ export default function GitPanel({ projectPath, projectName, onRefresh, onFileDr
                 </div>
               </ContextMenuTrigger>
               <ContextMenuContent>
+                <ContextMenuItem onClick={() => handleOpenFile(node.path)}>
+                  <ExternalLink className="mr-2 h-4 w-4" />
+                  Open
+                </ContextMenuItem>
+                <ContextMenuItem onClick={() => handleRevealInFileManager(node.path)}>
+                  <FolderOpen className="mr-2 h-4 w-4" />
+                  {getRevealLabel()}
+                </ContextMenuItem>
+                <ContextMenuSeparator />
                 <ContextMenuItem onClick={() => handleCopyPath(node.path)}>
                   <Copy className="mr-2 h-4 w-4" />
                   Copy Path
@@ -847,10 +878,6 @@ export default function GitPanel({ projectPath, projectName, onRefresh, onFileDr
                 <ContextMenuItem onClick={() => handleStartRename(node.path, node.name)}>
                   <Pencil className="mr-2 h-4 w-4" />
                   Rename
-                </ContextMenuItem>
-                <ContextMenuItem onClick={() => handleRevealInFinder(node.path)}>
-                  <FolderOpen className="mr-2 h-4 w-4" />
-                  Reveal in Finder
                 </ContextMenuItem>
                 <ContextMenuSeparator />
                 <ContextMenuItem
