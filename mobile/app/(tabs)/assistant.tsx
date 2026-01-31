@@ -7,6 +7,7 @@ import {
   Alert,
   RefreshControl,
 } from "react-native";
+import { useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
 import {
   Bot,
@@ -16,10 +17,11 @@ import {
   Check,
   X,
   Wand2,
-  Loader2,
+  WifiOff,
 } from "lucide-react-native";
 import { useConnectionStore } from "~/stores/connectionStore";
 import { useTerminalStore } from "~/stores/terminalStore";
+import { useTheme } from "~/components/ThemeProvider";
 import {
   Button,
   Card,
@@ -29,7 +31,6 @@ import {
   CardContent,
   CardFooter,
   Badge,
-  Separator,
 } from "~/components/ui";
 import type { ProjectContext } from "~/types";
 
@@ -38,31 +39,51 @@ interface Assistant {
   name: string;
   command: string;
   installed: boolean;
+  description?: string;
+  icon?: string;
 }
 
 const KNOWN_ASSISTANTS: Omit<Assistant, "installed">[] = [
-  { id: "claude-code", name: "Claude Code", command: "claude" },
-  { id: "aider", name: "Aider", command: "aider" },
-  { id: "opencode", name: "OpenCode", command: "opencode" },
+  {
+    id: "claude-code",
+    name: "Claude Code",
+    command: "claude",
+    description: "Anthropic's AI coding assistant"
+  },
+  {
+    id: "aider",
+    name: "Aider",
+    command: "aider",
+    description: "AI pair programming in your terminal"
+  },
+  {
+    id: "opencode",
+    name: "OpenCode",
+    command: "opencode",
+    description: "Open-source AI code assistant"
+  },
 ];
 
-export default function AssistantPage() {
-  const { activeProject, invoke } = useConnectionStore();
+export default function AssistantTabPage() {
+  const router = useRouter();
+  const { colors } = useTheme();
+  const { status, activeProject, invoke } = useConnectionStore();
   const { spawnTerminal } = useTerminalStore();
 
   const [assistants, setAssistants] = useState<Assistant[]>([]);
-  const [projectContext, setProjectContext] = useState<ProjectContext | null>(
-    null
-  );
+  const [projectContext, setProjectContext] = useState<ProjectContext | null>(null);
   const [aiInput, setAiInput] = useState("");
   const [generatedCommand, setGeneratedCommand] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
+  const isConnected = status === "connected";
   const projectPath = activeProject?.path || "";
 
   const loadAssistants = useCallback(async () => {
+    if (!isConnected) return;
+
     try {
       const installed = await invoke<Record<string, boolean>>(
         "check_installed_assistants"
@@ -79,16 +100,17 @@ export default function AssistantPage() {
         name: "Shell",
         command: "",
         installed: true,
+        description: "Open a new terminal shell",
       });
 
       setAssistants(assistantList);
     } catch (err) {
       console.error("Failed to check assistants:", err);
     }
-  }, [invoke]);
+  }, [invoke, isConnected]);
 
   const loadProjectContext = useCallback(async () => {
-    if (!projectPath) return;
+    if (!projectPath || !isConnected) return;
 
     try {
       const context = await invoke<ProjectContext>("scan_project_context", {
@@ -99,16 +121,21 @@ export default function AssistantPage() {
     } catch (err) {
       console.error("Failed to scan project context:", err);
     }
-  }, [invoke, projectPath]);
+  }, [invoke, projectPath, isConnected]);
 
   useEffect(() => {
     const load = async () => {
+      if (!isConnected) {
+        setIsLoading(false);
+        return;
+      }
+
       setIsLoading(true);
       await Promise.all([loadAssistants(), loadProjectContext()]);
       setIsLoading(false);
     };
     load();
-  }, [loadAssistants, loadProjectContext]);
+  }, [loadAssistants, loadProjectContext, isConnected]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -122,7 +149,8 @@ export default function AssistantPage() {
     try {
       await spawnTerminal(projectPath, assistant.command || undefined);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      Alert.alert("Launched", `${assistant.name} started in a new terminal`);
+      // Navigate to terminal tab to see the output
+      router.push("/(tabs)/terminal");
     } catch (err) {
       Alert.alert(
         "Error",
@@ -163,6 +191,8 @@ export default function AssistantPage() {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       setAiInput("");
       setGeneratedCommand(null);
+      // Navigate to terminal to see the result
+      router.push("/(tabs)/terminal");
     } catch (err) {
       Alert.alert(
         "Error",
@@ -171,6 +201,25 @@ export default function AssistantPage() {
     }
   };
 
+  // Not connected state
+  if (!isConnected) {
+    return (
+      <View className="flex-1 items-center justify-center bg-background p-4">
+        <WifiOff size={48} color={colors.mutedForeground} />
+        <Text className="text-foreground font-medium mt-4 text-lg">
+          Not Connected
+        </Text>
+        <Text className="text-muted-foreground text-center mt-2">
+          Connect to your desktop to use AI assistants
+        </Text>
+        <Button className="mt-6" onPress={() => router.push("/connect")}>
+          Connect to Desktop
+        </Button>
+      </View>
+    );
+  }
+
+  // No project selected
   if (!activeProject) {
     return (
       <View className="flex-1 items-center justify-center bg-background p-4">
@@ -189,11 +238,11 @@ export default function AssistantPage() {
         <RefreshControl
           refreshing={refreshing}
           onRefresh={onRefresh}
-          tintColor="#fff"
+          tintColor={colors.foreground}
         />
       }
     >
-      {/* Smart Shell */}
+      {/* Smart Shell / NLT */}
       <Card className="mb-4">
         <CardHeader>
           <View className="flex-row items-center">
@@ -208,7 +257,7 @@ export default function AssistantPage() {
           <TextInput
             className="min-h-20 w-full rounded-md border border-input bg-background p-3 text-foreground"
             placeholder="e.g., 'run tests for the auth module'"
-            placeholderTextColor="#666"
+            placeholderTextColor={colors.mutedForeground}
             value={aiInput}
             onChangeText={setAiInput}
             multiline
@@ -317,19 +366,19 @@ export default function AssistantPage() {
                   key={assistant.id}
                   className="flex-row items-center justify-between p-3 rounded-md border border-border"
                 >
-                  <View className="flex-row items-center">
+                  <View className="flex-row items-center flex-1">
                     {assistant.id === "shell" ? (
                       <Terminal size={20} color="#22c55e" />
                     ) : (
                       <Bot size={20} color="#60a5fa" />
                     )}
-                    <View className="ml-3">
+                    <View className="ml-3 flex-1">
                       <Text className="text-foreground font-medium">
                         {assistant.name}
                       </Text>
-                      {assistant.command && (
-                        <Text className="text-muted-foreground text-xs font-mono">
-                          {assistant.command}
+                      {assistant.description && (
+                        <Text className="text-muted-foreground text-xs">
+                          {assistant.description}
                         </Text>
                       )}
                     </View>
@@ -340,12 +389,12 @@ export default function AssistantPage() {
                       <Badge variant="success">
                         <Check size={10} color="#fff" />
                         <Text className="text-white ml-1 text-xs">
-                          Installed
+                          Ready
                         </Text>
                       </Badge>
                     ) : (
                       <Badge variant="secondary">
-                        <X size={10} color="#666" />
+                        <X size={10} color={colors.mutedForeground} />
                         <Text className="text-muted-foreground ml-1 text-xs">
                           Not found
                         </Text>

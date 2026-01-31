@@ -2,7 +2,6 @@ import "../global.css";
 import { useEffect } from "react";
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import { View } from "react-native";
 import { ThemeProvider, useTheme } from "~/components/ThemeProvider";
 import { useConnectionStore } from "~/stores/connectionStore";
 import { useThemeStore } from "~/stores/themeStore";
@@ -70,9 +69,9 @@ function RootLayoutContent() {
         }}
       >
         <Stack.Screen
-          name="index"
+          name="(tabs)"
           options={{
-            title: "Chell Portal",
+            headerShown: false,
           }}
         />
         <Stack.Screen
@@ -80,12 +79,6 @@ function RootLayoutContent() {
           options={{
             title: "Connect",
             presentation: "modal",
-          }}
-        />
-        <Stack.Screen
-          name="project"
-          options={{
-            title: "Project",
           }}
         />
       </Stack>

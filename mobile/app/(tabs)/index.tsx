@@ -6,6 +6,7 @@ import {
   RefreshControl,
   Alert,
   TextInput,
+  Pressable,
 } from "react-native";
 import { useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
@@ -22,6 +23,8 @@ import {
   Check,
   X,
   ChevronDown,
+  ChevronRight,
+  WifiOff,
 } from "lucide-react-native";
 import { useConnectionStore } from "~/stores/connectionStore";
 import { useGitStore } from "~/stores/gitStore";
@@ -39,14 +42,15 @@ import {
   TabsContent,
   Separator,
 } from "~/components/ui";
+import { useTheme } from "~/components/ThemeProvider";
 import { formatTimestamp, truncate } from "~/lib/utils";
-import type { FileDiff, Branch, Commit } from "~/types";
 
-export default function GitPanelPage() {
+export default function GitTabPage() {
   const router = useRouter();
-  const { activeProject } = useConnectionStore();
+  const { colors } = useTheme();
+  const { status, activeProject } = useConnectionStore();
   const {
-    status,
+    status: gitStatus,
     diffs,
     branches,
     history,
@@ -70,32 +74,34 @@ export default function GitPanelPage() {
   const [refreshing, setRefreshing] = useState(false);
   const [showBranchPicker, setShowBranchPicker] = useState(false);
   const [newBranchName, setNewBranchName] = useState("");
+  const [expandedFiles, setExpandedFiles] = useState<Set<string>>(new Set());
 
+  const isConnected = status === "connected";
   const projectPath = activeProject?.path || "";
 
   useEffect(() => {
-    if (projectPath) {
+    if (projectPath && isConnected) {
       refresh(projectPath);
     }
-  }, [projectPath]);
+  }, [projectPath, isConnected]);
 
-  // Auto-refresh every 5 seconds
+  // Auto-refresh every 5 seconds when connected
   useEffect(() => {
-    if (!projectPath) return;
+    if (!projectPath || !isConnected) return;
 
     const interval = setInterval(() => {
       refresh(projectPath);
     }, 5000);
 
     return () => clearInterval(interval);
-  }, [projectPath]);
+  }, [projectPath, isConnected]);
 
   const onRefresh = useCallback(async () => {
-    if (!projectPath) return;
+    if (!projectPath || !isConnected) return;
     setRefreshing(true);
     await refresh(projectPath);
     setRefreshing(false);
-  }, [projectPath]);
+  }, [projectPath, isConnected]);
 
   const handleGenerateMessage = async () => {
     if (diffs.length === 0) {
@@ -211,6 +217,42 @@ export default function GitPanelPage() {
     }
   };
 
+  const toggleFileExpanded = (filePath: string) => {
+    setExpandedFiles((prev) => {
+      const next = new Set(prev);
+      if (next.has(filePath)) {
+        next.delete(filePath);
+      } else {
+        next.add(filePath);
+      }
+      return next;
+    });
+  };
+
+  // Get diff for a file
+  const getDiffForFile = (filePath: string) => {
+    return diffs.find((d) => d.path === filePath);
+  };
+
+  // Not connected state
+  if (!isConnected) {
+    return (
+      <View className="flex-1 items-center justify-center bg-background p-4">
+        <WifiOff size={48} color={colors.mutedForeground} />
+        <Text className="text-foreground font-medium mt-4 text-lg">
+          Not Connected
+        </Text>
+        <Text className="text-muted-foreground text-center mt-2">
+          Connect to your desktop to view git status
+        </Text>
+        <Button className="mt-6" onPress={() => router.push("/connect")}>
+          Connect to Desktop
+        </Button>
+      </View>
+    );
+  }
+
+  // No project selected
   if (!activeProject) {
     return (
       <View className="flex-1 items-center justify-center bg-background p-4">
@@ -221,9 +263,9 @@ export default function GitPanelPage() {
     );
   }
 
-  const stagedFiles = status?.staged || [];
-  const unstagedFiles = status?.unstaged || [];
-  const untrackedFiles = status?.untracked || [];
+  const stagedFiles = gitStatus?.staged || [];
+  const unstagedFiles = gitStatus?.unstaged || [];
+  const untrackedFiles = gitStatus?.untracked || [];
 
   return (
     <ScrollView
@@ -233,7 +275,7 @@ export default function GitPanelPage() {
         <RefreshControl
           refreshing={refreshing}
           onRefresh={onRefresh}
-          tintColor="#fff"
+          tintColor={colors.foreground}
         />
       }
     >
@@ -247,22 +289,22 @@ export default function GitPanelPage() {
           >
             <GitBranch size={18} color="#a78bfa" />
             <Text className="text-foreground font-medium ml-2">
-              {status?.branch || "main"}
+              {gitStatus?.branch || "main"}
             </Text>
-            <ChevronDown size={16} color="#666" />
+            <ChevronDown size={16} color={colors.mutedForeground} />
           </Button>
 
           <View className="flex-row gap-2">
-            {status && status.behind > 0 && (
+            {gitStatus && gitStatus.behind > 0 && (
               <Badge variant="outline">
-                <ArrowDown size={12} color="#fff" />
-                <Text className="text-foreground ml-1">{status.behind}</Text>
+                <ArrowDown size={12} color={colors.foreground} />
+                <Text className="text-foreground ml-1">{gitStatus.behind}</Text>
               </Badge>
             )}
-            {status && status.ahead > 0 && (
+            {gitStatus && gitStatus.ahead > 0 && (
               <Badge variant="outline">
-                <ArrowUp size={12} color="#fff" />
-                <Text className="text-foreground ml-1">{status.ahead}</Text>
+                <ArrowUp size={12} color={colors.foreground} />
+                <Text className="text-foreground ml-1">{gitStatus.ahead}</Text>
               </Badge>
             )}
           </View>
@@ -274,7 +316,7 @@ export default function GitPanelPage() {
               onPress={handlePull}
               disabled={loading}
             >
-              <ArrowDown size={16} color="#fff" />
+              <ArrowDown size={16} color={colors.foreground} />
             </Button>
             <Button
               variant="outline"
@@ -282,7 +324,7 @@ export default function GitPanelPage() {
               onPress={handlePush}
               disabled={loading}
             >
-              <ArrowUp size={16} color="#fff" />
+              <ArrowUp size={16} color={colors.foreground} />
             </Button>
           </View>
         </CardContent>
@@ -305,7 +347,7 @@ export default function GitPanelPage() {
                     className="justify-start mb-1"
                     onPress={() => handleCheckoutBranch(branch.name)}
                   >
-                    <GitBranch size={14} color={branch.isHead ? "#a78bfa" : "#666"} />
+                    <GitBranch size={14} color={branch.isHead ? "#a78bfa" : colors.mutedForeground} />
                     <Text
                       className={`ml-2 ${
                         branch.isHead ? "text-foreground" : "text-muted-foreground"
@@ -322,7 +364,7 @@ export default function GitPanelPage() {
               <TextInput
                 className="flex-1 h-10 rounded-md border border-input bg-background px-3 text-foreground"
                 placeholder="New branch name"
-                placeholderTextColor="#666"
+                placeholderTextColor={colors.mutedForeground}
                 value={newBranchName}
                 onChangeText={setNewBranchName}
               />
@@ -359,29 +401,54 @@ export default function GitPanelPage() {
                 </View>
               </CardHeader>
               <CardContent>
-                {stagedFiles.map((file) => (
-                  <View
-                    key={file}
-                    className="flex-row items-center justify-between py-2 border-b border-border"
-                  >
-                    <View className="flex-row items-center flex-1">
-                      <FileText size={14} color="#22c55e" />
-                      <Text
-                        className="text-foreground ml-2 flex-1"
-                        numberOfLines={1}
+                {stagedFiles.map((file) => {
+                  const diff = getDiffForFile(file);
+                  const isExpanded = expandedFiles.has(file);
+
+                  return (
+                    <View key={file} className="border-b border-border">
+                      <Pressable
+                        className="flex-row items-center justify-between py-3"
+                        onPress={() => toggleFileExpanded(file)}
                       >
-                        {file}
-                      </Text>
+                        <View className="flex-row items-center flex-1">
+                          <ChevronRight
+                            size={14}
+                            color={colors.mutedForeground}
+                            style={{
+                              transform: [{ rotate: isExpanded ? "90deg" : "0deg" }],
+                            }}
+                          />
+                          <FileText size={14} color="#22c55e" className="ml-2" />
+                          <Text
+                            className="text-foreground ml-2 flex-1"
+                            numberOfLines={1}
+                          >
+                            {file}
+                          </Text>
+                        </View>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onPress={() => handleUnstageFile(file)}
+                        >
+                          <Minus size={14} color="#ef4444" />
+                        </Button>
+                      </Pressable>
+
+                      {/* Diff view */}
+                      {isExpanded && diff && (
+                        <View className="bg-secondary/50 p-2 mb-2 rounded-md">
+                          <ScrollView horizontal>
+                            <Text className="text-foreground font-mono text-xs">
+                              {diff.diff || "No diff available"}
+                            </Text>
+                          </ScrollView>
+                        </View>
+                      )}
                     </View>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onPress={() => handleUnstageFile(file)}
-                    >
-                      <Minus size={14} color="#ef4444" />
-                    </Button>
-                  </View>
-                ))}
+                  );
+                })}
               </CardContent>
             </Card>
           )}
@@ -398,38 +465,63 @@ export default function GitPanelPage() {
                 </View>
               </CardHeader>
               <CardContent>
-                {unstagedFiles.map((file) => (
-                  <View
-                    key={file}
-                    className="flex-row items-center justify-between py-2 border-b border-border"
-                  >
-                    <View className="flex-row items-center flex-1">
-                      <FileText size={14} color="#eab308" />
-                      <Text
-                        className="text-foreground ml-2 flex-1"
-                        numberOfLines={1}
+                {unstagedFiles.map((file) => {
+                  const diff = getDiffForFile(file);
+                  const isExpanded = expandedFiles.has(file);
+
+                  return (
+                    <View key={file} className="border-b border-border">
+                      <Pressable
+                        className="flex-row items-center justify-between py-3"
+                        onPress={() => toggleFileExpanded(file)}
                       >
-                        {file}
-                      </Text>
+                        <View className="flex-row items-center flex-1">
+                          <ChevronRight
+                            size={14}
+                            color={colors.mutedForeground}
+                            style={{
+                              transform: [{ rotate: isExpanded ? "90deg" : "0deg" }],
+                            }}
+                          />
+                          <FileText size={14} color="#eab308" className="ml-2" />
+                          <Text
+                            className="text-foreground ml-2 flex-1"
+                            numberOfLines={1}
+                          >
+                            {file}
+                          </Text>
+                        </View>
+                        <View className="flex-row">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onPress={() => handleStageFile(file)}
+                          >
+                            <Plus size={14} color="#22c55e" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onPress={() => handleDiscardFile(file)}
+                          >
+                            <RotateCcw size={14} color="#ef4444" />
+                          </Button>
+                        </View>
+                      </Pressable>
+
+                      {/* Diff view */}
+                      {isExpanded && diff && (
+                        <View className="bg-secondary/50 p-2 mb-2 rounded-md">
+                          <ScrollView horizontal>
+                            <Text className="text-foreground font-mono text-xs">
+                              {diff.diff || "No diff available"}
+                            </Text>
+                          </ScrollView>
+                        </View>
+                      )}
                     </View>
-                    <View className="flex-row">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onPress={() => handleStageFile(file)}
-                      >
-                        <Plus size={14} color="#22c55e" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onPress={() => handleDiscardFile(file)}
-                      >
-                        <RotateCcw size={14} color="#ef4444" />
-                      </Button>
-                    </View>
-                  </View>
-                ))}
+                  );
+                })}
               </CardContent>
             </Card>
           )}
@@ -449,7 +541,7 @@ export default function GitPanelPage() {
                 {untrackedFiles.map((file) => (
                   <View
                     key={file}
-                    className="flex-row items-center justify-between py-2 border-b border-border"
+                    className="flex-row items-center justify-between py-3 border-b border-border"
                   >
                     <View className="flex-row items-center flex-1">
                       <FileText size={14} color="#60a5fa" />
@@ -511,7 +603,7 @@ export default function GitPanelPage() {
                 <TextInput
                   className="min-h-24 w-full rounded-md border border-input bg-background p-3 text-foreground"
                   placeholder="Commit message..."
-                  placeholderTextColor="#666"
+                  placeholderTextColor={colors.mutedForeground}
                   value={commitMessage}
                   onChangeText={setCommitMessage}
                   multiline
@@ -536,40 +628,49 @@ export default function GitPanelPage() {
         <TabsContent value="history">
           <Card>
             <CardContent className="p-0">
-              {history.map((historyCommit, index) => (
-                <View
-                  key={historyCommit.id}
-                  className={`p-4 ${
-                    index < history.length - 1 ? "border-b border-border" : ""
-                  }`}
-                >
-                  <View className="flex-row items-start">
-                    <GitCommit size={16} color="#a78bfa" className="mt-1" />
-                    <View className="ml-3 flex-1">
-                      <Text className="text-foreground font-medium">
-                        {truncate(historyCommit.message.split("\n")[0], 50)}
-                      </Text>
-                      <View className="flex-row items-center mt-1">
-                        <Text className="text-muted-foreground text-xs">
-                          {historyCommit.shortId}
+              {history.length === 0 ? (
+                <View className="items-center py-8">
+                  <GitCommit size={32} color={colors.mutedForeground} />
+                  <Text className="text-muted-foreground mt-4">
+                    No commit history
+                  </Text>
+                </View>
+              ) : (
+                history.map((historyCommit, index) => (
+                  <View
+                    key={historyCommit.id}
+                    className={`p-4 ${
+                      index < history.length - 1 ? "border-b border-border" : ""
+                    }`}
+                  >
+                    <View className="flex-row items-start">
+                      <GitCommit size={16} color="#a78bfa" className="mt-1" />
+                      <View className="ml-3 flex-1">
+                        <Text className="text-foreground font-medium">
+                          {truncate(historyCommit.message.split("\n")[0], 50)}
                         </Text>
-                        <Text className="text-muted-foreground text-xs mx-2">
-                          •
-                        </Text>
-                        <Text className="text-muted-foreground text-xs">
-                          {historyCommit.author}
-                        </Text>
-                        <Text className="text-muted-foreground text-xs mx-2">
-                          •
-                        </Text>
-                        <Text className="text-muted-foreground text-xs">
-                          {formatTimestamp(historyCommit.timestamp)}
-                        </Text>
+                        <View className="flex-row items-center mt-1 flex-wrap">
+                          <Text className="text-muted-foreground text-xs">
+                            {historyCommit.shortId}
+                          </Text>
+                          <Text className="text-muted-foreground text-xs mx-2">
+                            •
+                          </Text>
+                          <Text className="text-muted-foreground text-xs">
+                            {historyCommit.author}
+                          </Text>
+                          <Text className="text-muted-foreground text-xs mx-2">
+                            •
+                          </Text>
+                          <Text className="text-muted-foreground text-xs">
+                            {formatTimestamp(historyCommit.timestamp)}
+                          </Text>
+                        </View>
                       </View>
                     </View>
                   </View>
-                </View>
-              ))}
+                ))
+              )}
             </CardContent>
           </Card>
         </TabsContent>
