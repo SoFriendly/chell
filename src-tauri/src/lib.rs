@@ -269,7 +269,7 @@ fn spawn_terminal(
             match reader.read(&mut buffer) {
                 Ok(0) => break,
                 Ok(n) => {
-                    let data = String::from_utf8_lossy(&buffer[..n]).to_string();
+                    let data = buffer[..n].to_vec();
                     let _ = handle.emit(&format!("terminal-output-{}", terminal_id), data);
                 }
                 Err(_) => break,

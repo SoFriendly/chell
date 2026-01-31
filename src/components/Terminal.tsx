@@ -388,8 +388,8 @@ export default function Terminal({ id, command = "", cwd, onTerminalReady, visib
     });
 
     // Listen for terminal output from backend
-    const unlisten = listen<string>(`terminal-output-${terminalId}`, (event) => {
-      terminal.write(event.payload);
+    const unlisten = listen<number[]>(`terminal-output-${terminalId}`, (event) => {
+      terminal.write(new Uint8Array(event.payload));
     });
 
     // Handle window resize
