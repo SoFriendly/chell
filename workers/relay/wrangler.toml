@@ -1,0 +1,26 @@
+name = "chell-relay"
+main = "src/index.ts"
+compatibility_date = "2025-01-01"
+
+# Durable Objects for session management
+[[durable_objects.bindings]]
+name = "SESSIONS"
+class_name = "SessionDO"
+
+[[migrations]]
+tag = "v1"
+new_classes = ["SessionDO"]
+
+# KV for device registry
+[[kv_namespaces]]
+binding = "DEVICES"
+id = "f6bba13044304e8a924a722970b24850"
+preview_id = "a268223c15c04bf4a77dc65b91f98093"
+
+[vars]
+ENVIRONMENT = "production"
+
+# Custom domain routing
+[[routes]]
+pattern = "relay.chell.app"
+custom_domain = true

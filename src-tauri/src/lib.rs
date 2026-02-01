@@ -7,8 +7,11 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::thread;
 use tauri::Emitter;
+use tauri::Manager;
 #[cfg(target_os = "macos")]
 use tauri::menu::{Menu, PredefinedMenuItem, Submenu};
+use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
+use tauri::menu::{MenuBuilder, MenuItemBuilder};
 use uuid::Uuid;
 
 mod database;
@@ -270,7 +273,13 @@ fn spawn_terminal(
                 Ok(0) => break,
                 Ok(n) => {
                     let data = buffer[..n].to_vec();
-                    let _ = handle.emit(&format!("terminal-output-{}", terminal_id), data);
+                    // Emit specific event for desktop terminal component
+                    let _ = handle.emit(&format!("terminal-output-{}", terminal_id), data.clone());
+                    // Emit generic event for portal forwarding to mobile
+                    let _ = handle.emit("terminal-output", serde_json::json!({
+                        "terminalId": terminal_id,
+                        "data": data
+                    }));
                 }
                 Err(_) => break,
             }
@@ -297,15 +306,26 @@ fn spawn_terminal(
 
 #[tauri::command]
 fn write_terminal(id: String, data: String, state: tauri::State<Arc<AppState>>) -> Result<(), String> {
+    println!("[write_terminal] id: {}, data: {:?}", id, data);
     let mut terminals = state.terminals.lock();
     if let Some(terminal) = terminals.get_mut(&id) {
         terminal
             .writer
             .write_all(data.as_bytes())
-            .map_err(|e| e.to_string())?;
-        terminal.writer.flush().map_err(|e| e.to_string())?;
+            .map_err(|e| {
+                println!("[write_terminal] write_all error: {}", e);
+                e.to_string()
+            })?;
+        terminal.writer.flush().map_err(|e| {
+            println!("[write_terminal] flush error: {}", e);
+            e.to_string()
+        })?;
+        println!("[write_terminal] success");
+        Ok(())
+    } else {
+        println!("[write_terminal] terminal not found: {}", id);
+        Err(format!("Terminal not found: {}", id))
     }
-    Ok(())
 }
 
 #[tauri::command]
@@ -938,9 +958,21 @@ Keep the description brief or empty if the subject is self-explanatory."#,
 
     if let Some(choice) = groq_response.choices.first() {
         let content = &choice.message.content;
+
+        // Strip markdown code fences if present (e.g., ```json ... ```)
+        let json_content = content
+            .trim()
+            .strip_prefix("```json")
+            .or_else(|| content.trim().strip_prefix("```"))
+            .unwrap_or(content)
+            .trim()
+            .strip_suffix("```")
+            .unwrap_or(content)
+            .trim();
+
         // Parse the JSON response
-        let suggestion: CommitSuggestion = serde_json::from_str(content)
-            .map_err(|e| format!("Failed to parse AI response: {} - Content: {}", e, content))?;
+        let suggestion: CommitSuggestion = serde_json::from_str(json_content)
+            .map_err(|e| format!("Failed to parse AI response: {} - Content: {}", e, json_content))?;
         Ok(suggestion)
     } else {
         Err("No response from AI".to_string())
@@ -1248,6 +1280,46 @@ pub fn run() {
                 let _ = native_pty_system();
             });
 
+            // Create system tray icon
+            let show_item = MenuItemBuilder::with_id("show", "Show Chell").build(app)?;
+            let quit_item = MenuItemBuilder::with_id("quit", "Quit").build(app)?;
+            let tray_menu = MenuBuilder::new(app)
+                .item(&show_item)
+                .separator()
+                .item(&quit_item)
+                .build()?;
+
+            let _tray = TrayIconBuilder::new()
+                .icon(app.default_window_icon().unwrap().clone())
+                .menu(&tray_menu)
+                .tooltip("Chell - Running in background")
+                .on_menu_event(|app, event| {
+                    match event.id().as_ref() {
+                        "show" => {
+                            if let Some(window) = app.get_webview_window("main") {
+                                let _ = window.show();
+                                let _ = window.set_focus();
+                            }
+                        }
+                        "quit" => {
+                            app.exit(0);
+                        }
+                        _ => {}
+                    }
+                })
+                .on_tray_icon_event(|tray, event| {
+                    if let TrayIconEvent::Click { button, button_state, .. } = event {
+                        if button == MouseButton::Left && button_state == MouseButtonState::Up {
+                            let app = tray.app_handle();
+                            if let Some(window) = app.get_webview_window("main") {
+                                let _ = window.show();
+                                let _ = window.set_focus();
+                            }
+                        }
+                    }
+                })
+                .build(app)?;
+
             // Create custom macOS menu with proper app name
             #[cfg(target_os = "macos")]
             {
@@ -1300,6 +1372,15 @@ pub fn run() {
             }
 
             Ok(())
+        })
+        .on_window_event(|window, event| {
+            // Minimize to tray on close instead of quitting
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                // Hide the window instead of closing it
+                let _ = window.hide();
+                // Prevent the window from being closed
+                api.prevent_close();
+            }
         })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -548,16 +548,37 @@ impl GitService {
 
     /// Pull from remote using system git (handles credentials properly)
     pub fn pull(repo_path: &str, remote: &str) -> Result<(), String> {
+        // Use --rebase to handle diverged branches more gracefully
         let output = std::process::Command::new("git")
             .arg("-C")
             .arg(repo_path)
             .arg("pull")
+            .arg("--rebase")
             .arg(remote)
             .output()
             .map_err(|e| format!("Failed to run git: {}", e))?;
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
+            let stderr_lower = stderr.to_lowercase();
+
+            // Check for conflicts during rebase
+            if stderr_lower.contains("conflict") || stderr_lower.contains("could not apply") {
+                // Abort the rebase to leave the repo in a clean state
+                let _ = std::process::Command::new("git")
+                    .arg("-C")
+                    .arg(repo_path)
+                    .arg("rebase")
+                    .arg("--abort")
+                    .output();
+                return Err("Pull failed: conflicts detected. Please resolve conflicts manually.".to_string());
+            }
+
+            // Check for uncommitted changes
+            if stderr_lower.contains("uncommitted changes") || stderr_lower.contains("unstaged changes") {
+                return Err("Pull failed: you have uncommitted changes. Commit or stash them first.".to_string());
+            }
+
             return Err(format!("git pull failed: {}", stderr.trim()));
         }
 
@@ -576,6 +597,18 @@ impl GitService {
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
+            let stderr_lower = stderr.to_lowercase();
+
+            // Check if remote has changes we don't have
+            if stderr_lower.contains("rejected") || stderr_lower.contains("non-fast-forward") || stderr_lower.contains("fetch first") {
+                return Err("Push rejected: remote has changes. Pull first.".to_string());
+            }
+
+            // Check for no upstream branch
+            if stderr_lower.contains("no upstream branch") || stderr_lower.contains("has no upstream") {
+                return Err("No upstream branch set. Use 'git push -u origin <branch>' to set upstream.".to_string());
+            }
+
             return Err(format!("git push failed: {}", stderr.trim()));
         }
 

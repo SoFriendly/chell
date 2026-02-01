@@ -4,6 +4,10 @@ import { BrowserRouter } from "react-router-dom";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import App from "./App";
 import "@/index.css";
+import { setupTerminalForwarding } from "@/stores/portalStore";
+
+// Initialize terminal output forwarding to mobile devices
+setupTerminalForwarding();
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>

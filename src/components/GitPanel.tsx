@@ -120,6 +120,7 @@ export default function GitPanel({ projectPath, projectName, onRefresh, onFileDr
   const [viewMode, setViewMode] = useState<"changes" | "history" | "files">("changes");
   const [commitToReset, setCommitToReset] = useState<string | null>(null);
   const [isResetting, setIsResetting] = useState(false);
+  const [isUndoing, setIsUndoing] = useState(false);
   const [fileTree, setFileTree] = useState<FileTreeNode[]>([]);
   const [expandedDirs, setExpandedDirs] = useState<Set<string>>(new Set());
   const [isLoadingFiles, setIsLoadingFiles] = useState(false);
@@ -335,6 +336,29 @@ export default function GitPanel({ projectPath, projectName, onRefresh, onFileDr
     }
   };
 
+  const handleUndoCommit = async () => {
+    if (history.length < 2) {
+      toast.error("No commit to undo");
+      return;
+    }
+    setIsUndoing(true);
+    try {
+      const parentCommitId = history[1].id;
+      await invoke("reset_to_commit", {
+        repoPath: projectPath,
+        commitId: parentCommitId,
+        mode: "soft"
+      });
+      toast.success("Commit undone");
+      onRefresh();
+    } catch (error) {
+      toast.error("Failed to undo commit");
+      console.error(error);
+    } finally {
+      setIsUndoing(false);
+    }
+  };
+
   const handlePull = async () => {
     setIsPulling(true);
     // Double RAF + timeout to ensure UI updates before blocking operation
@@ -345,11 +369,7 @@ export default function GitPanel({ projectPath, projectName, onRefresh, onFileDr
       onRefresh();
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
-      if (errorMsg.includes("merge required")) {
-        toast.error("Cannot fast-forward. Merge or rebase required.");
-      } else {
-        toast.error("Failed to pull");
-      }
+      toast.error(errorMsg || "Failed to pull");
       console.error(error);
     } finally {
       setIsPulling(false);
@@ -365,7 +385,8 @@ export default function GitPanel({ projectPath, projectName, onRefresh, onFileDr
       toast.success("Pushed to remote");
       onRefresh();
     } catch (error) {
-      toast.error("Failed to push");
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      toast.error(errorMsg || "Failed to push");
       console.error(error);
     } finally {
       setIsPushing(false);
@@ -1251,14 +1272,29 @@ export default function GitPanel({ projectPath, projectName, onRefresh, onFileDr
           </Button>
         )}
 
-        {/* Commit button */}
-        <Button
-          className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-medium"
-          onClick={handleCommit}
-          disabled={isCommitting || !commitSubject.trim() || diffs.length === 0}
-        >
-          {isCommitting ? "Committing..." : `Commit to ${currentBranch?.name || "main"}`}
-        </Button>
+        {/* Commit or Undo Commit button */}
+        {status && status.ahead > 0 && diffs.length === 0 && history.length > 1 ? (
+          <Button
+            className="w-full bg-muted hover:bg-muted/80 text-foreground font-medium"
+            onClick={handleUndoCommit}
+            disabled={isUndoing}
+          >
+            <Undo2 className="mr-1.5 h-4 w-4" />
+            <span className="truncate">
+              {isUndoing ? "Undoing..." : "Undo Commit"}
+            </span>
+          </Button>
+        ) : (
+          <Button
+            className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-medium"
+            onClick={handleCommit}
+            disabled={isCommitting || !commitSubject.trim() || diffs.length === 0}
+          >
+            <span className="truncate">
+              {isCommitting ? "Committing..." : `Commit to ${currentBranch?.name || "main"}`}
+            </span>
+          </Button>
+        )}
       </div>
 
       {/* Create branch dialog */}

@@ -15,6 +15,7 @@ import {
   Bot,
   ExternalLink,
   RefreshCw,
+  Smartphone,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -28,6 +29,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { useSettingsStore } from "@/stores/settingsStore";
 import { cn } from "@/lib/utils";
 import { CustomThemeEditor } from "@/components/CustomThemeEditor";
+import { RemotePortalSettings } from "@/components/RemotePortalSettings";
 import type { ThemeOption } from "@/types";
 
 interface SettingsSheetProps {
@@ -35,13 +37,14 @@ interface SettingsSheetProps {
   onOpenChange: (open: boolean) => void;
 }
 
-type SettingsTab = "general" | "assistants" | "appearance" | "ai" | "keyboard" | "about";
+type SettingsTab = "general" | "assistants" | "appearance" | "ai" | "keyboard" | "portal" | "about";
 
 const NAV_ITEMS: { id: SettingsTab; label: string; icon: React.ReactNode }[] = [
   { id: "general", label: "General", icon: <Settings className="h-4 w-4" /> },
   { id: "assistants", label: "Assistants", icon: <Bot className="h-4 w-4" /> },
   { id: "appearance", label: "Appearance", icon: <Palette className="h-4 w-4" /> },
   { id: "ai", label: "AI Behavior", icon: <Sparkles className="h-4 w-4" /> },
+  { id: "portal", label: "Remote Portal", icon: <Smartphone className="h-4 w-4" /> },
   { id: "keyboard", label: "Keyboard", icon: <Keyboard className="h-4 w-4" /> },
   { id: "about", label: "About", icon: <Info className="h-4 w-4" /> },
 ];
@@ -626,6 +629,9 @@ export default function SettingsSheet({ open, onOpenChange }: SettingsSheetProps
                   </section>
                 </div>
               )}
+
+              {/* Remote Portal Tab */}
+              {activeTab === "portal" && <RemotePortalSettings />}
 
               {/* About Tab */}
               {activeTab === "about" && (
