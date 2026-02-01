@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import {
   View,
   Text,
@@ -7,7 +7,6 @@ import {
   Pressable,
   Alert,
   Platform,
-  Keyboard,
 } from "react-native";
 import { useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
@@ -19,6 +18,7 @@ import {
   Terminal as TerminalIcon,
   WifiOff,
   ChevronDown,
+  ChevronUp,
   Check,
   Keyboard as KeyboardIcon,
   ClipboardPaste,
@@ -32,7 +32,7 @@ import { useConnectionStore } from "~/stores/connectionStore";
 import { useTerminalStore } from "~/stores/terminalStore";
 import { useTheme } from "~/components/ThemeProvider";
 import { Button } from "~/components/ui";
-import AssistantTerminalWebView from "~/components/AssistantTerminalWebView";
+import AssistantTerminalWebView, { AssistantTerminalWebViewRef } from "~/components/AssistantTerminalWebView";
 
 interface AssistantTab {
   id: string;
@@ -76,6 +76,8 @@ export default function AssistantTabPage() {
   const [installedCommands, setInstalledCommands] = useState<string[]>([]);
   const [isCheckingInstalled, setIsCheckingInstalled] = useState(true);
   const [hasAutoLaunched, setHasAutoLaunched] = useState(false);
+  const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
+  const terminalRef = useRef<AssistantTerminalWebViewRef>(null);
 
 
   const isConnected = status === "connected";
@@ -412,6 +414,7 @@ export default function AssistantTabPage() {
         <>
           {activeTab?.terminalId ? (
             <AssistantTerminalWebView
+              ref={terminalRef}
               key={activeTab.terminalId}
               terminalId={activeTab.terminalId}
               output={output}
@@ -497,11 +500,23 @@ export default function AssistantTabPage() {
             <Button
               variant="ghost"
               size="sm"
-              onPress={() => Keyboard.dismiss()}
+              onPress={() => {
+                if (isKeyboardVisible) {
+                  terminalRef.current?.dismissKeyboard();
+                  setIsKeyboardVisible(false);
+                } else {
+                  terminalRef.current?.focusKeyboard();
+                  setIsKeyboardVisible(true);
+                }
+              }}
               className="flex-row items-center"
             >
               <KeyboardIcon size={18} color="#60a5fa" />
-              <ChevronDown size={14} color="#60a5fa" style={{ marginLeft: 4 }} />
+              {isKeyboardVisible ? (
+                <ChevronDown size={14} color="#60a5fa" style={{ marginLeft: 4 }} />
+              ) : (
+                <ChevronUp size={14} color="#60a5fa" style={{ marginLeft: 4 }} />
+              )}
             </Button>
           </View>
 

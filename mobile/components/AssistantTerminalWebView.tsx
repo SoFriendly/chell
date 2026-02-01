@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, forwardRef, useImperativeHandle } from "react";
 import { Text, View } from "react-native";
 import { Asset } from "expo-asset";
 import * as FileSystem from "expo-file-system";
@@ -9,6 +9,11 @@ interface AssistantTerminalWebViewProps {
   output: string[];
   onInput: (data: string) => void;
   onResize: (cols: number, rows: number) => void;
+}
+
+export interface AssistantTerminalWebViewRef {
+  dismissKeyboard: () => void;
+  focusKeyboard: () => void;
 }
 
 const buildHtml = (css: string, xtermJs: string, fitJs: string) => `<!doctype html>
@@ -94,6 +99,11 @@ const buildHtml = (css: string, xtermJs: string, fitJs: string) => `<!doctype ht
         } else if (message.type === "fit") {
           fitAddon.fit();
           sendSize();
+        } else if (message.type === "blur") {
+          term.blur();
+          document.activeElement?.blur();
+        } else if (message.type === "focus") {
+          term.focus();
         }
       }
 
@@ -109,13 +119,22 @@ const buildHtml = (css: string, xtermJs: string, fitJs: string) => `<!doctype ht
   </body>
 </html>`;
 
-export default function AssistantTerminalWebView({
+const AssistantTerminalWebView = forwardRef<AssistantTerminalWebViewRef, AssistantTerminalWebViewProps>(({
   terminalId,
   output,
   onInput,
   onResize,
-}: AssistantTerminalWebViewProps) {
+}, ref) => {
   const webViewRef = useRef<WebView>(null);
+
+  useImperativeHandle(ref, () => ({
+    dismissKeyboard: () => {
+      webViewRef.current?.postMessage(JSON.stringify({ type: "blur" }));
+    },
+    focusKeyboard: () => {
+      webViewRef.current?.postMessage(JSON.stringify({ type: "focus" }));
+    },
+  }));
   const [isReady, setIsReady] = useState(false);
   const [isError, setIsError] = useState(false);
   const [logLine, setLogLine] = useState<string | null>(null);
@@ -276,4 +295,6 @@ export default function AssistantTerminalWebView({
       )}
     </View>
   );
-}
+});
+
+export default AssistantTerminalWebView;
