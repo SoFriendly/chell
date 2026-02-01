@@ -48,6 +48,7 @@ export interface Terminal {
   id: string;
   title: string;
   cwd: string;
+  type: "shell" | "assistant";
 }
 
 export interface ProjectContext {

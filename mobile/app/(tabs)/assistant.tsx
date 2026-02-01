@@ -1,206 +1,181 @@
-import { useState, useEffect, useCallback } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import {
   View,
   Text,
   ScrollView,
   TextInput,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
   Alert,
-  RefreshControl,
 } from "react-native";
 import { useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
 import {
   Bot,
-  Sparkles,
-  Play,
-  Terminal,
-  Check,
+  Plus,
   X,
-  Wand2,
+  Terminal as TerminalIcon,
+  Send,
   WifiOff,
+  ChevronDown,
+  Check,
 } from "lucide-react-native";
 import { useConnectionStore } from "~/stores/connectionStore";
 import { useTerminalStore } from "~/stores/terminalStore";
 import { useTheme } from "~/components/ThemeProvider";
-import {
-  Button,
-  Card,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-  CardContent,
-  CardFooter,
-  Badge,
-} from "~/components/ui";
-import type { ProjectContext } from "~/types";
+import { Button } from "~/components/ui";
 
-interface Assistant {
+interface AssistantTab {
   id: string;
   name: string;
   command: string;
-  installed: boolean;
-  description?: string;
-  icon?: string;
+  terminalId: string | null;
 }
 
-const KNOWN_ASSISTANTS: Omit<Assistant, "installed">[] = [
-  {
-    id: "claude-code",
-    name: "Claude Code",
-    command: "claude",
-    description: "Anthropic's AI coding assistant"
-  },
-  {
-    id: "aider",
-    name: "Aider",
-    command: "aider",
-    description: "AI pair programming in your terminal"
-  },
-  {
-    id: "opencode",
-    name: "OpenCode",
-    command: "opencode",
-    description: "Open-source AI code assistant"
-  },
+interface AssistantOption {
+  id: string;
+  name: string;
+  command: string;
+}
+
+const ASSISTANT_OPTIONS: AssistantOption[] = [
+  { id: "claude", name: "Claude Code", command: "claude" },
+  { id: "aider", name: "Aider", command: "aider" },
+  { id: "gemini", name: "Gemini CLI", command: "gemini" },
+  { id: "codex", name: "OpenAI Codex", command: "codex" },
+  { id: "opencode", name: "OpenCode", command: "opencode" },
+  { id: "shell", name: "Shell", command: "" },
 ];
 
 export default function AssistantTabPage() {
   const router = useRouter();
   const { colors } = useTheme();
   const { status, activeProject, invoke } = useConnectionStore();
-  const { spawnTerminal } = useTerminalStore();
+  const {
+    spawnTerminal,
+    killTerminal,
+    sendInput,
+    getOutput,
+  } = useTerminalStore();
 
-  const [assistants, setAssistants] = useState<Assistant[]>([]);
-  const [projectContext, setProjectContext] = useState<ProjectContext | null>(null);
-  const [aiInput, setAiInput] = useState("");
-  const [generatedCommand, setGeneratedCommand] = useState<string | null>(null);
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
+  const [tabs, setTabs] = useState<AssistantTab[]>([]);
+  const [activeTabId, setActiveTabId] = useState<string | null>(null);
+  const [showDropdown, setShowDropdown] = useState(false);
+  const [installedCommands, setInstalledCommands] = useState<string[]>([]);
+  const [isCheckingInstalled, setIsCheckingInstalled] = useState(true);
+  const [input, setInput] = useState("");
+  const [hasAutoLaunched, setHasAutoLaunched] = useState(false);
+  const scrollViewRef = useRef<ScrollView>(null);
 
   const isConnected = status === "connected";
   const projectPath = activeProject?.path || "";
+  const activeTab = tabs.find((t) => t.id === activeTabId);
+  const output = activeTab?.terminalId ? getOutput(activeTab.terminalId) : [];
 
-  const loadAssistants = useCallback(async () => {
-    if (!isConnected) return;
-
-    try {
-      // Returns array of installed command names like ["claude", "aider"]
-      const installedCommands = await invoke<string[]>(
-        "check_installed_assistants"
-      );
-
-      const assistantList: Assistant[] = KNOWN_ASSISTANTS.map((a) => ({
-        ...a,
-        installed: installedCommands.includes(a.command),
-      }));
-
-      // Always add shell
-      assistantList.push({
-        id: "shell",
-        name: "Shell",
-        command: "",
-        installed: true,
-        description: "Open a new terminal shell",
-      });
-
-      setAssistants(assistantList);
-    } catch (err) {
-      console.error("Failed to check assistants:", err);
-    }
-  }, [invoke, isConnected]);
-
-  const loadProjectContext = useCallback(async () => {
-    if (!projectPath || !isConnected) return;
-
-    try {
-      const context = await invoke<ProjectContext>("scan_project_context", {
-        cwd: projectPath,
-        forceRefresh: false,
-      });
-      setProjectContext(context);
-    } catch (err) {
-      console.error("Failed to scan project context:", err);
-    }
-  }, [invoke, projectPath, isConnected]);
-
+  // Check installed assistants
   useEffect(() => {
-    const load = async () => {
+    const checkInstalled = async () => {
       if (!isConnected) {
-        setIsLoading(false);
+        setIsCheckingInstalled(false);
         return;
       }
-
-      setIsLoading(true);
-      await Promise.all([loadAssistants(), loadProjectContext()]);
-      setIsLoading(false);
+      setIsCheckingInstalled(true);
+      try {
+        const installed = await invoke<string[]>("check_installed_assistants");
+        console.log("[Assistant] Installed commands:", installed);
+        setInstalledCommands(installed);
+      } catch (err) {
+        console.error("Failed to check installed assistants:", err);
+        // Default to allowing all if check fails
+        setInstalledCommands(["claude", "aider", "gemini", "codex", "opencode"]);
+      } finally {
+        setIsCheckingInstalled(false);
+      }
     };
-    load();
-  }, [loadAssistants, loadProjectContext, isConnected]);
+    checkInstalled();
+  }, [isConnected, invoke]);
 
-  const onRefresh = useCallback(async () => {
-    setRefreshing(true);
-    await Promise.all([loadAssistants(), loadProjectContext()]);
-    setRefreshing(false);
-  }, [loadAssistants, loadProjectContext]);
+  // Auto-launch default assistant (claude) when first opening
+  useEffect(() => {
+    if (projectPath && isConnected && !hasAutoLaunched && installedCommands.length > 0) {
+      // Default to claude if installed, otherwise first installed
+      const defaultCommand = installedCommands.includes("claude")
+        ? "claude"
+        : installedCommands[0] || "";
 
-  const handleLaunchAssistant = async (assistant: Assistant) => {
+      if (defaultCommand) {
+        const option = ASSISTANT_OPTIONS.find((o) => o.command === defaultCommand);
+        if (option) {
+          handleAddTab(option);
+          setHasAutoLaunched(true);
+        }
+      }
+    }
+  }, [projectPath, isConnected, hasAutoLaunched, installedCommands]);
+
+  // Auto-scroll to bottom when output changes
+  useEffect(() => {
+    scrollViewRef.current?.scrollToEnd({ animated: true });
+  }, [output]);
+
+  const handleAddTab = async (option: AssistantOption) => {
     if (!projectPath) return;
 
+    const tabId = `${option.id}-${Date.now()}`;
+    const newTab: AssistantTab = {
+      id: tabId,
+      name: option.name,
+      command: option.command,
+      terminalId: null,
+    };
+
+    setTabs((prev) => [...prev, newTab]);
+    setActiveTabId(tabId);
+    setShowDropdown(false);
+
     try {
-      await spawnTerminal(projectPath, assistant.command || undefined);
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      // Navigate to terminal tab to see the output
-      router.push("/(tabs)/terminal");
-    } catch (err) {
-      Alert.alert(
-        "Error",
-        err instanceof Error ? err.message : "Failed to launch assistant"
+      // Pass "assistant" type to distinguish from shell terminals
+      const terminalId = await spawnTerminal(projectPath, option.command || undefined, "assistant");
+      setTabs((prev) =>
+        prev.map((t) => (t.id === tabId ? { ...t, terminalId } : t))
       );
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    } catch (err) {
+      console.error("[Assistant] Failed to spawn terminal:", err);
+      Alert.alert("Error", "Failed to launch assistant");
+      setTabs((prev) => prev.filter((t) => t.id !== tabId));
     }
   };
 
-  const handleGenerateCommand = async () => {
-    if (!aiInput.trim()) return;
-
-    setIsGenerating(true);
-    setGeneratedCommand(null);
-
-    try {
-      const result = await invoke<{ command: string }>("ai_shell_command", {
-        description: aiInput,
-        projectContext,
-      });
-
-      setGeneratedCommand(result.command);
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    } catch (err) {
-      Alert.alert(
-        "Error",
-        err instanceof Error ? err.message : "Failed to generate command"
-      );
-    } finally {
-      setIsGenerating(false);
+  const handleCloseTab = async (tabId: string) => {
+    const tab = tabs.find((t) => t.id === tabId);
+    if (tab?.terminalId) {
+      await killTerminal(tab.terminalId);
     }
+
+    setTabs((prev) => prev.filter((t) => t.id !== tabId));
+
+    if (activeTabId === tabId) {
+      const remaining = tabs.filter((t) => t.id !== tabId);
+      setActiveTabId(remaining.length > 0 ? remaining[remaining.length - 1].id : null);
+    }
+
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
   };
 
-  const handleRunCommand = async () => {
-    if (!generatedCommand || !projectPath) return;
+  const handleSend = useCallback(() => {
+    if (!activeTab?.terminalId || !input.trim()) return;
+    sendInput(activeTab.terminalId, input + "\n");
+    setInput("");
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  }, [activeTab, input, sendInput]);
 
-    try {
-      await spawnTerminal(projectPath, generatedCommand);
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-      setAiInput("");
-      setGeneratedCommand(null);
-      // Navigate to terminal to see the result
-      router.push("/(tabs)/terminal");
-    } catch (err) {
-      Alert.alert(
-        "Error",
-        err instanceof Error ? err.message : "Failed to run command"
-      );
-    }
-  };
+  const handleCtrlC = useCallback(() => {
+    if (!activeTab?.terminalId) return;
+    sendInput(activeTab.terminalId, "\x03");
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+  }, [activeTab, sendInput]);
 
   // Not connected state
   if (!isConnected) {
@@ -211,7 +186,7 @@ export default function AssistantTabPage() {
           Not Connected
         </Text>
         <Text className="text-muted-foreground text-center mt-2">
-          Connect to your desktop to use AI assistants
+          Connect to your desktop to use coding assistants
         </Text>
         <Button className="mt-6" onPress={() => router.push("/connect")}>
           Connect to Desktop
@@ -225,199 +200,205 @@ export default function AssistantTabPage() {
     return (
       <View className="flex-1 items-center justify-center bg-background p-4">
         <Text className="text-muted-foreground text-center">
-          No project selected. Please select a project on your desktop.
+          No project selected. Select a project from the home screen.
         </Text>
       </View>
     );
   }
 
   return (
-    <ScrollView
+    <KeyboardAvoidingView
       className="flex-1 bg-background"
-      contentContainerStyle={{ padding: 16 }}
-      refreshControl={
-        <RefreshControl
-          refreshing={refreshing}
-          onRefresh={onRefresh}
-          tintColor={colors.foreground}
-        />
-      }
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+      keyboardVerticalOffset={100}
     >
-      {/* Smart Shell / NLT */}
-      <Card className="mb-4">
-        <CardHeader>
-          <View className="flex-row items-center">
-            <Wand2 size={18} color="#a78bfa" />
-            <CardTitle className="ml-2">Smart Shell</CardTitle>
-          </View>
-          <CardDescription>
-            Describe what you want to do in natural language
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <TextInput
-            className="min-h-20 w-full rounded-md border border-input bg-background p-3 text-foreground"
-            placeholder="e.g., 'run tests for the auth module'"
-            placeholderTextColor={colors.mutedForeground}
-            value={aiInput}
-            onChangeText={setAiInput}
-            multiline
-            textAlignVertical="top"
-          />
-
-          {generatedCommand && (
-            <View className="mt-4 p-3 rounded-md bg-secondary">
-              <Text className="text-muted-foreground text-xs mb-1">
-                Generated command:
-              </Text>
-              <Text className="text-foreground font-mono">
-                $ {generatedCommand}
-              </Text>
-            </View>
-          )}
-        </CardContent>
-        <CardFooter className="gap-2">
-          <Button
-            variant="outline"
-            onPress={handleGenerateCommand}
-            loading={isGenerating}
-            disabled={!aiInput.trim()}
-            icon={<Sparkles size={16} color="#a78bfa" />}
-            className="flex-1"
-          >
-            Generate
-          </Button>
-          {generatedCommand && (
-            <Button
-              onPress={handleRunCommand}
-              icon={<Play size={16} color="#000" />}
-              className="flex-1"
+      {/* Tab Bar */}
+      <View className="flex-row items-center border-b border-border p-2">
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          className="flex-1"
+        >
+          {tabs.map((tab) => (
+            <Pressable
+              key={tab.id}
+              className={`flex-row items-center mr-2 px-3 py-1.5 rounded-md ${
+                tab.id === activeTabId ? "bg-secondary" : "bg-transparent"
+              }`}
+              onPress={() => setActiveTabId(tab.id)}
             >
-              Run
-            </Button>
-          )}
-        </CardFooter>
-      </Card>
-
-      {/* Project Context */}
-      {projectContext && (
-        <Card className="mb-4">
-          <CardHeader>
-            <CardTitle>Project Context</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <View className="flex-row flex-wrap gap-2">
-              {projectContext.projectType && (
-                <Badge variant="secondary">{projectContext.projectType}</Badge>
-              )}
-              {projectContext.packageManager && (
-                <Badge variant="outline">{projectContext.packageManager}</Badge>
-              )}
-              {projectContext.hasDocker && <Badge variant="outline">Docker</Badge>}
-              {projectContext.hasMakefile && (
-                <Badge variant="outline">Makefile</Badge>
-              )}
-            </View>
-
-            {projectContext.scripts && projectContext.scripts.length > 0 && (
-              <View className="mt-4">
-                <Text className="text-muted-foreground text-sm mb-2">
-                  Available scripts:
-                </Text>
-                <View className="flex-row flex-wrap gap-2">
-                  {projectContext.scripts.slice(0, 8).map((script) => (
-                    <Badge key={script} variant="outline">
-                      {script}
-                    </Badge>
-                  ))}
-                  {projectContext.scripts.length > 8 && (
-                    <Badge variant="secondary">
-                      +{projectContext.scripts.length - 8} more
-                    </Badge>
-                  )}
-                </View>
-              </View>
-            )}
-          </CardContent>
-        </Card>
-      )}
-
-      {/* AI Assistants */}
-      <Card>
-        <CardHeader>
-          <View className="flex-row items-center">
-            <Bot size={18} color="#60a5fa" />
-            <CardTitle className="ml-2">AI Assistants</CardTitle>
-          </View>
-          <CardDescription>
-            Launch coding assistants in the terminal
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {isLoading ? (
-            <View className="items-center py-8">
-              <Text className="text-muted-foreground">
-                Loading assistants...
+              <Bot
+                size={14}
+                color={tab.id === activeTabId ? "#60a5fa" : colors.mutedForeground}
+              />
+              <Text
+                className={`ml-2 text-sm ${
+                  tab.id === activeTabId
+                    ? "text-foreground"
+                    : "text-muted-foreground"
+                }`}
+                numberOfLines={1}
+              >
+                {tab.name}
               </Text>
-            </View>
-          ) : (
-            <View className="gap-3">
-              {assistants.map((assistant) => (
-                <View
-                  key={assistant.id}
-                  className="flex-row items-center justify-between p-3 rounded-md border border-border"
-                >
-                  <View className="flex-row items-center flex-1">
-                    {assistant.id === "shell" ? (
-                      <Terminal size={20} color="#22c55e" />
-                    ) : (
-                      <Bot size={20} color="#60a5fa" />
-                    )}
-                    <View className="ml-3 flex-1">
-                      <Text className="text-foreground font-medium">
-                        {assistant.name}
-                      </Text>
-                      {assistant.description && (
-                        <Text className="text-muted-foreground text-xs">
-                          {assistant.description}
-                        </Text>
+              <Pressable
+                className="ml-2 p-1"
+                onPress={() => handleCloseTab(tab.id)}
+              >
+                <X size={12} color={colors.mutedForeground} />
+              </Pressable>
+            </Pressable>
+          ))}
+        </ScrollView>
+
+        {/* Add Tab Dropdown */}
+        <View>
+          <Button
+            variant="ghost"
+            size="icon"
+            onPress={() => setShowDropdown(!showDropdown)}
+          >
+            <Plus size={18} color={colors.foreground} />
+          </Button>
+
+          {showDropdown && (
+            <View
+              className="absolute right-0 top-10 bg-card border border-border rounded-lg shadow-lg z-50"
+              style={{ minWidth: 180 }}
+            >
+              {ASSISTANT_OPTIONS.map((option) => {
+                const isInstalled =
+                  option.command === "" || installedCommands.includes(option.command);
+
+                return (
+                  <Pressable
+                    key={option.id}
+                    className="flex-row items-center justify-between px-4 py-3 border-b border-border"
+                    onPress={() => isInstalled && handleAddTab(option)}
+                    disabled={!isInstalled}
+                  >
+                    <View className="flex-row items-center">
+                      {option.command === "" ? (
+                        <TerminalIcon size={16} color="#22c55e" />
+                      ) : (
+                        <Bot size={16} color={isInstalled ? "#60a5fa" : colors.mutedForeground} />
                       )}
+                      <Text
+                        className={`ml-2 ${
+                          isInstalled ? "text-foreground" : "text-muted-foreground"
+                        }`}
+                      >
+                        {option.name}
+                      </Text>
                     </View>
-                  </View>
-
-                  <View className="flex-row items-center gap-2">
-                    {assistant.installed ? (
-                      <Badge variant="success">
-                        <Check size={10} color="#fff" />
-                        <Text className="text-white ml-1 text-xs">
-                          Ready
-                        </Text>
-                      </Badge>
-                    ) : (
-                      <Badge variant="secondary">
-                        <X size={10} color={colors.mutedForeground} />
-                        <Text className="text-muted-foreground ml-1 text-xs">
-                          Not found
-                        </Text>
-                      </Badge>
-                    )}
-
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onPress={() => handleLaunchAssistant(assistant)}
-                      disabled={!assistant.installed}
-                      icon={<Play size={14} color="#22c55e" />}
-                    >
-                      Launch
-                    </Button>
-                  </View>
-                </View>
-              ))}
+                    {isInstalled && <Check size={14} color="#22c55e" />}
+                  </Pressable>
+                );
+              })}
             </View>
           )}
-        </CardContent>
-      </Card>
-    </ScrollView>
+        </View>
+      </View>
+
+      {/* Terminal Output or Empty State */}
+      {tabs.length === 0 ? (
+        <View className="flex-1 items-center justify-center">
+          <Bot size={48} color={colors.mutedForeground} />
+          <Text className="text-foreground font-medium mt-4">
+            {isCheckingInstalled ? "Loading..." : "No assistants running"}
+          </Text>
+          <Text className="text-muted-foreground text-center mt-2 px-8">
+            {isCheckingInstalled
+              ? "Checking installed coding assistants..."
+              : "Tap + to launch a coding assistant like Claude Code or Aider"}
+          </Text>
+        </View>
+      ) : (
+        <>
+          <ScrollView
+            ref={scrollViewRef}
+            className="flex-1"
+            style={{ backgroundColor: "#000" }}
+            contentContainerStyle={{ padding: 8, paddingBottom: 16 }}
+          >
+            {output.length === 0 ? (
+              <View className="items-center justify-center py-8">
+                <Bot size={32} color="#333" />
+                <Text style={{ color: "#666" }} className="mt-4">
+                  {activeTab?.name} starting...
+                </Text>
+              </View>
+            ) : (
+              output.map((line, index) => (
+                <Text
+                  key={index}
+                  style={{
+                    color: "#4ade80",
+                    fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
+                  }}
+                  className="text-sm leading-5"
+                  selectable
+                >
+                  {line}
+                </Text>
+              ))
+            )}
+          </ScrollView>
+
+          {/* Quick Actions */}
+          <View className="flex-row items-center border-t border-border bg-card px-2 py-1">
+            <Button
+              variant="ghost"
+              size="sm"
+              onPress={handleCtrlC}
+              className="mr-1"
+            >
+              <Text className="text-destructive text-xs font-mono">^C</Text>
+            </Button>
+            <View className="flex-1" />
+            <Text className="text-muted-foreground text-xs">
+              {tabs.length} assistant{tabs.length !== 1 ? "s" : ""}
+            </Text>
+          </View>
+
+          {/* Input */}
+          <View className="flex-row items-center border-t border-border bg-card p-2">
+            <Text
+              style={{
+                color: "#60a5fa",
+                fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
+              }}
+              className="mr-2"
+            >
+              &gt;
+            </Text>
+            <TextInput
+              className="flex-1 h-10 text-foreground"
+              style={{ fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace" }}
+              value={input}
+              onChangeText={setInput}
+              placeholder="Enter message..."
+              placeholderTextColor={colors.mutedForeground}
+              autoCapitalize="none"
+              autoCorrect={false}
+              returnKeyType="send"
+              onSubmitEditing={handleSend}
+              blurOnSubmit={false}
+            />
+            <Button
+              variant="ghost"
+              size="icon"
+              onPress={handleSend}
+              disabled={!input.trim()}
+            >
+              <Send
+                size={18}
+                color={input.trim() ? "#60a5fa" : colors.mutedForeground}
+              />
+            </Button>
+          </View>
+        </>
+      )}
+    </KeyboardAvoidingView>
   );
 }

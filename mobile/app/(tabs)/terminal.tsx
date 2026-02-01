@@ -7,14 +7,16 @@ import {
   KeyboardAvoidingView,
   Platform,
   Pressable,
+  Alert,
 } from "react-native";
 import { useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
-import { Plus, X, Terminal as TerminalIcon, Send, WifiOff } from "lucide-react-native";
+import { Plus, X, Terminal as TerminalIcon, Send, WifiOff, Sparkles, Wand2 } from "lucide-react-native";
 import { useConnectionStore } from "~/stores/connectionStore";
 import { useTerminalStore } from "~/stores/terminalStore";
 import { useTheme } from "~/components/ThemeProvider";
 import { Button, Card, CardContent } from "~/components/ui";
+import type { ProjectContext } from "~/types";
 
 export default function TerminalTabPage() {
   const router = useRouter();
@@ -36,9 +38,20 @@ export default function TerminalTabPage() {
   const scrollViewRef = useRef<ScrollView>(null);
   const inputRef = useRef<TextInput>(null);
 
+  // Smart Shell / NLT state
+  const [showNLT, setShowNLT] = useState(false);
+  const [aiInput, setAiInput] = useState("");
+  const [generatedCommand, setGeneratedCommand] = useState<string | null>(null);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [projectContext, setProjectContext] = useState<ProjectContext | null>(null);
+
   const isConnected = status === "connected";
   const projectPath = activeProject?.path || "";
-  const activeTerminal = terminals.find((t) => t.id === activeTerminalId);
+  const { invoke } = useConnectionStore();
+
+  // Filter to only show shell terminals (not assistant terminals)
+  const shellTerminals = terminals.filter((t) => t.type === "shell");
+  const activeTerminal = shellTerminals.find((t) => t.id === activeTerminalId);
   const output = activeTerminalId ? getOutput(activeTerminalId) : [];
 
   // Spawn initial terminal if none exists
@@ -115,6 +128,57 @@ export default function TerminalTabPage() {
     sendInput(activeTerminalId, "\t");
   }, [activeTerminalId, sendInput]);
 
+  // Load project context for Smart Shell
+  useEffect(() => {
+    const loadContext = async () => {
+      if (!projectPath || !isConnected) return;
+      try {
+        const context = await invoke<ProjectContext>("scan_project_context", {
+          cwd: projectPath,
+          forceRefresh: false,
+        });
+        setProjectContext(context);
+      } catch (err) {
+        console.error("Failed to scan project context:", err);
+      }
+    };
+    loadContext();
+  }, [projectPath, isConnected, invoke]);
+
+  const handleGenerateCommand = async () => {
+    if (!aiInput.trim()) return;
+
+    setIsGenerating(true);
+    setGeneratedCommand(null);
+
+    try {
+      const result = await invoke<{ command: string }>("ai_shell_command", {
+        description: aiInput,
+        projectContext,
+      });
+
+      setGeneratedCommand(result.command);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch (err) {
+      Alert.alert(
+        "Error",
+        err instanceof Error ? err.message : "Failed to generate command"
+      );
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  const handleRunGeneratedCommand = async () => {
+    if (!generatedCommand || !activeTerminalId) return;
+
+    sendInput(activeTerminalId, generatedCommand + "\n");
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setAiInput("");
+    setGeneratedCommand(null);
+    setShowNLT(false);
+  };
+
   // Not connected state
   if (!isConnected) {
     return (
@@ -157,7 +221,7 @@ export default function TerminalTabPage() {
           showsHorizontalScrollIndicator={false}
           className="flex-1"
         >
-          {terminals.map((terminal) => (
+          {shellTerminals.map((terminal) => (
             <Pressable
               key={terminal.id}
               className={`flex-row items-center mr-2 px-3 py-1.5 rounded-md ${
@@ -225,8 +289,67 @@ export default function TerminalTabPage() {
         )}
       </ScrollView>
 
+      {/* Smart Shell / NLT */}
+      {showNLT && (
+        <View className="border-t border-border bg-card p-3">
+          <View className="flex-row items-center mb-2">
+            <Wand2 size={16} color="#a78bfa" />
+            <Text className="text-foreground font-medium ml-2 text-sm">
+              Natural Language Terminal
+            </Text>
+          </View>
+          <TextInput
+            className="min-h-16 w-full rounded-md border border-input bg-background p-3 text-foreground text-sm"
+            placeholder="Describe what you want to do..."
+            placeholderTextColor={colors.mutedForeground}
+            value={aiInput}
+            onChangeText={setAiInput}
+            multiline
+            textAlignVertical="top"
+          />
+          {generatedCommand && (
+            <View className="mt-2 p-2 rounded-md bg-secondary">
+              <Text className="text-muted-foreground text-xs">Command:</Text>
+              <Text className="text-foreground font-mono text-sm">
+                $ {generatedCommand}
+              </Text>
+            </View>
+          )}
+          <View className="flex-row gap-2 mt-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onPress={handleGenerateCommand}
+              loading={isGenerating}
+              disabled={!aiInput.trim()}
+              className="flex-1"
+            >
+              <Sparkles size={14} color="#a78bfa" />
+              <Text className="ml-1 text-foreground">Generate</Text>
+            </Button>
+            {generatedCommand && (
+              <Button
+                size="sm"
+                onPress={handleRunGeneratedCommand}
+                className="flex-1"
+              >
+                <Text className="text-black">Run</Text>
+              </Button>
+            )}
+          </View>
+        </View>
+      )}
+
       {/* Quick Actions */}
       <View className="flex-row items-center border-t border-border bg-card px-2 py-1">
+        <Button
+          variant={showNLT ? "secondary" : "ghost"}
+          size="sm"
+          onPress={() => setShowNLT(!showNLT)}
+          className="mr-1"
+        >
+          <Sparkles size={14} color={showNLT ? "#a78bfa" : colors.mutedForeground} />
+        </Button>
         <Button
           variant="ghost"
           size="sm"
@@ -256,7 +379,7 @@ export default function TerminalTabPage() {
         </Button>
         <View className="flex-1" />
         <Text className="text-muted-foreground text-xs mr-2">
-          {terminals.length} terminal{terminals.length !== 1 ? "s" : ""}
+          {shellTerminals.length} terminal{shellTerminals.length !== 1 ? "s" : ""}
         </Text>
       </View>
 

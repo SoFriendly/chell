@@ -56,21 +56,21 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
-        name="terminal"
-        options={{
-          title: "Terminal",
-          headerTitle: "Terminal",
-          tabBarIcon: ({ color, size }) => (
-            <Terminal size={size} color={color} />
-          ),
-        }}
-      />
-      <Tabs.Screen
         name="assistant"
         options={{
           title: "Assistant",
-          headerTitle: "AI Assistant",
+          headerTitle: "Coding Assistants",
           tabBarIcon: ({ color, size }) => <Bot size={size} color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="terminal"
+        options={{
+          title: "Terminal",
+          headerTitle: "Smart Shell",
+          tabBarIcon: ({ color, size }) => (
+            <Terminal size={size} color={color} />
+          ),
         }}
       />
     </Tabs>

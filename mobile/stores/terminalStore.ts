@@ -14,7 +14,7 @@ interface TerminalStore {
   outputBuffer: Map<string, string[]>;
 
   // Actions
-  spawnTerminal: (cwd: string, command?: string) => Promise<string>;
+  spawnTerminal: (cwd: string, command?: string, type?: "shell" | "assistant") => Promise<string>;
   killTerminal: (terminalId: string) => Promise<void>;
   setActiveTerminal: (terminalId: string) => void;
   sendInput: (terminalId: string, data: string) => void;
@@ -29,7 +29,7 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
   activeTerminalId: null,
   outputBuffer: new Map(),
 
-  spawnTerminal: async (cwd: string, command?: string): Promise<string> => {
+  spawnTerminal: async (cwd: string, command?: string, type: "shell" | "assistant" = "shell"): Promise<string> => {
     const { invoke } = useConnectionStore.getState();
 
     const terminalId = await invoke<string>("spawn_terminal", {
@@ -43,11 +43,12 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
       id: terminalId,
       title: command || "Shell",
       cwd,
+      type,
     };
 
     set((state) => ({
       terminals: [...state.terminals, terminal],
-      activeTerminalId: terminalId,
+      activeTerminalId: type === "shell" ? terminalId : state.activeTerminalId,
       outputBuffer: new Map(state.outputBuffer).set(terminalId, []),
     }));
 
