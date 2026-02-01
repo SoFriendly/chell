@@ -195,6 +195,15 @@ export const useConnectionStore = create<ConnectionStore>()(
                 });
                 break;
 
+              case "terminal_output":
+                // Forward terminal output to terminalStore
+                const { terminalId, data } = message as { terminalId: string; data: string };
+                console.log("[ConnectionStore] Terminal output for", terminalId, ":", data.slice(0, 50));
+                import("./terminalStore").then(({ useTerminalStore }) => {
+                  useTerminalStore.getState().appendOutput(terminalId, data);
+                });
+                break;
+
               case "error":
                 set({ error: message.message });
                 break;
