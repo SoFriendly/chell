@@ -8,10 +8,27 @@ import {
   Platform,
   Pressable,
   Alert,
+  Keyboard,
 } from "react-native";
 import { useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
-import { Plus, X, Terminal as TerminalIcon, Send, WifiOff, Sparkles, Wand2 } from "lucide-react-native";
+import {
+  Plus,
+  X,
+  Terminal as TerminalIcon,
+  Send,
+  WifiOff,
+  Sparkles,
+  Wand2,
+  CornerDownLeft,
+  ArrowUp,
+  ArrowDown,
+  ArrowLeft,
+  ArrowRight,
+  Keyboard as KeyboardIcon,
+  ChevronDown,
+  ChevronUp,
+} from "lucide-react-native";
 import { useConnectionStore } from "~/stores/connectionStore";
 import { useTerminalStore } from "~/stores/terminalStore";
 import { useTheme } from "~/components/ThemeProvider";
@@ -35,8 +52,25 @@ export default function TerminalTabPage() {
   const [input, setInput] = useState("");
   const [commandHistory, setCommandHistory] = useState<string[]>([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
+  const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
   const scrollViewRef = useRef<ScrollView>(null);
   const inputRef = useRef<TextInput>(null);
+
+  // Track keyboard visibility
+  useEffect(() => {
+    const showSub = Keyboard.addListener(
+      Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow",
+      () => setIsKeyboardVisible(true)
+    );
+    const hideSub = Keyboard.addListener(
+      Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide",
+      () => setIsKeyboardVisible(false)
+    );
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
 
   // Smart Shell / NLT state
   const [showNLT, setShowNLT] = useState(false);
@@ -128,6 +162,42 @@ export default function TerminalTabPage() {
   const handleTab = useCallback(() => {
     if (!activeTerminalId) return;
     sendInput(activeTerminalId, "\t");
+  }, [activeTerminalId, sendInput]);
+
+  const handleEsc = useCallback(() => {
+    if (!activeTerminalId) return;
+    sendInput(activeTerminalId, "\x1b");
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  }, [activeTerminalId, sendInput]);
+
+  const handleArrowUp = useCallback(() => {
+    if (!activeTerminalId) return;
+    sendInput(activeTerminalId, "\x1b[A");
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  }, [activeTerminalId, sendInput]);
+
+  const handleArrowDown = useCallback(() => {
+    if (!activeTerminalId) return;
+    sendInput(activeTerminalId, "\x1b[B");
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  }, [activeTerminalId, sendInput]);
+
+  const handleArrowLeft = useCallback(() => {
+    if (!activeTerminalId) return;
+    sendInput(activeTerminalId, "\x1b[D");
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  }, [activeTerminalId, sendInput]);
+
+  const handleArrowRight = useCallback(() => {
+    if (!activeTerminalId) return;
+    sendInput(activeTerminalId, "\x1b[C");
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  }, [activeTerminalId, sendInput]);
+
+  const handleNewLine = useCallback(() => {
+    if (!activeTerminalId) return;
+    sendInput(activeTerminalId, "\n");
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
   }, [activeTerminalId, sendInput]);
 
   // Load project context for Smart Shell
@@ -345,46 +415,91 @@ export default function TerminalTabPage() {
       )}
 
       {/* Quick Actions */}
-      <View className="flex-row items-center border-t border-border bg-card px-2 py-1">
+      <View className="flex-row items-center border-t border-border bg-card pl-1 pr-2 py-1">
         <Button
           variant={showNLT ? "secondary" : "ghost"}
           size="sm"
           onPress={() => setShowNLT(!showNLT)}
-          className="mr-1"
+          className="mr-2"
         >
-          <Sparkles size={14} color={showNLT ? "#a78bfa" : colors.mutedForeground} />
+          <Sparkles size={14} color="#60a5fa" />
         </Button>
         <Button
           variant="ghost"
           size="sm"
           onPress={handleCtrlC}
-          className="mr-1"
+          className="mr-2"
         >
-          <Text className="text-destructive text-xs font-mono">^C</Text>
-        </Button>
-        <Button variant="ghost" size="sm" onPress={handleTab} className="mr-1">
-          <Text className="text-muted-foreground text-xs font-mono">TAB</Text>
+          <Text style={{ color: "#60a5fa", fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace", fontWeight: "bold" }} className="text-base">^C</Text>
         </Button>
         <Button
           variant="ghost"
           size="sm"
-          onPress={handleHistoryUp}
-          className="mr-1"
+          onPress={handleEsc}
+          className="mr-2"
         >
-          <Text className="text-muted-foreground text-xs font-mono">↑</Text>
+          <Text style={{ color: "#60a5fa", fontWeight: "bold" }} className="text-base">ESC</Text>
         </Button>
         <Button
           variant="ghost"
           size="sm"
-          onPress={handleHistoryDown}
-          className="mr-1"
+          onPress={handleNewLine}
+          className="mr-2"
         >
-          <Text className="text-muted-foreground text-xs font-mono">↓</Text>
+          <CornerDownLeft size={20} color="#60a5fa" />
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          onPress={handleArrowUp}
+          className="mr-2"
+        >
+          <ArrowUp size={20} color="#60a5fa" />
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          onPress={handleArrowDown}
+          className="mr-2"
+        >
+          <ArrowDown size={20} color="#60a5fa" />
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          onPress={handleArrowLeft}
+          className="mr-2"
+        >
+          <ArrowLeft size={20} color="#60a5fa" />
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          onPress={handleArrowRight}
+          className="mr-2"
+        >
+          <ArrowRight size={20} color="#60a5fa" />
         </Button>
         <View className="flex-1" />
-        <Text className="text-muted-foreground text-xs mr-2">
-          {shellTerminals.length} terminal{shellTerminals.length !== 1 ? "s" : ""}
-        </Text>
+        <Button
+          variant="ghost"
+          size="sm"
+          onPress={() => {
+            if (isKeyboardVisible) {
+              Keyboard.dismiss();
+            } else {
+              inputRef.current?.focus();
+            }
+          }}
+          className="flex-row items-center"
+        >
+          <KeyboardIcon size={18} color="#60a5fa" />
+          {isKeyboardVisible ? (
+            <ChevronDown size={14} color="#60a5fa" style={{ marginLeft: 4 }} />
+          ) : (
+            <ChevronUp size={14} color="#60a5fa" style={{ marginLeft: 4 }} />
+          )}
+        </Button>
       </View>
 
       {/* Input */}

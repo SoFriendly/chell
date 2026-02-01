@@ -431,7 +431,7 @@ export default function AssistantTabPage() {
           )}
 
           {/* Quick Actions */}
-          <View className="flex-row items-center border-t border-border bg-card px-2 py-1">
+          <View className="flex-row items-center border-t border-border bg-card pl-1 pr-2 py-1">
             <Button
               variant="ghost"
               size="sm"
