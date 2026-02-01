@@ -15,13 +15,13 @@ import {
   Wifi,
   WifiOff,
   X,
-  Folder,
-  FolderOpen,
-  GitBranch,
+  FolderGit2,
   Download,
   ChevronRight,
   Monitor,
   Settings,
+  ArrowRight,
+  Plus,
 } from "lucide-react-native";
 import { Stack } from "expo-router";
 import {
@@ -29,14 +29,8 @@ import {
   DesktopProject,
 } from "~/stores/connectionStore";
 import { useTheme } from "~/components/ThemeProvider";
-import {
-  Button,
-  Card,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-  CardContent,
-} from "~/components/ui";
+import { Button } from "~/components/ui";
+import ChellLogo from "~/components/ChellLogo";
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -58,6 +52,11 @@ export default function HomeScreen() {
 
   const isConnected = status === "connected";
 
+  // Sort projects by last opened
+  const sortedProjects = [...availableProjects].sort(
+    (a, b) => new Date(b.lastOpened || 0).getTime() - new Date(a.lastOpened || 0).getTime()
+  );
+
   // Request status on mount and when connected
   useEffect(() => {
     if (isConnected) {
@@ -75,7 +74,6 @@ export default function HomeScreen() {
   const handleSelectProject = (project: DesktopProject) => {
     selectProject(project.id);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    // Navigate to tabs (project view)
     router.push("/(tabs)");
   };
 
@@ -99,17 +97,13 @@ export default function HomeScreen() {
       });
 
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-
-      // Clear form and close modal
       setCloneUrl("");
       setClonePath("");
       setShowCloneModal(false);
-
-      // Refresh project list then navigate
       requestStatus();
 
       Alert.alert("Success", `Repository cloned to ${result}`, [
-        { text: "OK", onPress: () => router.push("/(tabs)") }
+        { text: "OK", onPress: () => router.push("/(tabs)") },
       ]);
     } catch (err) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
@@ -122,256 +116,322 @@ export default function HomeScreen() {
     }
   };
 
+  const getRelativeTime = (date: string | undefined) => {
+    if (!date) return "";
+    const now = new Date();
+    const then = new Date(date);
+    const diff = now.getTime() - then.getTime();
+    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+    const hours = Math.floor(diff / (1000 * 60 * 60));
+    const minutes = Math.floor(diff / (1000 * 60));
+
+    if (days > 0) return `${days}d ago`;
+    if (hours > 0) return `${hours}h ago`;
+    if (minutes > 0) return `${minutes}m ago`;
+    return "Just now";
+  };
+
   return (
     <>
       <Stack.Screen
         options={{
-          headerRight: () => (
-            <Pressable
-              onPress={() => router.push("/settings")}
-              className="p-2 mr-2"
-            >
-              <Settings size={22} color={colors.foreground} />
-            </Pressable>
-          ),
+          headerShown: false,
         }}
       />
-      <ScrollView
-        className="flex-1 bg-background"
-        contentContainerStyle={{ padding: 16 }}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            tintColor={colors.primary}
-          />
-        }
-    >
-      {/* Connection Status Banner */}
-      <Pressable
-        className={`flex-row items-center justify-between p-4 rounded-xl mb-4 ${
-          isConnected ? "bg-primary/10" : "bg-destructive/10"
-        }`}
-        onPress={() => !isConnected && router.push("/connect")}
-      >
-        <View className="flex-row items-center">
-          {isConnected ? (
-            <Wifi size={20} color={colors.primary} />
-          ) : (
-            <WifiOff size={20} color={colors.destructive} />
-          )}
-          <View className="ml-3">
+      <View className="flex-1 bg-background">
+        {/* Connection Status Header */}
+        <View
+          className="px-4 pt-14 pb-3 flex-row items-center justify-between"
+          style={{ backgroundColor: colors.background }}
+        >
+          <Pressable
+            className={`flex-row items-center px-3 py-2 rounded-full ${
+              isConnected ? "bg-primary/10" : "bg-destructive/10"
+            }`}
+            onPress={() => !isConnected && router.push("/connect")}
+          >
+            {isConnected ? (
+              <Wifi size={14} color={colors.primary} />
+            ) : (
+              <WifiOff size={14} color={colors.destructive} />
+            )}
             <Text
-              className={`font-medium ${
+              className={`ml-2 text-xs font-medium ${
                 isConnected ? "text-primary" : "text-destructive"
               }`}
             >
-              {isConnected ? "Connected" : "Not Connected"}
+              {isConnected
+                ? desktopDeviceName || "Connected"
+                : "Not Connected"}
             </Text>
-            {isConnected && desktopDeviceName && (
-              <View className="flex-row items-center mt-0.5">
-                <Monitor size={12} color={colors.mutedForeground} />
-                <Text className="text-muted-foreground text-xs ml-1">
-                  {desktopDeviceName}
-                </Text>
-              </View>
-            )}
-          </View>
-        </View>
-        {!isConnected && (
-          <View className="flex-row items-center">
-            <Text className="text-destructive text-sm mr-1">Connect</Text>
-            <ChevronRight size={16} color={colors.destructive} />
-          </View>
-        )}
-      </Pressable>
+          </Pressable>
 
-      {/* Not Connected State */}
-      {!isConnected && (
-        <Card className="mb-4">
-          <CardContent className="py-8 items-center">
-            <View className="w-16 h-16 rounded-full bg-muted items-center justify-center mb-4">
-              <GitBranch size={32} color={colors.mutedForeground} />
+          <Pressable
+            onPress={() => router.push("/settings")}
+            className="p-2"
+          >
+            <Settings size={22} color={colors.mutedForeground} />
+          </Pressable>
+        </View>
+
+        <ScrollView
+          className="flex-1"
+          contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 40 }}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor={colors.primary}
+            />
+          }
+        >
+          {/* Hero Section */}
+          <View className="items-center py-8">
+            <View
+              className="w-16 h-16 rounded-2xl items-center justify-center mb-4"
+              style={{
+                backgroundColor: `${colors.primary}20`,
+                borderWidth: 1,
+                borderColor: `${colors.primary}40`,
+              }}
+            >
+              <ChellLogo size={36} />
             </View>
-            <Text className="text-foreground text-lg font-semibold mb-2">
+            <Text className="text-xl font-semibold text-foreground">
               Welcome to Chell
             </Text>
-            <Text className="text-muted-foreground text-center mb-4">
-              Connect to your desktop to access your projects and git
-              repositories.
+            <Text className="text-sm text-muted-foreground mt-2">
+              Think in changes, not commands.
             </Text>
-            <Button onPress={() => router.push("/connect")}>
-              Connect Desktop
-            </Button>
-          </CardContent>
-        </Card>
-      )}
+          </View>
 
-      {/* Clone Repository - only show when connected */}
-      {isConnected && (
-        <Card className="mb-4">
-          <CardHeader>
-            <View className="flex-row items-center">
-              <Download size={18} color={colors.info} />
-              <CardTitle className="ml-2">Quick Actions</CardTitle>
+          {/* Not Connected State */}
+          {!isConnected && (
+            <View className="items-center py-8">
+              <Text className="text-muted-foreground text-center mb-4">
+                Connect to your desktop to access your projects.
+              </Text>
+              <Button onPress={() => router.push("/connect")}>
+                Connect Desktop
+              </Button>
             </View>
-          </CardHeader>
-          <CardContent>
-            <Button
-              variant="outline"
-              onPress={() => setShowCloneModal(true)}
-              icon={<GitBranch size={18} color={colors.foreground} />}
-            >
-              Clone Repository
-            </Button>
-          </CardContent>
-        </Card>
-      )}
+          )}
 
-      {/* Projects List - only show when connected */}
-      {isConnected && (
-        <Card className="mb-4">
-          <CardHeader>
-            <View className="flex-row items-center">
-              <FolderOpen size={18} color={colors.success} />
-              <CardTitle className="ml-2">
-                Projects{" "}
-                {availableProjects.length > 0 &&
-                  `(${availableProjects.length})`}
-              </CardTitle>
+          {/* Quick Actions - only show when connected */}
+          {isConnected && (
+            <View className="gap-3 mb-8">
+              <Pressable
+                className="flex-row items-center p-4 rounded-xl border border-border bg-card"
+                style={{ gap: 16 }}
+                onPress={() => setShowCloneModal(true)}
+              >
+                <View
+                  className="w-10 h-10 rounded-lg items-center justify-center"
+                  style={{ backgroundColor: colors.muted }}
+                >
+                  <Download size={20} color={colors.mutedForeground} />
+                </View>
+                <View className="flex-1">
+                  <Text className="text-sm font-medium text-foreground">
+                    Clone repository
+                  </Text>
+                  <Text className="text-xs text-muted-foreground">
+                    Clone from GitHub, GitLab, or any URL
+                  </Text>
+                </View>
+                <ArrowRight size={16} color={colors.mutedForeground} />
+              </Pressable>
+
+              <Pressable
+                className="flex-row items-center p-4 rounded-xl border border-border bg-card"
+                style={{ gap: 16 }}
+                onPress={() => {
+                  Alert.alert(
+                    "Open Repository",
+                    "Use Chell on your desktop to open a local repository, then it will appear here."
+                  );
+                }}
+              >
+                <View
+                  className="w-10 h-10 rounded-lg items-center justify-center"
+                  style={{ backgroundColor: colors.muted }}
+                >
+                  <Monitor size={20} color={colors.mutedForeground} />
+                </View>
+                <View className="flex-1">
+                  <Text className="text-sm font-medium text-foreground">
+                    Open existing repository
+                  </Text>
+                  <Text className="text-xs text-muted-foreground">
+                    Open a repo in Chell Desktop
+                  </Text>
+                </View>
+                <ArrowRight size={16} color={colors.mutedForeground} />
+              </Pressable>
+
+              <Pressable
+                className="flex-row items-center p-4 rounded-xl border border-border bg-card"
+                style={{ gap: 16 }}
+                onPress={() => {
+                  Alert.alert(
+                    "Create Repository",
+                    "Use Chell on your desktop to create a new repository."
+                  );
+                }}
+              >
+                <View
+                  className="w-10 h-10 rounded-lg items-center justify-center"
+                  style={{ backgroundColor: colors.muted }}
+                >
+                  <Plus size={20} color={colors.mutedForeground} />
+                </View>
+                <View className="flex-1">
+                  <Text className="text-sm font-medium text-foreground">
+                    Create new repository
+                  </Text>
+                  <Text className="text-xs text-muted-foreground">
+                    Initialize a new git repository
+                  </Text>
+                </View>
+                <ArrowRight size={16} color={colors.mutedForeground} />
+              </Pressable>
             </View>
-            <CardDescription>
-              {availableProjects.length > 0
-                ? "Select a project to work with"
-                : "No projects found on desktop"}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {availableProjects.length === 0 ? (
-              <View className="py-4 items-center">
-                <Text className="text-muted-foreground text-sm">
-                  Clone a repository or open one in Chell Desktop
-                </Text>
-              </View>
-            ) : (
-              <View className="gap-2">
-                {availableProjects.map((project) => (
+          )}
+
+          {/* Recent Projects */}
+          {isConnected && sortedProjects.length > 0 && (
+            <View>
+              <Text className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground px-1 mb-3">
+                Recent Projects
+              </Text>
+              <View className="gap-1">
+                {sortedProjects.map((project) => (
                   <Pressable
                     key={project.id}
-                    className="flex-row items-center p-4 rounded-lg border border-border bg-card active:bg-muted/50"
+                    className="flex-row items-center px-3 py-3 rounded-lg"
+                    style={{ gap: 12 }}
                     onPress={() => handleSelectProject(project)}
+                    android_ripple={{ color: colors.muted }}
                   >
-                    <View className="w-10 h-10 rounded-lg items-center justify-center bg-muted">
-                      <Folder size={20} color={colors.mutedForeground} />
-                    </View>
-                    <View className="ml-3 flex-1">
-                      <Text className="font-medium text-foreground text-sm">
+                    <FolderGit2 size={16} color={colors.primary} />
+                    <View className="flex-1 min-w-0">
+                      <Text
+                        className="text-sm font-medium text-foreground"
+                        numberOfLines={1}
+                      >
                         {project.name}
                       </Text>
                       <Text
-                        className="text-muted-foreground text-xs font-mono mt-0.5"
+                        className="text-[11px] text-muted-foreground font-mono"
                         numberOfLines={1}
                       >
                         {project.path}
                       </Text>
                     </View>
-                    <ChevronRight size={16} color={colors.mutedForeground} />
+                    <Text className="text-[11px] text-muted-foreground">
+                      {getRelativeTime(project.lastOpened)}
+                    </Text>
                   </Pressable>
                 ))}
               </View>
-            )}
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Clone Repository Modal */}
-      <Modal
-        visible={showCloneModal}
-        animationType="slide"
-        transparent
-        onRequestClose={() => setShowCloneModal(false)}
-      >
-        <View className="flex-1 bg-black/50 justify-end">
-          <View
-            className="bg-card rounded-t-3xl p-6"
-            style={{ paddingBottom: 40 }}
-          >
-            <View className="flex-row items-center justify-between mb-6">
-              <View className="flex-row items-center">
-                <GitBranch size={20} color={colors.info} />
-                <Text className="text-foreground text-lg font-semibold ml-2">
-                  Clone Repository
-                </Text>
-              </View>
-              <Pressable
-                onPress={() => setShowCloneModal(false)}
-                className="p-2"
-              >
-                <X size={20} color={colors.mutedForeground} />
-              </Pressable>
             </View>
+          )}
 
-            <View className="gap-4">
-              <View>
-                <Text className="text-foreground font-medium mb-2">
-                  Repository URL
-                </Text>
-                <TextInput
-                  className="h-12 rounded-lg border border-input bg-background px-4 text-foreground"
-                  placeholder="https://github.com/user/repo.git"
-                  placeholderTextColor={colors.mutedForeground}
-                  value={cloneUrl}
-                  onChangeText={setCloneUrl}
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  keyboardType="url"
-                />
-              </View>
+          {/* Empty state for projects */}
+          {isConnected && sortedProjects.length === 0 && (
+            <View className="items-center py-4">
+              <Text className="text-muted-foreground text-sm text-center">
+                No projects yet. Clone a repository or open one in Chell Desktop.
+              </Text>
+            </View>
+          )}
+        </ScrollView>
 
-              <View>
-                <Text className="text-foreground font-medium mb-2">
-                  Destination Path
-                </Text>
-                <TextInput
-                  className="h-12 rounded-lg border border-input bg-background px-4 text-foreground"
-                  placeholder="~/Projects/repo-name"
-                  placeholderTextColor={colors.mutedForeground}
-                  value={clonePath}
-                  onChangeText={setClonePath}
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                />
-                <Text className="text-muted-foreground text-xs mt-1">
-                  Path on your desktop where the repo will be cloned
-                </Text>
-              </View>
-
-              <View className="flex-row gap-3 mt-2">
-                <Button
-                  variant="outline"
-                  className="flex-1"
+        {/* Clone Repository Modal */}
+        <Modal
+          visible={showCloneModal}
+          animationType="slide"
+          transparent
+          onRequestClose={() => setShowCloneModal(false)}
+        >
+          <View className="flex-1 bg-black/50 justify-end">
+            <View
+              className="bg-card rounded-t-3xl p-6"
+              style={{ paddingBottom: 40 }}
+            >
+              <View className="flex-row items-center justify-between mb-6">
+                <View className="flex-row items-center">
+                  <Download size={20} color={colors.primary} />
+                  <Text className="text-foreground text-lg font-semibold ml-2">
+                    Clone Repository
+                  </Text>
+                </View>
+                <Pressable
                   onPress={() => setShowCloneModal(false)}
-                  disabled={isCloning}
+                  className="p-2"
                 >
-                  Cancel
-                </Button>
-                <Button
-                  className="flex-1"
-                  onPress={handleCloneRepo}
-                  loading={isCloning}
-                  disabled={!cloneUrl.trim() || !clonePath.trim()}
-                  icon={
-                    isCloning ? undefined : <Download size={16} color="#000" />
-                  }
-                >
-                  {isCloning ? "Cloning..." : "Clone"}
-                </Button>
+                  <X size={20} color={colors.mutedForeground} />
+                </Pressable>
+              </View>
+
+              <View className="gap-4">
+                <View>
+                  <Text className="text-foreground font-medium mb-2">
+                    Repository URL
+                  </Text>
+                  <TextInput
+                    className="h-12 rounded-lg border border-input bg-background px-4 text-foreground"
+                    placeholder="https://github.com/user/repo.git"
+                    placeholderTextColor={colors.mutedForeground}
+                    value={cloneUrl}
+                    onChangeText={setCloneUrl}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    keyboardType="url"
+                  />
+                </View>
+
+                <View>
+                  <Text className="text-foreground font-medium mb-2">
+                    Destination Path
+                  </Text>
+                  <TextInput
+                    className="h-12 rounded-lg border border-input bg-background px-4 text-foreground"
+                    placeholder="~/Projects/repo-name"
+                    placeholderTextColor={colors.mutedForeground}
+                    value={clonePath}
+                    onChangeText={setClonePath}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                  />
+                  <Text className="text-muted-foreground text-xs mt-1">
+                    Path on your desktop where the repo will be cloned
+                  </Text>
+                </View>
+
+                <View className="flex-row gap-3 mt-2">
+                  <Button
+                    variant="outline"
+                    className="flex-1"
+                    onPress={() => setShowCloneModal(false)}
+                    disabled={isCloning}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    className="flex-1"
+                    onPress={handleCloneRepo}
+                    loading={isCloning}
+                    disabled={!cloneUrl.trim() || !clonePath.trim()}
+                  >
+                    {isCloning ? "Cloning..." : "Clone"}
+                  </Button>
+                </View>
               </View>
             </View>
           </View>
-        </View>
-      </Modal>
-    </ScrollView>
+        </Modal>
+      </View>
     </>
   );
 }
