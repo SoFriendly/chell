@@ -345,7 +345,7 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
             {/* Top icons */}
             <div className="flex flex-col items-center gap-1">
               <button className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/20 text-primary">
-                <TerminalIcon className="h-5 w-5" />
+                <ChellIcon className="h-5 w-5" />
               </button>
               <button className="flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground">
                 <Plus className="h-5 w-5" />

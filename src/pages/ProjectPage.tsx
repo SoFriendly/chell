@@ -1212,7 +1212,7 @@ export default function ProjectPage() {
           >
             {utilityTerminalId !== "closed" ? (
               <SmartShell
-                cwd={currentProject.path}
+                cwd={shellCwd || currentProject.path}
                 terminalId={utilityTerminalId}
                 onTerminalReady={(id) => setUtilityTerminalId(id)}
                 visible={showShellPanel}

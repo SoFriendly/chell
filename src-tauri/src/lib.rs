@@ -1008,7 +1008,8 @@ fn detect_project_context(path: &std::path::Path) -> ProjectContext {
 
         let scripts = pkg.get("scripts")
             .and_then(|s| s.as_object())
-            .map(|s| s.keys().cloned().collect::<Vec<String>>());
+            .map(|s| s.keys().cloned().collect::<Vec<String>>())
+            .filter(|s| !s.is_empty());
 
         // Detect package manager by lockfile
         let package_manager = if path.join("bun.lockb").exists() {
