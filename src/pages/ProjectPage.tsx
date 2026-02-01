@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef, useCallback, type DragEvent, type WheelEvent } from "react";
+import { useEffect, useState, useRef, useCallback, type WheelEvent } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
@@ -8,7 +8,6 @@ import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import {
   Settings,
   Terminal as TerminalIcon,
-  GripVertical,
   X,
   HelpCircle,
   Plus,
@@ -98,7 +97,6 @@ export default function ProjectPage() {
   const [dragOverTabId, setDragOverTabId] = useState<string | null>(null);
   const [dragPosition, setDragPosition] = useState<{ x: number; y: number } | null>(null);
   const tabListRef = useRef<HTMLDivElement | null>(null);
-  const draggingTabIdRef = useRef<string | null>(null);
   const tabRefs = useRef<Map<string, HTMLDivElement>>(new Map());
 
   // Count visible panels - must always have at least one
@@ -591,7 +589,6 @@ export default function ProjectPage() {
     event.preventDefault();
     setDraggingTabId(tabId);
     setDragPosition({ x: event.clientX, y: event.clientY });
-    draggingTabIdRef.current = tabId;
 
     const handleMouseMove = (e: MouseEvent) => {
       setDragPosition({ x: e.clientX, y: e.clientY });
@@ -633,7 +630,6 @@ export default function ProjectPage() {
       setDraggingTabId(null);
       setDragOverTabId(null);
       setDragPosition(null);
-      draggingTabIdRef.current = null;
     };
 
     document.addEventListener('mousemove', handleMouseMove);
@@ -991,7 +987,6 @@ export default function ProjectPage() {
                     onClick={() => !draggingTabId && setActiveTabId(tab.id)}
                     onMouseDown={(event) => handleTabMouseDown(event, tab.id)}
                   >
-                    <GripVertical className="h-3.5 w-3.5 shrink-0 text-muted-foreground/40" />
                     <TerminalIcon className="h-3.5 w-3.5 shrink-0" />
                     {editingTabId === tab.id ? (
                     <Input
@@ -1067,14 +1062,13 @@ export default function ProjectPage() {
             </div>
           )}
 
-          {/* Tab content - keep all terminals mounted, hide with CSS */}
-          {terminalTabs.map((tab, index) => (
+          {/* Tab content - render in stable order (sorted by id) to prevent remounting on reorder */}
+          {[...terminalTabs].sort((a, b) => a.id.localeCompare(b.id)).map((tab) => (
             <div
               key={tab.id}
               className={cn(
                 "flex flex-1 flex-col overflow-hidden",
-                // Show this tab if it's active, or if no tab is active show the first one
-                !(activeTabId === tab.id || (activeTabId === null && index === 0)) && "hidden"
+                activeTabId !== tab.id && "hidden"
               )}
             >
               <div
