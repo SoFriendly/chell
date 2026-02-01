@@ -352,16 +352,37 @@ export default function TerminalTabPage() {
             </Text>
           </View>
         ) : (
-          output.map((line, index) => (
-            <Text
-              key={index}
-              style={{ color: colors.terminal, fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace" }}
-              className="text-sm leading-5"
-              selectable
-            >
-              {line}
-            </Text>
-          ))
+          // Join all chunks, normalize line endings, and split into actual lines
+          output.join("")
+            .replace(/\r\n/g, "\n")
+            .replace(/\r/g, "\n")
+            .split("\n")
+            // Filter out shell initialization artifacts (%, =, etc.)
+            .filter((line) => {
+              const trimmed = line.trim();
+              // Skip lines that are just shell prompt artifacts
+              if (trimmed === "%" || trimmed === "=" || trimmed === "%=") return false;
+              return true;
+            })
+            // Clean up trailing shell integration artifacts from prompt lines
+            .map((line) => line.replace(/ =$/, "").replace(/=$/, ""))
+            // Collapse consecutive empty lines to max 1
+            .reduce<string[]>((acc, line) => {
+              const prevEmpty = acc.length > 0 && acc[acc.length - 1].trim() === "";
+              const currEmpty = line.trim() === "";
+              if (currEmpty && prevEmpty) return acc;
+              return [...acc, line];
+            }, [])
+            .map((line, index) => (
+              <Text
+                key={index}
+                style={{ color: colors.terminal, fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace" }}
+                className="text-sm leading-5"
+                selectable
+              >
+                {line || " "}
+              </Text>
+            ))
         )}
       </ScrollView>
 

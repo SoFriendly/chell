@@ -326,9 +326,13 @@ export class SessionDO implements DurableObject {
   private async handleCommand(ws: WebSocket, message: CommandMessage) {
     const { sessionToken, command, params, id } = message;
 
+    console.log("[Relay] handleCommand:", command, "id:", id, "sessionToken:", sessionToken?.slice(0, 20) + "...");
+
     // Find desktop for this session
     const desktopWs = this.desktopBySession.get(sessionToken);
+    console.log("[Relay] desktopWs found:", !!desktopWs, "desktopBySession size:", this.desktopBySession.size);
     if (!desktopWs) {
+      console.log("[Relay] Desktop not found for sessionToken, sending error response");
       // Send proper command_response so mobile doesn't hang
       ws.send(
         JSON.stringify({
@@ -344,6 +348,7 @@ export class SessionDO implements DurableObject {
     }
 
     // Forward command to desktop
+    console.log("[Relay] Forwarding command to desktop:", command, "id:", id);
     desktopWs.send(
       JSON.stringify({
         type: "command",
@@ -363,27 +368,34 @@ export class SessionDO implements DurableObject {
     const state = this.connections.get(ws);
     if (!state || state.type !== "desktop") return;
 
-    // Find session token for this desktop
+    console.log("[Relay] handleCommandResponse, requestId:", requestId);
+
+    // Build response once
+    const response: CommandResponseMessage = {
+      type: "command_response",
+      id: generateMessageId(),
+      timestamp: Date.now(),
+      requestId,
+      success,
+      result,
+      error,
+    };
+
+    // Send to ALL mobiles connected to this desktop (across all session tokens)
+    let sentCount = 0;
     for (const [token, desktop] of this.desktopBySession) {
       if (desktop === ws) {
         const mobiles = this.mobilesBySession.get(token);
         if (mobiles) {
-          const response: CommandResponseMessage = {
-            type: "command_response",
-            id: generateMessageId(),
-            timestamp: Date.now(),
-            requestId,
-            success,
-            result,
-            error,
-          };
           for (const mobileWs of mobiles) {
             mobileWs.send(JSON.stringify(response));
+            sentCount++;
           }
         }
-        break;
+        // Don't break - continue to send to mobiles with other tokens for this desktop
       }
     }
+    console.log("[Relay] Sent command_response to", sentCount, "mobile(s)");
   }
 
   private async handleTerminalInput(ws: WebSocket, message: TerminalInputMessage) {

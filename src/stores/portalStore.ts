@@ -267,7 +267,7 @@ export const usePortalStore = create<PortalState>()(
               id: string;
             };
 
-            console.log("[Portal] Received command from mobile:", command, "id:", id);
+            console.log("[Portal] Received command from mobile:", command, "id:", id, "params:", JSON.stringify(params).slice(0, 100));
 
             // Inject API key for AI commands
             let finalParams = { ...params };
@@ -298,6 +298,7 @@ export const usePortalStore = create<PortalState>()(
                     });
                   }
 
+                  console.log("[Portal] Command succeeded:", command, "sending response with requestId:", id);
                   get().sendMessage({
                     type: "command_response",
                     id: crypto.randomUUID(),
@@ -307,6 +308,7 @@ export const usePortalStore = create<PortalState>()(
                   });
                 })
                 .catch((error) => {
+                  console.log("[Portal] Command failed:", command, "error:", error, "sending response with requestId:", id);
                   get().sendMessage({
                     type: "command_response",
                     id: crypto.randomUUID(),

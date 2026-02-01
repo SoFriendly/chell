@@ -109,13 +109,15 @@ export class ChellWebSocket {
   }
 
   private handleMessage(message: WSMessage): void {
-    console.log("[ChellWS] handleMessage called, handlers count:", this.messageHandlers.size);
+    console.log("[ChellWS] handleMessage called, type:", message.type, "handlers count:", this.messageHandlers.size);
 
     // Handle command responses
     if (message.type === "command_response") {
       const response = message as CommandResponseMessage;
+      console.log("[ChellWS] Received command_response, requestId:", response.requestId, "pending commands:", Array.from(this.pendingCommands.keys()));
       const pending = this.pendingCommands.get(response.requestId);
       if (pending) {
+        console.log("[ChellWS] Found pending command for requestId:", response.requestId);
         clearTimeout(pending.timeout);
         this.pendingCommands.delete(response.requestId);
 
@@ -124,6 +126,8 @@ export class ChellWebSocket {
         } else {
           pending.reject(new Error(response.error || "Command failed"));
         }
+      } else {
+        console.warn("[ChellWS] No pending command found for requestId:", response.requestId);
       }
     }
 
