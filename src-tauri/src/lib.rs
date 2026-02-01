@@ -1402,11 +1402,12 @@ pub fn run() {
         })
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
-        .run(|app_handle, event| {
+        .run(|_app_handle, _event| {
             // Handle dock icon click on macOS when no windows are visible
-            if let tauri::RunEvent::Reopen { has_visible_windows, .. } = event {
+            #[cfg(target_os = "macos")]
+            if let tauri::RunEvent::Reopen { has_visible_windows, .. } = _event {
                 if !has_visible_windows {
-                    if let Some(window) = app_handle.get_webview_window("main") {
+                    if let Some(window) = _app_handle.get_webview_window("main") {
                         let _ = window.show();
                         let _ = window.set_focus();
                     }
