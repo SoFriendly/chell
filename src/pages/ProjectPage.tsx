@@ -13,12 +13,12 @@ import {
   Plus,
   Bot,
   GitBranch,
-  PanelRightClose,
   Folder,
   ChevronDown,
   Search,
   Sparkles,
 } from "lucide-react";
+import { ChellIcon } from "@/components/icons/ChellIcon";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -797,7 +797,7 @@ export default function ProjectPage() {
                     : "text-muted-foreground hover:bg-muted hover:text-foreground"
                 )}
               >
-                <TerminalIcon className="h-5 w-5" />
+                <ChellIcon className="h-5 w-5" />
               </button>
             </TooltipTrigger>
             <TooltipContent side="right">Terminal</TooltipContent>
@@ -898,7 +898,7 @@ export default function ProjectPage() {
                   showShellPanel && visiblePanelCount <= 1 && "opacity-50 cursor-not-allowed"
                 )}
               >
-                <PanelRightClose className="h-5 w-5" />
+                <TerminalIcon className="h-5 w-5" />
               </button>
             </TooltipTrigger>
             <TooltipContent side="right">
