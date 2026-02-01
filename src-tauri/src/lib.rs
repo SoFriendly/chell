@@ -958,9 +958,21 @@ Keep the description brief or empty if the subject is self-explanatory."#,
 
     if let Some(choice) = groq_response.choices.first() {
         let content = &choice.message.content;
+
+        // Strip markdown code fences if present (e.g., ```json ... ```)
+        let json_content = content
+            .trim()
+            .strip_prefix("```json")
+            .or_else(|| content.trim().strip_prefix("```"))
+            .unwrap_or(content)
+            .trim()
+            .strip_suffix("```")
+            .unwrap_or(content)
+            .trim();
+
         // Parse the JSON response
-        let suggestion: CommitSuggestion = serde_json::from_str(content)
-            .map_err(|e| format!("Failed to parse AI response: {} - Content: {}", e, content))?;
+        let suggestion: CommitSuggestion = serde_json::from_str(json_content)
+            .map_err(|e| format!("Failed to parse AI response: {} - Content: {}", e, json_content))?;
         Ok(suggestion)
     } else {
         Err("No response from AI".to_string())

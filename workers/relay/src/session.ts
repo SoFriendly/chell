@@ -329,7 +329,17 @@ export class SessionDO implements DurableObject {
     // Find desktop for this session
     const desktopWs = this.desktopBySession.get(sessionToken);
     if (!desktopWs) {
-      this.sendError(ws, "DESKTOP_OFFLINE", "Desktop is not connected");
+      // Send proper command_response so mobile doesn't hang
+      ws.send(
+        JSON.stringify({
+          type: "command_response",
+          id: generateMessageId(),
+          timestamp: Date.now(),
+          requestId: id,
+          success: false,
+          error: "Desktop is not connected",
+        })
+      );
       return;
     }
 
@@ -484,6 +494,9 @@ export class SessionDO implements DurableObject {
     }
     this.mobilesBySession.get(sessionToken)!.add(ws);
 
+    // Check if desktop is connected
+    const desktopWs = this.desktopBySession.get(sessionToken);
+
     if (desktopWs) {
       this.sendMobileConnectionUpdate(desktopWs);
     }
@@ -495,11 +508,11 @@ export class SessionDO implements DurableObject {
         id: message.id,
         timestamp: Date.now(),
         success: true,
+        desktopConnected: !!desktopWs,
       })
     );
 
     // If desktop is connected, request status update
-    const desktopWs = this.desktopBySession.get(sessionToken);
     if (desktopWs) {
       desktopWs.send(
         JSON.stringify({

@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import {
   View,
   Text,
@@ -71,12 +71,16 @@ export default function GitTabPage() {
   } = useGitStore();
 
   const [activeTab, setActiveTab] = useState("changes");
-  const [commitMessage, setCommitMessage] = useState("");
+  const [commitSubject, setCommitSubject] = useState("");
+  const [commitDescription, setCommitDescription] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [showBranchPicker, setShowBranchPicker] = useState(false);
   const [newBranchName, setNewBranchName] = useState("");
   const [expandedFiles, setExpandedFiles] = useState<Set<string>>(new Set());
+
+  const lastDiffsHash = useRef<string>("");
+  const hasGeneratedInitialMessage = useRef(false);
 
   const isConnected = status === "connected";
   const projectPath = activeProject?.path || "";
@@ -106,35 +110,97 @@ export default function GitTabPage() {
   }, [projectPath, isConnected]);
 
   const handleGenerateMessage = async () => {
+    console.log("[Git] handleGenerateMessage called, diffs:", diffs.length);
+
+    // Use diffs if available, otherwise create fallback
     if (diffs.length === 0) {
-      Alert.alert("No Changes", "Stage some changes first to generate a message");
+      // Fallback: just list the files
+      const allFiles = [...(gitStatus?.staged || []), ...(gitStatus?.unstaged || []), ...(gitStatus?.untracked || [])];
+      console.log("[Git] No diffs, allFiles:", allFiles.length);
+      if (allFiles.length > 0) {
+        const fileNames = allFiles.map(f => f.split('/').pop()).slice(0, 3).join(', ');
+        setCommitSubject(`Update ${fileNames}${allFiles.length > 3 ? '...' : ''}`);
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      } else {
+        Alert.alert("No Changes", "No changes to generate a message for");
+      }
       return;
     }
 
     setIsGenerating(true);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    console.log("[Git] Calling generateCommitMessage with", diffs.length, "diffs");
     try {
-      const message = await generateCommitMessage(diffs);
-      setCommitMessage(message);
+      const { subject, description } = await generateCommitMessage(diffs);
+      console.log("[Git] Got response:", subject);
+      setCommitSubject(subject);
+      setCommitDescription(description);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (err) {
-      Alert.alert(
-        "Error",
-        err instanceof Error ? err.message : "Failed to generate message"
-      );
+      console.error("[Git] Failed to generate commit message:", err);
+      // Fallback to simple message
+      const fileNames = diffs.map(d => d.path.split('/').pop()).join(', ');
+      setCommitSubject(`Update ${fileNames}`);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
     } finally {
       setIsGenerating(false);
     }
   };
 
+  // Auto-generate commit message when diffs change
+  useEffect(() => {
+    const runAutoGenerate = async () => {
+      const diffsHash = JSON.stringify(diffs.map(d => d.path + d.status).sort());
+
+      if (diffs.length === 0) {
+        // Only clear if there are truly no changes at all
+        const hasAnyChanges = (gitStatus?.staged?.length || 0) + (gitStatus?.unstaged?.length || 0) + (gitStatus?.untracked?.length || 0) > 0;
+        if (!hasAnyChanges) {
+          setCommitSubject("");
+          setCommitDescription("");
+          hasGeneratedInitialMessage.current = false;
+        }
+        lastDiffsHash.current = "";
+      } else if (diffsHash !== lastDiffsHash.current) {
+        const previousHash = lastDiffsHash.current;
+        lastDiffsHash.current = diffsHash;
+
+        // Auto-generate on first load
+        if (!previousHash || !hasGeneratedInitialMessage.current) {
+          hasGeneratedInitialMessage.current = true;
+          setIsGenerating(true);
+          try {
+            const { subject, description } = await generateCommitMessage(diffs);
+            setCommitSubject(subject);
+            setCommitDescription(description);
+          } catch (err) {
+            console.error("Failed to generate commit message:", err);
+            const fileNames = diffs.map(d => d.path.split('/').pop()).join(', ');
+            setCommitSubject(`Update ${fileNames}`);
+          } finally {
+            setIsGenerating(false);
+          }
+        }
+      }
+    };
+
+    runAutoGenerate();
+  }, [diffs, gitStatus, generateCommitMessage]);
+
   const handleCommit = async () => {
-    if (!commitMessage?.trim()) {
+    if (!commitSubject?.trim()) {
       Alert.alert("Error", "Please enter a commit message");
       return;
     }
 
+    const fullMessage = commitDescription.trim()
+      ? `${commitSubject}\n\n${commitDescription}`
+      : commitSubject;
+
     try {
-      await commit(projectPath, commitMessage);
-      setCommitMessage("");
+      await commit(projectPath, fullMessage);
+      setCommitSubject("");
+      setCommitDescription("");
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       Alert.alert("Success", "Changes committed successfully");
     } catch (err) {
@@ -297,6 +363,7 @@ export default function GitTabPage() {
   const stagedFiles = gitStatus?.staged || [];
   const unstagedFiles = gitStatus?.unstaged || [];
   const untrackedFiles = gitStatus?.untracked || [];
+  const currentBranch = branches.find((b) => b.isHead);
 
   return (
     <ScrollView
@@ -583,7 +650,7 @@ export default function GitTabPage() {
                           !isLast ? "border-b border-border" : ""
                         }`}
                         onPress={() => toggleFileExpanded(file)}
-                        onLongPress={() => showFileContextMenu(file, false)}
+                        onLongPress={() => showFileContextMenu(file, true)}
                       >
                         <ChevronRight
                           size={16}
@@ -634,29 +701,38 @@ export default function GitTabPage() {
                   onPress={handleGenerateMessage}
                   disabled={isGenerating}
                 >
-                  <Sparkles size={12} color={colors.ai} />
-                  <Text className="text-xs text-muted-foreground">AI</Text>
+                  <Sparkles size={12} color={isGenerating ? colors.mutedForeground : colors.ai} />
+                  <Text className="text-xs text-muted-foreground">
+                    {isGenerating ? "Generating..." : "AI"}
+                  </Text>
                 </Pressable>
               </View>
               <Card>
-                <CardContent className="p-3">
+                <CardContent className="p-3 gap-3">
                   <TextInput
-                    className="min-h-20 w-full rounded-md border border-input bg-background p-3 text-foreground text-sm"
-                    placeholder="Commit message..."
+                    className="w-full rounded-md border border-input bg-background px-3 py-2 text-foreground text-sm"
+                    placeholder="Summary (required)"
                     placeholderTextColor={colors.mutedForeground}
-                    value={commitMessage}
-                    onChangeText={setCommitMessage}
+                    value={commitSubject}
+                    onChangeText={setCommitSubject}
+                    editable={!isGenerating}
+                  />
+                  <TextInput
+                    className="min-h-16 w-full rounded-md border border-input bg-background p-3 text-foreground text-sm"
+                    placeholder="Description (optional)"
+                    placeholderTextColor={colors.mutedForeground}
+                    value={commitDescription}
+                    onChangeText={setCommitDescription}
                     multiline
                     textAlignVertical="top"
+                    editable={!isGenerating}
                   />
                   <Button
-                    className="mt-3"
                     onPress={handleCommit}
                     loading={loading}
-                    disabled={!commitMessage?.trim() || stagedFiles.length === 0}
-                    icon={<GitCommit size={16} color="#000" />}
+                    disabled={!commitSubject?.trim() || diffs.length === 0}
                   >
-                    Commit Changes
+                    {loading ? "Committing..." : `Commit to ${currentBranch?.name || "main"}`}
                   </Button>
                 </CardContent>
               </Card>

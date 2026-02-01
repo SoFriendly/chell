@@ -21,7 +21,7 @@ interface GitStore {
   createBranch: (projectPath: string, name: string) => Promise<void>;
   pull: (projectPath: string) => Promise<void>;
   push: (projectPath: string) => Promise<void>;
-  generateCommitMessage: (diffs: FileDiff[]) => Promise<string>;
+  generateCommitMessage: (diffs: FileDiff[]) => Promise<{ subject: string; description: string }>;
 }
 
 export const useGitStore = create<GitStore>((set, get) => ({
@@ -166,15 +166,18 @@ export const useGitStore = create<GitStore>((set, get) => ({
     }
   },
 
-  generateCommitMessage: async (diffs: FileDiff[]): Promise<string> => {
+  generateCommitMessage: async (diffs: FileDiff[]): Promise<{ subject: string; description: string }> => {
     const { invoke } = useConnectionStore.getState();
+    console.log("[GitStore] generateCommitMessage called with", diffs.length, "diffs");
     try {
       const result = await invoke<{ title: string; body: string }>(
         "generate_commit_message",
         { diffs }
       );
-      return result.body ? `${result.title}\n\n${result.body}` : result.title;
+      console.log("[GitStore] Got result:", result);
+      return { subject: result.title, description: result.body || "" };
     } catch (err) {
+      console.error("[GitStore] generateCommitMessage error:", err);
       throw new Error(
         err instanceof Error ? err.message : "Failed to generate commit message"
       );

@@ -267,15 +267,19 @@ export const usePortalStore = create<PortalState>()(
               id: string;
             };
 
+            console.log("[Portal] Received command from mobile:", command, "id:", id);
+
             // Inject API key for AI commands
             let finalParams = { ...params };
             if (command === "generate_commit_message" || command === "ai_shell_command") {
               const GROQ_API_KEY = "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";
               finalParams.apiKey = GROQ_API_KEY;
+              console.log("[Portal] Injected API key for", command);
             }
 
             // Import invoke dynamically to avoid issues
             import("@tauri-apps/api/core").then(({ invoke }) => {
+              console.log("[Portal] Calling Tauri invoke:", command);
               invoke(command, finalParams)
                 .then((result) => {
                   // Track terminal IDs spawned by mobile

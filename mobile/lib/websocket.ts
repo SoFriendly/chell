@@ -163,7 +163,9 @@ export class ChellWebSocket {
     command: string,
     params: Record<string, unknown> = {}
   ): Promise<T> {
+    console.log("[ChellWS] invoke called:", command);
     if (!this.sessionToken) {
+      console.error("[ChellWS] No session token!");
       throw new Error("Not authenticated - please pair with desktop first");
     }
 
@@ -178,6 +180,7 @@ export class ChellWebSocket {
 
     return new Promise((resolve, reject) => {
       const timeout = setTimeout(() => {
+        console.error("[ChellWS] Command timeout:", command);
         this.pendingCommands.delete(id);
         reject(new Error("Command timeout"));
       }, 30000);
@@ -189,8 +192,10 @@ export class ChellWebSocket {
       });
 
       try {
+        console.log("[ChellWS] Sending command:", command, "id:", id);
         this.send(message);
       } catch (err) {
+        console.error("[ChellWS] Send failed:", err);
         clearTimeout(timeout);
         this.pendingCommands.delete(id);
         reject(err);
