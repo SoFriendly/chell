@@ -97,8 +97,9 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
     set((state) => {
       const newOutputBuffer = new Map(state.outputBuffer);
       const existing = newOutputBuffer.get(terminalId) || [];
-      // Strip ANSI escape codes and keep last 1000 lines
-      const cleanedData = stripAnsi(data);
+      const terminal = state.terminals.find((t) => t.id === terminalId);
+      // Keep ANSI for assistant terminals so xterm can render it
+      const cleanedData = terminal?.type === "assistant" ? data : stripAnsi(data);
       const newOutput = [...existing, cleanedData].slice(-1000);
       newOutputBuffer.set(terminalId, newOutput);
       return { outputBuffer: newOutputBuffer };

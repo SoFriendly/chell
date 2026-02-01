@@ -24,7 +24,15 @@ export default function TabsLayout() {
         },
         headerLeft: () => (
           <Pressable
-            onPress={() => router.dismissAll()}
+            onPress={() => {
+              // Clear active project and go back to project list
+              useConnectionStore.getState().setActiveProject(null);
+              if (router.canGoBack()) {
+                router.back();
+              } else {
+                router.replace("/");
+              }
+            }}
             className="p-2 ml-2"
           >
             <Home size={22} color={colors.foreground} />

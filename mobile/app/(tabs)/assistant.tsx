@@ -1,13 +1,12 @@
-import { useEffect, useState, useRef, useCallback } from "react";
+import { useEffect, useState, useCallback } from "react";
 import {
   View,
   Text,
   ScrollView,
-  TextInput,
   KeyboardAvoidingView,
-  Platform,
   Pressable,
   Alert,
+  Platform,
 } from "react-native";
 import { useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
@@ -16,7 +15,6 @@ import {
   Plus,
   X,
   Terminal as TerminalIcon,
-  Send,
   WifiOff,
   ChevronDown,
   Check,
@@ -25,6 +23,7 @@ import { useConnectionStore } from "~/stores/connectionStore";
 import { useTerminalStore } from "~/stores/terminalStore";
 import { useTheme } from "~/components/ThemeProvider";
 import { Button } from "~/components/ui";
+import AssistantTerminalWebView from "~/components/AssistantTerminalWebView";
 
 interface AssistantTab {
   id: string;
@@ -59,6 +58,7 @@ export default function AssistantTabPage() {
     killTerminal,
     sendInput,
     getOutput,
+    resizeTerminal,
   } = useTerminalStore();
 
   const [tabs, setTabs] = useState<AssistantTab[]>([]);
@@ -66,9 +66,7 @@ export default function AssistantTabPage() {
   const [showDropdown, setShowDropdown] = useState(false);
   const [installedCommands, setInstalledCommands] = useState<string[]>([]);
   const [isCheckingInstalled, setIsCheckingInstalled] = useState(true);
-  const [input, setInput] = useState("");
   const [hasAutoLaunched, setHasAutoLaunched] = useState(false);
-  const scrollViewRef = useRef<ScrollView>(null);
 
   const isConnected = status === "connected";
   const projectPath = activeProject?.path || "";
@@ -151,10 +149,6 @@ export default function AssistantTabPage() {
     }
   }, [projectPath, isConnected, hasAutoLaunched, installedCommands]);
 
-  // Auto-scroll to bottom when output changes
-  useEffect(() => {
-    scrollViewRef.current?.scrollToEnd({ animated: true });
-  }, [output]);
 
   const handleAddTab = async (option: AssistantOption) => {
     if (!projectPath) return;
@@ -201,24 +195,21 @@ export default function AssistantTabPage() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
   };
 
-  const handleSend = useCallback(() => {
-    console.log("[Assistant] handleSend called, activeTab:", activeTab?.id, "terminalId:", activeTab?.terminalId, "input:", input);
-    if (!activeTab?.terminalId) {
-      console.log("[Assistant] handleSend aborted - no terminalId");
-      return;
-    }
-    if (!input.trim()) {
-      console.log("[Assistant] handleSend aborted - empty input");
-      return;
-    }
-    // Use bracketed paste mode escape sequences so TUIs recognize this as input
-    // \x1b[200~ = start paste, \x1b[201~ = end paste, \r = Enter
-    const bracketedInput = `\x1b[200~${input}\x1b[201~\r`;
-    console.log("[Assistant] Sending input to terminal:", activeTab.terminalId);
-    sendInput(activeTab.terminalId, bracketedInput);
-    setInput("");
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-  }, [activeTab, input, sendInput]);
+  const handleTerminalInput = useCallback(
+    (data: string) => {
+      if (!activeTab?.terminalId) return;
+      sendInput(activeTab.terminalId, data);
+    },
+    [activeTab, sendInput]
+  );
+
+  const handleTerminalResize = useCallback(
+    (cols: number, rows: number) => {
+      if (!activeTab?.terminalId) return;
+      resizeTerminal(activeTab.terminalId, cols, rows).catch(() => {});
+    },
+    [activeTab, resizeTerminal]
+  );
 
   const handleCtrlC = useCallback(() => {
     if (!activeTab?.terminalId) return;
@@ -364,35 +355,22 @@ export default function AssistantTabPage() {
         </View>
       ) : (
         <>
-          <ScrollView
-            ref={scrollViewRef}
-            className="flex-1"
-            style={{ backgroundColor: "#000" }}
-            contentContainerStyle={{ padding: 8, paddingBottom: 16 }}
-          >
-            {output.length === 0 ? (
-              <View className="items-center justify-center py-8">
-                <Bot size={32} color="#333" />
-                <Text style={{ color: "#666" }} className="mt-4">
-                  {activeTab?.name} starting...
-                </Text>
-              </View>
-            ) : (
-              output.map((line, index) => (
-                <Text
-                  key={index}
-                  style={{
-                    color: "#4ade80",
-                    fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
-                  }}
-                  className="text-sm leading-5"
-                  selectable
-                >
-                  {line}
-                </Text>
-              ))
-            )}
-          </ScrollView>
+          {activeTab?.terminalId ? (
+            <AssistantTerminalWebView
+              key={activeTab.terminalId}
+              terminalId={activeTab.terminalId}
+              output={output}
+              onInput={handleTerminalInput}
+              onResize={handleTerminalResize}
+            />
+          ) : (
+            <View className="flex-1 items-center justify-center">
+              <Bot size={32} color="#333" />
+              <Text style={{ color: "#666" }} className="mt-4">
+                {activeTab?.name} starting...
+              </Text>
+            </View>
+          )}
 
           {/* Quick Actions */}
           <View className="flex-row items-center border-t border-border bg-card px-2 py-1">
@@ -412,39 +390,9 @@ export default function AssistantTabPage() {
 
           {/* Input */}
           <View className="flex-row items-center border-t border-border bg-card p-2">
-            <Text
-              style={{
-                color: "#60a5fa",
-                fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
-              }}
-              className="mr-2"
-            >
-              &gt;
+            <Text className="text-muted-foreground text-xs">
+              Tap the terminal to type
             </Text>
-            <TextInput
-              className="flex-1 h-10 text-foreground"
-              style={{ fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace" }}
-              value={input}
-              onChangeText={setInput}
-              placeholder="Enter message..."
-              placeholderTextColor={colors.mutedForeground}
-              autoCapitalize="none"
-              autoCorrect={false}
-              returnKeyType="send"
-              onSubmitEditing={handleSend}
-              blurOnSubmit={false}
-            />
-            <Button
-              variant="ghost"
-              size="icon"
-              onPress={handleSend}
-              disabled={!input.trim()}
-            >
-              <Send
-                size={18}
-                color={input.trim() ? "#60a5fa" : colors.mutedForeground}
-              />
-            </Button>
           </View>
         </>
       )}
