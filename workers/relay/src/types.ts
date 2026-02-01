@@ -12,6 +12,7 @@ export type MessageType =
   | "status_update"
   | "device_list"
   | "portal_list"
+  | "mobile_connection_update"
   | "error"
   | "ping"
   | "pong";
@@ -120,6 +121,12 @@ export interface DeviceListMessage extends BaseMessage {
   devices: LinkedDevice[];
 }
 
+// Mobile connection update for desktop
+export interface MobileConnectionUpdateMessage extends BaseMessage {
+  type: "mobile_connection_update";
+  activeMobiles: number;
+}
+
 // Portal list for mobile
 export interface PortalListMessage extends BaseMessage {
   type: "portal_list";
@@ -143,6 +150,7 @@ export type WSMessage =
   | TerminalInputMessage
   | StatusUpdateMessage
   | DeviceListMessage
+  | MobileConnectionUpdateMessage
   | PortalListMessage
   | ErrorMessage;
 

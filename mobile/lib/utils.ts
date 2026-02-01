@@ -34,15 +34,40 @@ export function truncate(str: string, maxLength: number): string {
 
 /**
  * Strip ANSI escape codes from terminal output
- * Handles colors, cursor movement, and other terminal control sequences
+ * Handles colors, cursor movement, OSC sequences, and other terminal control sequences
  */
 export function stripAnsi(str: string): string {
-  // Regex matches all ANSI escape sequences:
-  // - \x1B[\[\]()#;?]*(?:[0-9]{1,4}(?:;[0-9]{0,4})*)?[0-9A-ORZcf-nqry=><]
-  // - Also handles OSC sequences (title changes, etc.)
-  return str.replace(
+  // First pass: Remove OSC sequences (Operating System Commands)
+  // Format: ESC ] <code> ; <data> BEL  or  ESC ] <code> ; <data> ESC \
+  // These are used for terminal title, shell integration, etc.
+  let result = str.replace(
     // eslint-disable-next-line no-control-regex
-    /\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~]|\].*?(?:\x07|\x1B\\))/g,
+    /\x1B\][^\x07\x1B]*(?:\x07|\x1B\\)?/g,
     ""
   );
+
+  // Second pass: Remove CSI sequences (Control Sequence Introducer)
+  // Format: ESC [ <params> <command>
+  result = result.replace(
+    // eslint-disable-next-line no-control-regex
+    /\x1B\[[0-?]*[ -/]*[@-~]/g,
+    ""
+  );
+
+  // Third pass: Remove other escape sequences
+  // Single character escapes like ESC c (reset), ESC 7/8 (save/restore cursor)
+  result = result.replace(
+    // eslint-disable-next-line no-control-regex
+    /\x1B[@-Z\\-_]/g,
+    ""
+  );
+
+  // Fourth pass: Remove any remaining control characters except newline/tab
+  result = result.replace(
+    // eslint-disable-next-line no-control-regex
+    /[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g,
+    ""
+  );
+
+  return result;
 }

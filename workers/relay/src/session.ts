@@ -251,6 +251,8 @@ export class SessionDO implements DurableObject {
     this.mobilesBySession.get(sessionToken)!.add(ws);
     this.desktopBySession.set(sessionToken, desktopWs);
 
+    this.sendMobileConnectionUpdate(desktopWs);
+
     // Send success to mobile
     ws.send(
       JSON.stringify({
@@ -310,6 +312,10 @@ export class SessionDO implements DurableObject {
               mobileWs.close(1000, "Unpaired");
             }
           }
+        }
+
+        if (desktopWs) {
+          this.sendMobileConnectionUpdate(desktopWs);
         }
 
         break;
@@ -478,6 +484,10 @@ export class SessionDO implements DurableObject {
     }
     this.mobilesBySession.get(sessionToken)!.add(ws);
 
+    if (desktopWs) {
+      this.sendMobileConnectionUpdate(desktopWs);
+    }
+
     // Send confirmation
     ws.send(
       JSON.stringify({
@@ -541,6 +551,10 @@ export class SessionDO implements DurableObject {
         const mobiles = this.mobilesBySession.get(state.sessionToken);
         if (mobiles) {
           mobiles.delete(ws);
+          const desktopWs = this.desktopBySession.get(state.sessionToken);
+          if (desktopWs) {
+            this.sendMobileConnectionUpdate(desktopWs);
+          }
         }
       }
     }
@@ -555,6 +569,24 @@ export class SessionDO implements DurableObject {
         id: generateMessageId(),
         timestamp: Date.now(),
         devices: session.linkedMobiles,
+      })
+    );
+  }
+
+  private sendMobileConnectionUpdate(desktopWs: WebSocket) {
+    let activeMobiles = 0;
+    for (const [token, desktop] of this.desktopBySession) {
+      if (desktop === desktopWs) {
+        activeMobiles += this.mobilesBySession.get(token)?.size ?? 0;
+      }
+    }
+
+    desktopWs.send(
+      JSON.stringify({
+        type: "mobile_connection_update",
+        id: generateMessageId(),
+        timestamp: Date.now(),
+        activeMobiles,
       })
     );
   }

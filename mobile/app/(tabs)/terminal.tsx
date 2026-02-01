@@ -78,6 +78,7 @@ export default function TerminalTabPage() {
   const [generatedCommand, setGeneratedCommand] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [projectContext, setProjectContext] = useState<ProjectContext | null>(null);
+  const [hasAutoLaunched, setHasAutoLaunched] = useState(false);
 
   const isConnected = status === "connected";
   const projectPath = activeProject?.path || "";
@@ -88,12 +89,13 @@ export default function TerminalTabPage() {
   const activeTerminal = shellTerminals.find((t) => t.id === activeTerminalId);
   const output = activeTerminalId ? getOutput(activeTerminalId) : [];
 
-  // Spawn initial terminal if none exists
+  // Auto-launch default shell terminal when first opening
   useEffect(() => {
-    if (projectPath && isConnected && terminals.length === 0) {
+    if (projectPath && isConnected && !hasAutoLaunched && shellTerminals.length === 0) {
       spawnTerminal(projectPath);
+      setHasAutoLaunched(true);
     }
-  }, [projectPath, isConnected]);
+  }, [projectPath, isConnected, hasAutoLaunched, shellTerminals.length]);
 
   // Auto-scroll to bottom when output changes
   useEffect(() => {
