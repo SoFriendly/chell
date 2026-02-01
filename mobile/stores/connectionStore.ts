@@ -403,6 +403,13 @@ export const useConnectionStore = create<ConnectionStore>()(
       setGitStatus: (status: GitStatus | null) => set({ gitStatus: status }),
 
       selectProject: (projectId: string) => {
+        // Optimistically set the active project locally
+        const project = get().availableProjects.find((p) => p.id === projectId);
+        if (project) {
+          set({ activeProject: { ...project, lastOpened: "" } });
+        }
+
+        // Also notify the desktop to switch its active tab
         const ws = getWebSocket();
         ws.send({
           type: "select_project",

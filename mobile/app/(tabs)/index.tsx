@@ -125,7 +125,7 @@ export default function GitTabPage() {
   };
 
   const handleCommit = async () => {
-    if (!commitMessage.trim()) {
+    if (!commitMessage?.trim()) {
       Alert.alert("Error", "Please enter a commit message");
       return;
     }
@@ -617,7 +617,7 @@ export default function GitTabPage() {
                 <Button
                   onPress={handleCommit}
                   loading={loading}
-                  disabled={!commitMessage.trim() || stagedFiles.length === 0}
+                  disabled={!commitMessage?.trim() || stagedFiles.length === 0}
                   icon={<GitCommit size={16} color="#000" />}
                 >
                   Commit Changes

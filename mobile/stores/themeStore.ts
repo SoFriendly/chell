@@ -38,13 +38,20 @@ function hslToHex(h: number, s: number, l: number): string {
 }
 
 // Parse CSS HSL value like "0 0% 7%" to hex
-function parseHslToHex(hslString: string): string {
+function parseHslToHex(hslString: string | undefined): string {
+  if (!hslString || typeof hslString !== "string") return "#000000";
   const parts = hslString.trim().split(/\s+/);
   if (parts.length !== 3) return "#000000";
   const h = parseFloat(parts[0]);
   const s = parseFloat(parts[1]);
   const l = parseFloat(parts[2]);
   return hslToHex(h, s, l);
+}
+
+// Safely get a color value, handling undefined
+function safeColor(value: string | undefined, fallback: string): string {
+  if (!value || typeof value !== "string") return fallback;
+  return value.startsWith("#") ? value : parseHslToHex(value);
 }
 
 // Theme color values for programmatic use
@@ -168,26 +175,27 @@ export const useThemeStore = create<ThemeStore>()(
       getColors: (): ThemeColors => {
         const { theme, customTheme } = get();
 
-        if (theme === "custom" && customTheme) {
-          // Convert HSL strings to hex if needed
+        if (theme === "custom" && customTheme?.colors) {
+          // Convert HSL strings to hex if needed, with fallbacks for missing values
           const colors = customTheme.colors;
+          const base = THEME_COLORS[customTheme.baseTheme] || THEME_COLORS.dark;
           return {
-            background: colors.background.startsWith("#") ? colors.background : parseHslToHex(colors.background),
-            foreground: colors.foreground.startsWith("#") ? colors.foreground : parseHslToHex(colors.foreground),
-            card: colors.card.startsWith("#") ? colors.card : parseHslToHex(colors.card),
-            cardForeground: colors.cardForeground.startsWith("#") ? colors.cardForeground : parseHslToHex(colors.cardForeground),
-            primary: colors.primary.startsWith("#") ? colors.primary : parseHslToHex(colors.primary),
-            primaryForeground: colors.primaryForeground.startsWith("#") ? colors.primaryForeground : parseHslToHex(colors.primaryForeground),
-            secondary: colors.secondary.startsWith("#") ? colors.secondary : parseHslToHex(colors.secondary),
-            secondaryForeground: colors.secondaryForeground.startsWith("#") ? colors.secondaryForeground : parseHslToHex(colors.secondaryForeground),
-            muted: colors.muted.startsWith("#") ? colors.muted : parseHslToHex(colors.muted),
-            mutedForeground: colors.mutedForeground.startsWith("#") ? colors.mutedForeground : parseHslToHex(colors.mutedForeground),
-            accent: colors.accent.startsWith("#") ? colors.accent : parseHslToHex(colors.accent),
-            accentForeground: colors.accentForeground.startsWith("#") ? colors.accentForeground : parseHslToHex(colors.accentForeground),
-            border: colors.border.startsWith("#") ? colors.border : parseHslToHex(colors.border),
-            input: colors.input.startsWith("#") ? colors.input : parseHslToHex(colors.input),
-            destructive: colors.destructive.startsWith("#") ? colors.destructive : parseHslToHex(colors.destructive),
-            destructiveForeground: colors.destructiveForeground.startsWith("#") ? colors.destructiveForeground : parseHslToHex(colors.destructiveForeground),
+            background: safeColor(colors.background, base.background),
+            foreground: safeColor(colors.foreground, base.foreground),
+            card: safeColor(colors.card, base.card),
+            cardForeground: safeColor(colors.cardForeground, base.cardForeground),
+            primary: safeColor(colors.primary, base.primary),
+            primaryForeground: safeColor(colors.primaryForeground, base.primaryForeground),
+            secondary: safeColor(colors.secondary, base.secondary),
+            secondaryForeground: safeColor(colors.secondaryForeground, base.secondaryForeground),
+            muted: safeColor(colors.muted, base.muted),
+            mutedForeground: safeColor(colors.mutedForeground, base.mutedForeground),
+            accent: safeColor(colors.accent, base.accent),
+            accentForeground: safeColor(colors.accentForeground, base.accentForeground),
+            border: safeColor(colors.border, base.border),
+            input: safeColor(colors.input, base.input),
+            destructive: safeColor(colors.destructive, base.destructive),
+            destructiveForeground: safeColor(colors.destructiveForeground, base.destructiveForeground),
           };
         }
 
