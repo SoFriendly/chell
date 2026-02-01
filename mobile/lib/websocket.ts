@@ -35,7 +35,9 @@ export class ChellWebSocket {
   connect(): Promise<void> {
     return new Promise((resolve, reject) => {
       try {
-        this.ws = new WebSocket(this.url);
+        // Append /ws path if not already present
+        const wsUrl = this.url.endsWith('/ws') ? this.url : `${this.url}/ws`;
+        this.ws = new WebSocket(wsUrl);
 
         this.ws.onopen = () => {
           console.log("[ChellWS] Connected to relay server");
