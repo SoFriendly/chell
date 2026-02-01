@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import type { LinkedDevice, PortalSession } from "@/types";
+import type { LinkedDevice } from "@/types";
 
 // Word list for passphrase generation
 const WORD_LIST = [
@@ -118,7 +118,7 @@ export const usePortalStore = create<PortalState>()(
       },
 
       connect: async () => {
-        const { relayUrl, ws: existingWs, deviceId, deviceName, pairingCode, pairingPassphrase } = get();
+        const { relayUrl, ws: existingWs, deviceName, pairingCode, pairingPassphrase } = get();
 
         if (existingWs) {
           existingWs.close();
@@ -372,21 +372,21 @@ export const usePortalStore = create<PortalState>()(
 
 // Terminal output forwarding - hook into terminal events
 export function setupTerminalForwarding() {
-  const { listen } = require("@tauri-apps/api/event");
+  import("@tauri-apps/api/event").then(({ listen }) => {
+    // Listen for terminal output events and forward to mobile
+    listen("terminal-output", (event: { payload: { terminalId: string; data: number[] } }) => {
+      const { isConnected, sendMessage } = usePortalStore.getState();
+      if (!isConnected) return;
 
-  // Listen for terminal output events and forward to mobile
-  listen("terminal-output", (event: { payload: { terminalId: string; data: number[] } }) => {
-    const { isConnected, sendMessage } = usePortalStore.getState();
-    if (!isConnected) return;
+      const { terminalId, data } = event.payload;
+      const text = new TextDecoder().decode(new Uint8Array(data));
 
-    const { terminalId, data } = event.payload;
-    const text = new TextDecoder().decode(new Uint8Array(data));
-
-    sendMessage({
-      type: "terminal_output",
-      id: crypto.randomUUID(),
-      terminalId,
-      data: text,
+      sendMessage({
+        type: "terminal_output",
+        id: crypto.randomUUID(),
+        terminalId,
+        data: text,
+      });
     });
   });
 }

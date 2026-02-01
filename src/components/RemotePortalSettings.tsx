@@ -1,7 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import {
   Smartphone,
-  QrCode,
   Wifi,
   WifiOff,
   RefreshCw,
