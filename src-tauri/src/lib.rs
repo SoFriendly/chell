@@ -1281,9 +1281,11 @@ pub fn run() {
             });
 
             // Create system tray icon
+            let new_window_item = MenuItemBuilder::with_id("new_window", "New Window").build(app)?;
             let show_item = MenuItemBuilder::with_id("show", "Show Chell").build(app)?;
             let quit_item = MenuItemBuilder::with_id("quit", "Quit").build(app)?;
             let tray_menu = MenuBuilder::new(app)
+                .item(&new_window_item)
                 .item(&show_item)
                 .separator()
                 .item(&quit_item)
@@ -1295,7 +1297,7 @@ pub fn run() {
                 .tooltip("Chell - Running in background")
                 .on_menu_event(|app, event| {
                     match event.id().as_ref() {
-                        "show" => {
+                        "new_window" | "show" => {
                             if let Some(window) = app.get_webview_window("main") {
                                 let _ = window.show();
                                 let _ = window.set_focus();
@@ -1382,6 +1384,17 @@ pub fn run() {
                 api.prevent_close();
             }
         })
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|app_handle, event| {
+            // Handle dock icon click on macOS when no windows are visible
+            if let tauri::RunEvent::Reopen { has_visible_windows, .. } = event {
+                if !has_visible_windows {
+                    if let Some(window) = app_handle.get_webview_window("main") {
+                        let _ = window.show();
+                        let _ = window.set_focus();
+                    }
+                }
+            }
+        });
 }
