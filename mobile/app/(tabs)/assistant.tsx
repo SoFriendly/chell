@@ -8,6 +8,7 @@ import {
   Alert,
   Platform,
   TextInput,
+  Keyboard,
 } from "react-native";
 import { useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
@@ -18,8 +19,10 @@ import {
   Terminal as TerminalIcon,
   WifiOff,
   ChevronDown,
+  ChevronUp,
   Check,
   Send,
+  Keyboard as KeyboardIcon,
 } from "lucide-react-native";
 import { useConnectionStore } from "~/stores/connectionStore";
 import { useTerminalStore } from "~/stores/terminalStore";
@@ -72,7 +75,24 @@ export default function AssistantTabPage() {
 
   // Input state
   const [inputText, setInputText] = useState("");
+  const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
   const inputRef = useRef<TextInput>(null);
+
+  // Track keyboard visibility
+  useEffect(() => {
+    const showSub = Keyboard.addListener(
+      Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow",
+      () => setIsKeyboardVisible(true)
+    );
+    const hideSub = Keyboard.addListener(
+      Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide",
+      () => setIsKeyboardVisible(false)
+    );
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
 
   const isConnected = status === "connected";
   const projectPath = activeProject?.path || "";
@@ -201,14 +221,6 @@ export default function AssistantTabPage() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
   };
 
-  const handleTerminalInput = useCallback(
-    (data: string) => {
-      if (!activeTab?.terminalId) return;
-      sendInput(activeTab.terminalId, data);
-    },
-    [activeTab, sendInput]
-  );
-
   const handleTerminalResize = useCallback(
     (cols: number, rows: number) => {
       if (!activeTab?.terminalId) return;
@@ -217,20 +229,39 @@ export default function AssistantTabPage() {
     [activeTab, resizeTerminal]
   );
 
+  const handleEsc = useCallback(() => {
+    if (!activeTab?.terminalId) return;
+    sendInput(activeTab.terminalId, "\x1b");
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  }, [activeTab, sendInput]);
+
   const handleCtrlC = useCallback(() => {
     if (!activeTab?.terminalId) return;
     sendInput(activeTab.terminalId, "\x03");
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
   }, [activeTab, sendInput]);
 
+  const handleArrowUp = useCallback(() => {
+    if (!activeTab?.terminalId) return;
+    sendInput(activeTab.terminalId, "\x1b[A");
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  }, [activeTab, sendInput]);
+
+  const handleArrowDown = useCallback(() => {
+    if (!activeTab?.terminalId) return;
+    sendInput(activeTab.terminalId, "\x1b[B");
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  }, [activeTab, sendInput]);
+
   // Handle submit - send text then Enter separately
   const handleSubmit = useCallback(() => {
-    if (!activeTab?.terminalId || !inputText.trim()) return;
+    const terminalId = activeTab?.terminalId;
+    if (!terminalId || !inputText.trim()) return;
     // Send the text first, then Enter as a separate input
-    sendInput(activeTab.terminalId, inputText);
+    sendInput(terminalId, inputText);
     // Small delay then send Enter
     setTimeout(() => {
-      sendInput(activeTab.terminalId, "\r");
+      sendInput(terminalId, "\r");
     }, 50);
     setInputText("");
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -384,7 +415,6 @@ export default function AssistantTabPage() {
               key={activeTab.terminalId}
               terminalId={activeTab.terminalId}
               output={output}
-              onInput={handleTerminalInput}
               onResize={handleTerminalResize}
             />
           ) : (
@@ -404,12 +434,52 @@ export default function AssistantTabPage() {
               onPress={handleCtrlC}
               className="mr-1"
             >
-              <Text className="text-destructive text-xs font-mono">^C</Text>
+              <Text style={{ color: "#f87171" }} className="text-sm font-bold font-mono">^C</Text>
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onPress={handleEsc}
+              className="mr-1"
+            >
+              <Text style={{ color: "#60a5fa" }} className="text-sm font-bold font-mono">ESC</Text>
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onPress={handleArrowUp}
+              className="mr-1"
+            >
+              <Text style={{ color: "#60a5fa" }} className="text-base font-bold">▲</Text>
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onPress={handleArrowDown}
+              className="mr-1"
+            >
+              <Text style={{ color: "#60a5fa" }} className="text-base font-bold">▼</Text>
             </Button>
             <View className="flex-1" />
-            <Text className="text-muted-foreground text-xs">
-              {tabs.length} assistant{tabs.length !== 1 ? "s" : ""}
-            </Text>
+            <Button
+              variant="ghost"
+              size="sm"
+              onPress={() => {
+                if (isKeyboardVisible) {
+                  Keyboard.dismiss();
+                } else {
+                  inputRef.current?.focus();
+                }
+              }}
+              className="flex-row items-center"
+            >
+              <KeyboardIcon size={18} color="#60a5fa" />
+              {isKeyboardVisible ? (
+                <ChevronDown size={14} color="#60a5fa" style={{ marginLeft: 4 }} />
+              ) : (
+                <ChevronUp size={14} color="#60a5fa" style={{ marginLeft: 4 }} />
+              )}
+            </Button>
           </View>
 
           {/* Input */}
