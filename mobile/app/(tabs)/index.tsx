@@ -10,13 +10,13 @@ import {
 } from "react-native";
 import { useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
+import * as Clipboard from "expo-clipboard";
 import {
   GitBranch,
   GitCommit,
   Plus,
   Minus,
   FileText,
-  RotateCcw,
   ArrowUp,
   ArrowDown,
   Sparkles,
@@ -41,6 +41,8 @@ import {
   TabsTrigger,
   TabsContent,
   Separator,
+  SectionHeader,
+  FileStatusDot,
 } from "~/components/ui";
 import { useTheme } from "~/components/ThemeProvider";
 import { formatTimestamp, truncate } from "~/lib/utils";
@@ -189,6 +191,28 @@ export default function GitTabPage() {
     );
   };
 
+  const showFileContextMenu = (filePath: string, canDiscard: boolean = true) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    const buttons: Array<{ text: string; style?: "cancel" | "destructive" | "default"; onPress?: () => void }> = [
+      {
+        text: "Copy Path",
+        onPress: async () => {
+          await Clipboard.setStringAsync(filePath);
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        },
+      },
+    ];
+    if (canDiscard) {
+      buttons.push({
+        text: "Discard",
+        style: "destructive",
+        onPress: () => handleDiscardFile(filePath),
+      });
+    }
+    buttons.push({ text: "Cancel", style: "cancel" });
+    Alert.alert(filePath, undefined, buttons);
+  };
+
   const handleCheckoutBranch = async (branch: string) => {
     try {
       await checkoutBranch(projectPath, branch);
@@ -232,6 +256,13 @@ export default function GitTabPage() {
   // Get diff for a file
   const getDiffForFile = (filePath: string) => {
     return diffs.find((d) => d.path === filePath);
+  };
+
+  // Normalize git status to one of: added, modified, deleted
+  const normalizeStatus = (status: string | undefined): "added" | "modified" | "deleted" => {
+    if (status === "added") return "added";
+    if (status === "deleted") return "deleted";
+    return "modified"; // renamed, modified, or unknown -> modified
   };
 
   // Not connected state
@@ -282,20 +313,19 @@ export default function GitTabPage() {
       {/* Branch Header */}
       <Card className="mb-4">
         <CardContent className="flex-row items-center justify-between py-3">
-          <Button
-            variant="ghost"
+          <Pressable
             className="flex-row items-center flex-1 mr-2"
             onPress={() => setShowBranchPicker(!showBranchPicker)}
           >
-            <GitBranch size={18} color="#a78bfa" />
+            <GitBranch size={16} color={colors.ai} />
             <Text
               className="text-foreground font-medium ml-2 flex-1"
               numberOfLines={1}
             >
               {gitStatus?.branch || "main"}
             </Text>
-            <ChevronDown size={16} color={colors.mutedForeground} />
-          </Button>
+            <ChevronDown size={14} color={colors.mutedForeground} />
+          </Pressable>
 
           <View className="flex-row gap-2">
             {gitStatus && gitStatus.behind > 0 && (
@@ -350,7 +380,7 @@ export default function GitTabPage() {
                     className="justify-start mb-1"
                     onPress={() => handleCheckoutBranch(branch.name)}
                   >
-                    <GitBranch size={14} color={branch.isHead ? "#a78bfa" : colors.mutedForeground} />
+                    <GitBranch size={14} color={branch.isHead ? colors.ai : colors.mutedForeground} />
                     <Text
                       className={`ml-2 ${
                         branch.isHead ? "text-foreground" : "text-muted-foreground"
@@ -358,7 +388,7 @@ export default function GitTabPage() {
                     >
                       {branch.name}
                     </Text>
-                    {branch.isHead && <Check size={14} color="#22c55e" />}
+                    {branch.isHead && <Check size={14} color={colors.success} />}
                   </Button>
                 ))}
             </ScrollView>
@@ -394,178 +424,187 @@ export default function GitTabPage() {
         <TabsContent value="changes">
           {/* Staged Files */}
           {stagedFiles.length > 0 && (
-            <Card className="mb-4">
-              <CardHeader>
-                <View className="flex-row items-center">
-                  <Check size={16} color="#22c55e" />
-                  <CardTitle className="ml-2">
-                    Staged ({stagedFiles.length})
-                  </CardTitle>
-                </View>
-              </CardHeader>
-              <CardContent>
-                {stagedFiles.map((file) => {
-                  const diff = getDiffForFile(file);
-                  const isExpanded = expandedFiles.has(file);
+            <View className="mb-4">
+              <SectionHeader>Staged Changes ({stagedFiles.length})</SectionHeader>
+              <Card>
+                <CardContent className="p-0">
+                  {stagedFiles.map((file, index) => {
+                    const diff = getDiffForFile(file);
+                    const isExpanded = expandedFiles.has(file);
+                    const fileStatus = normalizeStatus(diff?.status);
 
-                  return (
-                    <View key={file} className="border-b border-border">
-                      <Pressable
-                        className="flex-row items-center justify-between py-3"
-                        onPress={() => toggleFileExpanded(file)}
-                      >
-                        <View className="flex-row items-center flex-1">
-                          <ChevronRight
-                            size={14}
-                            color={colors.mutedForeground}
-                            style={{
-                              transform: [{ rotate: isExpanded ? "90deg" : "0deg" }],
-                            }}
-                          />
-                          <FileText size={14} color="#22c55e" className="ml-2" />
-                          <Text
-                            className="text-foreground ml-2 flex-1"
-                            numberOfLines={1}
-                          >
-                            {file}
-                          </Text>
-                        </View>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onPress={() => handleUnstageFile(file)}
+                    return (
+                      <View key={file}>
+                        <Pressable
+                          className={`flex-row items-center gap-3 px-4 py-3 ${
+                            index < stagedFiles.length - 1 ? "border-b border-border" : ""
+                          }`}
+                          onPress={() => toggleFileExpanded(file)}
+                          onLongPress={() => showFileContextMenu(file, false)}
                         >
-                          <Minus size={14} color="#ef4444" />
-                        </Button>
-                      </Pressable>
-
-                      {/* Diff view */}
-                      {isExpanded && diff && (
-                        <View className="bg-secondary/50 p-2 mb-2 rounded-md">
-                          <ScrollView horizontal>
-                            <Text className="text-foreground font-mono text-xs">
-                              {diff.diff || "No diff available"}
-                            </Text>
-                          </ScrollView>
-                        </View>
-                      )}
-                    </View>
-                  );
-                })}
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Unstaged Files */}
-          {unstagedFiles.length > 0 && (
-            <Card className="mb-4">
-              <CardHeader>
-                <View className="flex-row items-center">
-                  <FileText size={16} color="#eab308" />
-                  <CardTitle className="ml-2">
-                    Modified ({unstagedFiles.length})
-                  </CardTitle>
-                </View>
-              </CardHeader>
-              <CardContent>
-                {unstagedFiles.map((file) => {
-                  const diff = getDiffForFile(file);
-                  const isExpanded = expandedFiles.has(file);
-
-                  return (
-                    <View key={file} className="border-b border-border">
-                      <Pressable
-                        className="flex-row items-center justify-between py-3"
-                        onPress={() => toggleFileExpanded(file)}
-                      >
-                        <View className="flex-row items-center flex-1">
                           <ChevronRight
-                            size={14}
+                            size={16}
                             color={colors.mutedForeground}
                             style={{
                               transform: [{ rotate: isExpanded ? "90deg" : "0deg" }],
                             }}
                           />
-                          <FileText size={14} color="#eab308" className="ml-2" />
+                          <FileStatusDot status={fileStatus} />
                           <Text
-                            className="text-foreground ml-2 flex-1"
+                            className="text-foreground font-mono text-sm flex-1"
                             numberOfLines={1}
                           >
                             {file}
                           </Text>
-                        </View>
-                        <View className="flex-row">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onPress={() => handleStageFile(file)}
-                          >
-                            <Plus size={14} color="#22c55e" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onPress={() => handleDiscardFile(file)}
-                          >
-                            <RotateCcw size={14} color="#ef4444" />
-                          </Button>
-                        </View>
-                      </Pressable>
+                        </Pressable>
 
-                      {/* Diff view */}
-                      {isExpanded && diff && (
-                        <View className="bg-secondary/50 p-2 mb-2 rounded-md">
-                          <ScrollView horizontal>
-                            <Text className="text-foreground font-mono text-xs">
-                              {diff.diff || "No diff available"}
-                            </Text>
-                          </ScrollView>
-                        </View>
-                      )}
-                    </View>
-                  );
-                })}
-              </CardContent>
-            </Card>
+                        {/* Diff view */}
+                        {isExpanded && (
+                          <View className="mx-4 mb-3 p-3 rounded" style={{ backgroundColor: '#0d0d0d' }}>
+                            {diff && diff.hunks && diff.hunks.length > 0 ? (
+                              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                                <View>
+                                  {diff.hunks.map((hunk, hunkIndex) => (
+                                    <View key={hunkIndex}>
+                                      {(hunk.lines || []).filter(l => l != null).map((line, lineIndex) => (
+                                          <Text
+                                            key={lineIndex}
+                                            className="font-mono text-xs leading-relaxed"
+                                            style={{
+                                              color: line.type === 'addition' ? colors.success
+                                                : line.type === 'deletion' ? colors.destructive
+                                                : colors.foreground
+                                            }}
+                                          >
+                                            {line.content}
+                                          </Text>
+                                      ))}
+                                    </View>
+                                  ))}
+                                </View>
+                              </ScrollView>
+                            ) : (
+                              <Text className="text-muted-foreground font-mono text-xs">
+                                No diff available
+                              </Text>
+                            )}
+                          </View>
+                        )}
+                      </View>
+                    );
+                  })}
+                </CardContent>
+              </Card>
+            </View>
           )}
 
-          {/* Untracked Files */}
-          {untrackedFiles.length > 0 && (
-            <Card className="mb-4">
-              <CardHeader>
-                <View className="flex-row items-center">
-                  <Plus size={16} color="#60a5fa" />
-                  <CardTitle className="ml-2">
-                    Untracked ({untrackedFiles.length})
-                  </CardTitle>
-                </View>
-              </CardHeader>
-              <CardContent>
-                {untrackedFiles.map((file) => (
-                  <View
-                    key={file}
-                    className="flex-row items-center justify-between py-3 border-b border-border"
-                  >
-                    <View className="flex-row items-center flex-1">
-                      <FileText size={14} color="#60a5fa" />
-                      <Text
-                        className="text-foreground ml-2 flex-1"
-                        numberOfLines={1}
+          {/* Unstaged Changes (Modified + Untracked) */}
+          {(unstagedFiles.length > 0 || untrackedFiles.length > 0) && (
+            <View className="mb-4">
+              <SectionHeader>Unstaged Changes ({unstagedFiles.length + untrackedFiles.length})</SectionHeader>
+              <Card>
+                <CardContent className="p-0">
+                  {/* Modified files */}
+                  {unstagedFiles.map((file, index) => {
+                    const diff = getDiffForFile(file);
+                    const isExpanded = expandedFiles.has(file);
+                    const isLast = index === unstagedFiles.length - 1 && untrackedFiles.length === 0;
+                    const fileStatus = normalizeStatus(diff?.status);
+
+                    return (
+                      <View key={file}>
+                        <Pressable
+                          className={`flex-row items-center gap-3 px-4 py-3 ${
+                            !isLast ? "border-b border-border" : ""
+                          }`}
+                          onPress={() => toggleFileExpanded(file)}
+                          onLongPress={() => showFileContextMenu(file, true)}
+                        >
+                          <ChevronRight
+                            size={16}
+                            color={colors.mutedForeground}
+                            style={{
+                              transform: [{ rotate: isExpanded ? "90deg" : "0deg" }],
+                            }}
+                          />
+                          <FileStatusDot status={fileStatus} />
+                          <Text
+                            className="text-foreground font-mono text-sm flex-1"
+                            numberOfLines={1}
+                          >
+                            {file}
+                          </Text>
+                        </Pressable>
+
+                        {/* Diff view */}
+                        {isExpanded && (
+                          <View className="mx-4 mb-3 p-3 rounded" style={{ backgroundColor: '#0d0d0d' }}>
+                            {diff && diff.hunks && diff.hunks.length > 0 ? (
+                              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                                <View>
+                                  {diff.hunks.map((hunk, hunkIndex) => (
+                                    <View key={hunkIndex}>
+                                      {(hunk.lines || []).filter(l => l != null).map((line, lineIndex) => (
+                                          <Text
+                                            key={lineIndex}
+                                            className="font-mono text-xs leading-relaxed"
+                                            style={{
+                                              color: line.type === 'addition' ? colors.success
+                                                : line.type === 'deletion' ? colors.destructive
+                                                : colors.foreground
+                                            }}
+                                          >
+                                            {line.content}
+                                          </Text>
+                                      ))}
+                                    </View>
+                                  ))}
+                                </View>
+                              </ScrollView>
+                            ) : (
+                              <Text className="text-muted-foreground font-mono text-xs">
+                                No diff available
+                              </Text>
+                            )}
+                          </View>
+                        )}
+                      </View>
+                    );
+                  })}
+                  {/* Untracked files */}
+                  {untrackedFiles.map((file, index) => {
+                    const isExpanded = expandedFiles.has(file);
+                    const isLast = index === untrackedFiles.length - 1;
+
+                    return (
+                      <Pressable
+                        key={file}
+                        className={`flex-row items-center gap-3 px-4 py-3 ${
+                          !isLast ? "border-b border-border" : ""
+                        }`}
+                        onPress={() => toggleFileExpanded(file)}
+                        onLongPress={() => showFileContextMenu(file, false)}
                       >
-                        {file}
-                      </Text>
-                    </View>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onPress={() => handleStageFile(file)}
-                    >
-                      <Plus size={14} color="#22c55e" />
-                    </Button>
-                  </View>
-                ))}
-              </CardContent>
-            </Card>
+                        <ChevronRight
+                          size={16}
+                          color={colors.mutedForeground}
+                          style={{
+                            transform: [{ rotate: isExpanded ? "90deg" : "0deg" }],
+                          }}
+                        />
+                        <FileStatusDot status="added" />
+                        <Text
+                          className="text-foreground font-mono text-sm flex-1"
+                          numberOfLines={1}
+                        >
+                          {file}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </CardContent>
+              </Card>
+            </View>
           )}
 
           {/* Empty State */}
@@ -574,7 +613,7 @@ export default function GitTabPage() {
             untrackedFiles.length === 0 && (
               <Card>
                 <CardContent className="items-center py-8">
-                  <Check size={48} color="#22c55e" />
+                  <Check size={48} color={colors.success} />
                   <Text className="text-foreground font-medium mt-4">
                     Working tree clean
                   </Text>
@@ -586,96 +625,88 @@ export default function GitTabPage() {
             )}
 
           {/* Commit Section */}
-          {(stagedFiles.length > 0 || unstagedFiles.length > 0) && (
-            <Card className="mt-4">
-              <CardHeader>
-                <View className="flex-row items-center justify-between">
-                  <CardTitle>Commit</CardTitle>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onPress={handleGenerateMessage}
-                    loading={isGenerating}
-                    icon={<Sparkles size={14} color="#a78bfa" />}
-                  >
-                    <Text className="text-foreground">AI Message</Text>
-                  </Button>
-                </View>
-              </CardHeader>
-              <CardContent>
-                <TextInput
-                  className="min-h-24 w-full rounded-md border border-input bg-background p-3 text-foreground"
-                  placeholder="Commit message..."
-                  placeholderTextColor={colors.mutedForeground}
-                  value={commitMessage}
-                  onChangeText={setCommitMessage}
-                  multiline
-                  textAlignVertical="top"
-                />
-              </CardContent>
-              <CardFooter>
-                <Button
-                  onPress={handleCommit}
-                  loading={loading}
-                  disabled={!commitMessage?.trim() || stagedFiles.length === 0}
-                  icon={<GitCommit size={16} color="#000" />}
+          {(stagedFiles.length > 0 || unstagedFiles.length > 0 || untrackedFiles.length > 0) && (
+            <View className="mt-4">
+              <View className="flex-row items-center justify-between mb-2">
+                <SectionHeader className="mb-0">Commit</SectionHeader>
+                <Pressable
+                  className="flex-row items-center gap-1 px-2 py-1 rounded-md bg-muted"
+                  onPress={handleGenerateMessage}
+                  disabled={isGenerating}
                 >
-                  Commit Changes
-                </Button>
-              </CardFooter>
-            </Card>
+                  <Sparkles size={12} color={colors.ai} />
+                  <Text className="text-xs text-muted-foreground">AI</Text>
+                </Pressable>
+              </View>
+              <Card>
+                <CardContent className="p-3">
+                  <TextInput
+                    className="min-h-20 w-full rounded-md border border-input bg-background p-3 text-foreground text-sm"
+                    placeholder="Commit message..."
+                    placeholderTextColor={colors.mutedForeground}
+                    value={commitMessage}
+                    onChangeText={setCommitMessage}
+                    multiline
+                    textAlignVertical="top"
+                  />
+                  <Button
+                    className="mt-3"
+                    onPress={handleCommit}
+                    loading={loading}
+                    disabled={!commitMessage?.trim() || stagedFiles.length === 0}
+                    icon={<GitCommit size={16} color="#000" />}
+                  >
+                    Commit Changes
+                  </Button>
+                </CardContent>
+              </Card>
+            </View>
           )}
         </TabsContent>
 
         {/* History Tab */}
         <TabsContent value="history">
-          <Card>
-            <CardContent className="p-0">
-              {history.length === 0 ? (
-                <View className="items-center py-8">
-                  <GitCommit size={32} color={colors.mutedForeground} />
-                  <Text className="text-muted-foreground mt-4">
-                    No commit history
-                  </Text>
-                </View>
-              ) : (
-                history.map((historyCommit, index) => (
+          {history.length === 0 ? (
+            <View className="items-center py-8">
+              <GitCommit size={32} color={colors.mutedForeground} />
+              <Text className="text-muted-foreground mt-4 text-sm">
+                No commit history
+              </Text>
+            </View>
+          ) : (
+            <Card>
+              <CardContent className="p-0">
+                {history.map((historyCommit, index) => (
                   <View
                     key={historyCommit.id}
-                    className={`p-4 ${
+                    className={`flex-row items-start gap-3 px-3 py-3 ${
                       index < history.length - 1 ? "border-b border-border" : ""
                     }`}
                   >
-                    <View className="flex-row items-start">
-                      <GitCommit size={16} color="#a78bfa" className="mt-1" />
-                      <View className="ml-3 flex-1">
-                        <Text className="text-foreground font-medium">
-                          {truncate(historyCommit.message.split("\n")[0], 50)}
+                    <GitCommit size={14} color={colors.ai} className="mt-0.5" />
+                    <View className="flex-1">
+                      <Text className="text-foreground text-sm font-medium">
+                        {truncate(historyCommit.message.split("\n")[0], 50)}
+                      </Text>
+                      <View className="flex-row items-center mt-1 flex-wrap gap-1">
+                        <Text className="text-muted-foreground text-xs font-mono">
+                          {historyCommit.shortId}
                         </Text>
-                        <View className="flex-row items-center mt-1 flex-wrap">
-                          <Text className="text-muted-foreground text-xs">
-                            {historyCommit.shortId}
-                          </Text>
-                          <Text className="text-muted-foreground text-xs mx-2">
-                            •
-                          </Text>
-                          <Text className="text-muted-foreground text-xs">
-                            {historyCommit.author}
-                          </Text>
-                          <Text className="text-muted-foreground text-xs mx-2">
-                            •
-                          </Text>
-                          <Text className="text-muted-foreground text-xs">
-                            {formatTimestamp(historyCommit.timestamp)}
-                          </Text>
-                        </View>
+                        <Text className="text-muted-foreground text-xs">•</Text>
+                        <Text className="text-muted-foreground text-xs">
+                          {historyCommit.author}
+                        </Text>
+                        <Text className="text-muted-foreground text-xs">•</Text>
+                        <Text className="text-muted-foreground text-xs">
+                          {formatTimestamp(historyCommit.timestamp)}
+                        </Text>
                       </View>
                     </View>
                   </View>
-                ))
-              )}
-            </CardContent>
-          </Card>
+                ))}
+              </CardContent>
+            </Card>
+          )}
         </TabsContent>
       </Tabs>
 
@@ -683,7 +714,7 @@ export default function GitTabPage() {
       {error && (
         <Card className="mt-4 border-destructive">
           <CardContent className="flex-row items-center">
-            <X size={16} color="#ef4444" />
+            <X size={16} color={colors.destructive} />
             <Text className="text-destructive ml-2">{error}</Text>
           </CardContent>
         </Card>

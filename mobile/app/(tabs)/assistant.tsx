@@ -326,7 +326,7 @@ export default function AssistantTabPage() {
             >
               <Bot
                 size={14}
-                color={tab.id === activeTabId ? "#60a5fa" : colors.mutedForeground}
+                color={tab.id === activeTabId ? colors.info : colors.mutedForeground}
               />
               <Text
                 className={`ml-2 text-sm ${
@@ -376,9 +376,9 @@ export default function AssistantTabPage() {
                   >
                     <View className="flex-row items-center">
                       {option.command === "" ? (
-                        <TerminalIcon size={16} color="#22c55e" />
+                        <TerminalIcon size={16} color={colors.success} />
                       ) : (
-                        <Bot size={16} color={isInstalled ? "#60a5fa" : colors.mutedForeground} />
+                        <Bot size={16} color={isInstalled ? colors.info : colors.mutedForeground} />
                       )}
                       <Text
                         className={`ml-2 ${
@@ -388,7 +388,7 @@ export default function AssistantTabPage() {
                         {option.name}
                       </Text>
                     </View>
-                    {isInstalled && <Check size={14} color="#22c55e" />}
+                    {isInstalled && <Check size={14} color={colors.success} />}
                   </Pressable>
                 );
               })}
@@ -423,8 +423,8 @@ export default function AssistantTabPage() {
             />
           ) : (
             <View className="flex-1 items-center justify-center">
-              <Bot size={32} color="#333" />
-              <Text style={{ color: "#666" }} className="mt-4">
+              <Bot size={32} color={colors.muted} />
+              <Text style={{ color: colors.mutedForeground }} className="mt-4">
                 {activeTab?.name} starting...
               </Text>
             </View>
@@ -438,7 +438,7 @@ export default function AssistantTabPage() {
               onPress={handleCtrlC}
               className="mr-2"
             >
-              <Text style={{ color: "#60a5fa", fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace", fontWeight: "bold" }} className="text-base">^C</Text>
+              <Text style={{ color: colors.info, fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace", fontWeight: "bold" }} className="text-base">^C</Text>
             </Button>
             <Button
               variant="ghost"
@@ -446,7 +446,7 @@ export default function AssistantTabPage() {
               onPress={handleEsc}
               className="mr-2"
             >
-              <Text style={{ color: "#60a5fa", fontWeight: "bold" }} className="text-base">ESC</Text>
+              <Text style={{ color: colors.info, fontWeight: "bold" }} className="text-base">ESC</Text>
             </Button>
             <Button
               variant="ghost"
@@ -454,7 +454,7 @@ export default function AssistantTabPage() {
               onPress={handleNewLine}
               className="mr-2"
             >
-              <CornerDownLeft size={20} color="#60a5fa" />
+              <CornerDownLeft size={20} color={colors.info} />
             </Button>
             <Button
               variant="ghost"
@@ -462,7 +462,7 @@ export default function AssistantTabPage() {
               onPress={handlePaste}
               className="mr-2"
             >
-              <ClipboardPaste size={16} color="#60a5fa" />
+              <ClipboardPaste size={16} color={colors.info} />
             </Button>
             <Button
               variant="ghost"
@@ -470,7 +470,7 @@ export default function AssistantTabPage() {
               onPress={handleArrowUp}
               className="mr-2"
             >
-              <ArrowUp size={20} color="#60a5fa" />
+              <ArrowUp size={20} color={colors.info} />
             </Button>
             <Button
               variant="ghost"
@@ -478,7 +478,7 @@ export default function AssistantTabPage() {
               onPress={handleArrowDown}
               className="mr-2"
             >
-              <ArrowDown size={20} color="#60a5fa" />
+              <ArrowDown size={20} color={colors.info} />
             </Button>
             <Button
               variant="ghost"
@@ -486,7 +486,7 @@ export default function AssistantTabPage() {
               onPress={handleArrowLeft}
               className="mr-2"
             >
-              <ArrowLeft size={20} color="#60a5fa" />
+              <ArrowLeft size={20} color={colors.info} />
             </Button>
             <Button
               variant="ghost"
@@ -494,7 +494,7 @@ export default function AssistantTabPage() {
               onPress={handleArrowRight}
               className="mr-2"
             >
-              <ArrowRight size={20} color="#60a5fa" />
+              <ArrowRight size={20} color={colors.info} />
             </Button>
             <View className="flex-1" />
             <Button
@@ -511,11 +511,11 @@ export default function AssistantTabPage() {
               }}
               className="flex-row items-center"
             >
-              <KeyboardIcon size={18} color="#60a5fa" />
+              <KeyboardIcon size={18} color={colors.info} />
               {isKeyboardVisible ? (
-                <ChevronDown size={14} color="#60a5fa" style={{ marginLeft: 4 }} />
+                <ChevronDown size={14} color={colors.info} style={{ marginLeft: 4 }} />
               ) : (
-                <ChevronUp size={14} color="#60a5fa" style={{ marginLeft: 4 }} />
+                <ChevronUp size={14} color={colors.info} style={{ marginLeft: 4 }} />
               )}
             </Button>
           </View>

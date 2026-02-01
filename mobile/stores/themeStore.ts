@@ -22,6 +22,12 @@ export interface ThemeColors {
   input: string;
   destructive: string;
   destructiveForeground: string;
+  // Semantic colors
+  success: string;
+  info: string;
+  warning: string;
+  ai: string;
+  terminal: string;
 }
 
 // Helper to convert HSL string to hex
@@ -73,6 +79,11 @@ export const THEME_COLORS: Record<Exclude<ThemeOption, "system" | "custom">, The
     input: "#2e2e2e",
     destructive: "#dc2626",
     destructiveForeground: "#ffffff",
+    success: "#22c55e",
+    info: "#60a5fa",
+    warning: "#eab308",
+    ai: "#a78bfa",
+    terminal: "#4ade80",
   },
   tokyo: {
     background: "#1a1b26",
@@ -91,6 +102,11 @@ export const THEME_COLORS: Record<Exclude<ThemeOption, "system" | "custom">, The
     input: "#3b4261",
     destructive: "#f7768e",
     destructiveForeground: "#ffffff",
+    success: "#9ece6a",
+    info: "#7aa2f7",
+    warning: "#e0af68",
+    ai: "#bb9af7",
+    terminal: "#9ece6a",
   },
   light: {
     background: "#ffffff",
@@ -109,6 +125,11 @@ export const THEME_COLORS: Record<Exclude<ThemeOption, "system" | "custom">, The
     input: "#e2e8f0",
     destructive: "#dc2626",
     destructiveForeground: "#ffffff",
+    success: "#16a34a",
+    info: "#2563eb",
+    warning: "#ca8a04",
+    ai: "#7c3aed",
+    terminal: "#16a34a",
   },
 };
 
@@ -131,6 +152,11 @@ interface CustomThemeColors {
     input: string;
     destructive: string;
     destructiveForeground: string;
+    success?: string;
+    info?: string;
+    warning?: string;
+    ai?: string;
+    terminal?: string;
   };
 }
 
@@ -196,6 +222,11 @@ export const useThemeStore = create<ThemeStore>()(
             input: safeColor(colors.input, base.input),
             destructive: safeColor(colors.destructive, base.destructive),
             destructiveForeground: safeColor(colors.destructiveForeground, base.destructiveForeground),
+            success: safeColor(colors.success, base.success),
+            info: safeColor(colors.info, base.info),
+            warning: safeColor(colors.warning, base.warning),
+            ai: safeColor(colors.ai, base.ai),
+            terminal: safeColor(colors.terminal, base.terminal),
           };
         }
 

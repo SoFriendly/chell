@@ -52,11 +52,8 @@ interface PortalState {
   // Mobile-spawned terminals (only forward output for these)
   mobileTerminalIds: Set<string>;
 
-  // Terminals currently active for mobile (last input from mobile)
-  mobileActiveTerminalIds: Set<string>;
-
-  // Active mobile connections
-  activeMobileCount: number;
+  // Desktop-spawned terminals (never forward these)
+  localTerminalIds: Set<string>;
 
   // WebSocket
   ws: WebSocket | null;
@@ -70,7 +67,8 @@ interface PortalState {
   regeneratePairingCode: () => void;
   removeDevice: (deviceId: string) => void;
   setDeviceName: (name: string) => void;
-  markLocalTerminalInput: (terminalId: string) => void;
+  registerLocalTerminal: (terminalId: string) => void;
+  unregisterLocalTerminal: (terminalId: string) => void;
 
   // Internal handlers
   handleMessage: (data: unknown) => void;
@@ -105,8 +103,7 @@ export const usePortalStore = create<PortalState>()(
       pairingPassphrase: generatePassphrase(),
       linkedDevices: [],
       mobileTerminalIds: new Set(),
-      mobileActiveTerminalIds: new Set(),
-      activeMobileCount: 0,
+      localTerminalIds: new Set(),
       ws: null,
 
       enable: () => {
@@ -144,7 +141,7 @@ export const usePortalStore = create<PortalState>()(
 
           ws.onopen = () => {
             console.log("[Portal] Connected to relay");
-            set({ isConnected: true, ws, activeMobileCount: 0 });
+            set({ isConnected: true, ws });
 
             // Register desktop with deviceId so relay can find existing session
             get().sendMessage({
@@ -168,7 +165,7 @@ export const usePortalStore = create<PortalState>()(
 
           ws.onclose = () => {
             console.log("[Portal] Disconnected from relay");
-            set({ isConnected: false, ws: null, activeMobileCount: 0 });
+            set({ isConnected: false, ws: null });
 
             // Auto-reconnect if enabled
             if (get().isEnabled) {
@@ -237,12 +234,20 @@ export const usePortalStore = create<PortalState>()(
         set({ deviceName: name });
       },
 
-      markLocalTerminalInput: (terminalId: string) => {
+      registerLocalTerminal: (terminalId: string) => {
+        set((state) => ({
+          localTerminalIds: state.localTerminalIds.has(terminalId)
+            ? state.localTerminalIds
+            : new Set([...state.localTerminalIds, terminalId]),
+        }));
+      },
+
+      unregisterLocalTerminal: (terminalId: string) => {
         set((state) => {
-          if (!state.mobileActiveTerminalIds.has(terminalId)) return {};
-          const newSet = new Set(state.mobileActiveTerminalIds);
+          if (!state.localTerminalIds.has(terminalId)) return {};
+          const newSet = new Set(state.localTerminalIds);
           newSet.delete(terminalId);
-          return { mobileActiveTerminalIds: newSet };
+          return { localTerminalIds: newSet };
         });
       },
 
@@ -252,10 +257,6 @@ export const usePortalStore = create<PortalState>()(
         switch (message.type) {
           case "device_list":
             set({ linkedDevices: message.devices as LinkedDevice[] });
-            break;
-
-          case "mobile_connection_update":
-            set({ activeMobileCount: Number(message.activeMobiles || 0) });
             break;
 
           case "command": {
@@ -281,7 +282,6 @@ export const usePortalStore = create<PortalState>()(
                   if (command === "spawn_terminal" && typeof result === "string") {
                     set((state) => ({
                       mobileTerminalIds: new Set([...state.mobileTerminalIds, result]),
-                      mobileActiveTerminalIds: new Set([...state.mobileActiveTerminalIds, result]),
                     }));
                   }
 
@@ -290,9 +290,7 @@ export const usePortalStore = create<PortalState>()(
                     set((state) => {
                       const newSet = new Set(state.mobileTerminalIds);
                       newSet.delete(finalParams.id as string);
-                      const activeSet = new Set(state.mobileActiveTerminalIds);
-                      activeSet.delete(finalParams.id as string);
-                      return { mobileTerminalIds: newSet, mobileActiveTerminalIds: activeSet };
+                      return { mobileTerminalIds: newSet };
                     });
                   }
 
@@ -329,9 +327,6 @@ export const usePortalStore = create<PortalState>()(
               mobileTerminalIds: state.mobileTerminalIds.has(terminalId)
                 ? state.mobileTerminalIds
                 : new Set([...state.mobileTerminalIds, terminalId]),
-              mobileActiveTerminalIds: state.mobileActiveTerminalIds.has(terminalId)
-                ? state.mobileActiveTerminalIds
-                : new Set([...state.mobileActiveTerminalIds, terminalId]),
             }));
 
             import("@tauri-apps/api/core").then(({ invoke }) => {
@@ -457,10 +452,12 @@ export function setupTerminalForwarding() {
     // Listen for terminal output events and forward to mobile
     // Only forward output for terminals spawned by mobile, not local desktop terminals
     listen("terminal-output", (event: { payload: { terminalId: string; data: number[] } }) => {
-      const { isConnected, sendMessage, mobileTerminalIds, activeMobileCount } = usePortalStore.getState();
-      if (!isConnected || activeMobileCount === 0) return;
+      const { isConnected, sendMessage, mobileTerminalIds, localTerminalIds } = usePortalStore.getState();
+      if (!isConnected) return;
 
       const { terminalId, data } = event.payload;
+
+      if (localTerminalIds.has(terminalId)) return;
 
       // Only forward output for terminals spawned by mobile
       if (!mobileTerminalIds.has(terminalId)) return;

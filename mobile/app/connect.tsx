@@ -15,6 +15,7 @@ import {
   Camera,
 } from "lucide-react-native";
 import { useConnectionStore, LinkedPortal } from "~/stores/connectionStore";
+import { useTheme } from "~/components/ThemeProvider";
 import {
   Button,
   Card,
@@ -28,6 +29,7 @@ import {
 
 export default function ConnectPage() {
   const router = useRouter();
+  const { colors } = useTheme();
   const {
     status,
     error,
@@ -166,7 +168,7 @@ export default function ConnectPage() {
           {isConnected ? (
             <View className="gap-2">
               <View className="flex-row items-center">
-                <Check size={16} color="#22c55e" />
+                <Check size={16} color={colors.success} />
                 <Text className="text-foreground ml-2">
                   Connected to {desktopDeviceName || "Desktop"}
                 </Text>
@@ -177,7 +179,7 @@ export default function ConnectPage() {
           )}
           {error && (
             <View className="flex-row items-center mt-2">
-              <X size={16} color="#ef4444" />
+              <X size={16} color={colors.destructive} />
               <Text className="text-destructive ml-2">{error}</Text>
             </View>
           )}
@@ -195,7 +197,7 @@ export default function ConnectPage() {
       <Card className="mb-4">
         <CardHeader>
           <View className="flex-row items-center">
-            <QrCode size={18} color="#a78bfa" />
+            <QrCode size={18} color={colors.ai} />
             <CardTitle className="ml-2">Add Desktop</CardTitle>
           </View>
           <CardDescription>
@@ -217,7 +219,7 @@ export default function ConnectPage() {
         <CardHeader>
           <View className="flex-row items-center justify-between">
             <View className="flex-row items-center">
-              <Monitor size={18} color="#60a5fa" />
+              <Monitor size={18} color={colors.info} />
               <CardTitle className="ml-2">
                 Linked Desktops ({linkedPortals.length})
               </CardTitle>
@@ -230,7 +232,7 @@ export default function ConnectPage() {
         <CardContent>
           {linkedPortals.length === 0 ? (
             <View className="py-8 items-center">
-              <Monitor size={32} color="#333" />
+              <Monitor size={32} color={colors.muted} />
               <Text className="text-muted-foreground mt-4">
                 No desktops linked yet
               </Text>
@@ -253,12 +255,12 @@ export default function ConnectPage() {
                   <View className="flex-row items-center flex-1">
                     <View
                       className={`w-10 h-10 rounded-lg items-center justify-center ${
-                        portal.isOnline ? "bg-green-500/10" : "bg-muted"
+                        portal.isOnline ? "bg-success/10" : "bg-muted"
                       }`}
                     >
                       <Monitor
                         size={20}
-                        color={portal.isOnline ? "#22c55e" : "#666"}
+                        color={portal.isOnline ? colors.success : colors.mutedForeground}
                       />
                     </View>
                     <View className="ml-3 flex-1">
@@ -281,10 +283,10 @@ export default function ConnectPage() {
                       className="p-2"
                       onPress={() => handleRemovePortal(portal)}
                     >
-                      <Trash2 size={18} color="#ef4444" />
+                      <Trash2 size={18} color={colors.destructive} />
                     </Pressable>
                     {(portal.id !== activePortalId || !isConnected) && (
-                      <ChevronRight size={18} color="#666" />
+                      <ChevronRight size={18} color={colors.mutedForeground} />
                     )}
                   </View>
                 </Pressable>

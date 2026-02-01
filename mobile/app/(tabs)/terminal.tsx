@@ -309,7 +309,7 @@ export default function TerminalTabPage() {
             >
               <TerminalIcon
                 size={14}
-                color={terminal.id === activeTerminalId ? "#22c55e" : colors.mutedForeground}
+                color={terminal.id === activeTerminalId ? colors.success : colors.mutedForeground}
               />
               <Text
                 className={`ml-2 text-sm ${
@@ -338,16 +338,16 @@ export default function TerminalTabPage() {
       <ScrollView
         ref={scrollViewRef}
         className="flex-1"
-        style={{ backgroundColor: "#000" }}
+        style={{ backgroundColor: colors.background }}
         contentContainerStyle={{ padding: 8, paddingBottom: 16 }}
       >
         {output.length === 0 ? (
           <View className="items-center justify-center py-8">
-            <TerminalIcon size={32} color="#333" />
-            <Text style={{ color: "#666" }} className="mt-4">
+            <TerminalIcon size={32} color={colors.muted} />
+            <Text style={{ color: colors.mutedForeground }} className="mt-4">
               Terminal ready
             </Text>
-            <Text style={{ color: "#444" }} className="text-sm mt-1">
+            <Text style={{ color: colors.mutedForeground }} className="text-sm mt-1">
               {activeTerminal?.cwd}
             </Text>
           </View>
@@ -355,7 +355,7 @@ export default function TerminalTabPage() {
           output.map((line, index) => (
             <Text
               key={index}
-              style={{ color: "#4ade80", fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace" }}
+              style={{ color: colors.terminal, fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace" }}
               className="text-sm leading-5"
               selectable
             >
@@ -369,7 +369,7 @@ export default function TerminalTabPage() {
       {showNLT && (
         <View className="border-t border-border bg-card p-3">
           <View className="flex-row items-center mb-2">
-            <Wand2 size={16} color="#a78bfa" />
+            <Wand2 size={16} color={colors.ai} />
             <Text className="text-foreground font-medium ml-2 text-sm">
               Natural Language Terminal
             </Text>
@@ -400,7 +400,7 @@ export default function TerminalTabPage() {
               disabled={!aiInput.trim()}
               className="flex-1"
             >
-              <Sparkles size={14} color="#a78bfa" />
+              <Sparkles size={14} color={colors.ai} />
               <Text className="ml-1 text-foreground">Generate</Text>
             </Button>
             {generatedCommand && (
@@ -424,7 +424,7 @@ export default function TerminalTabPage() {
           onPress={() => setShowNLT(!showNLT)}
           className="mr-2"
         >
-          <Sparkles size={14} color="#60a5fa" />
+          <Sparkles size={14} color={colors.info} />
         </Button>
         <Button
           variant="ghost"
@@ -432,7 +432,7 @@ export default function TerminalTabPage() {
           onPress={handleCtrlC}
           className="mr-2"
         >
-          <Text style={{ color: "#60a5fa", fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace", fontWeight: "bold" }} className="text-base">^C</Text>
+          <Text style={{ color: colors.info, fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace", fontWeight: "bold" }} className="text-base">^C</Text>
         </Button>
         <Button
           variant="ghost"
@@ -440,7 +440,7 @@ export default function TerminalTabPage() {
           onPress={handleEsc}
           className="mr-2"
         >
-          <Text style={{ color: "#60a5fa", fontWeight: "bold" }} className="text-base">ESC</Text>
+          <Text style={{ color: colors.info, fontWeight: "bold" }} className="text-base">ESC</Text>
         </Button>
         <Button
           variant="ghost"
@@ -448,7 +448,7 @@ export default function TerminalTabPage() {
           onPress={handleNewLine}
           className="mr-2"
         >
-          <CornerDownLeft size={20} color="#60a5fa" />
+          <CornerDownLeft size={20} color={colors.info} />
         </Button>
         <Button
           variant="ghost"
@@ -456,7 +456,7 @@ export default function TerminalTabPage() {
           onPress={handleArrowUp}
           className="mr-2"
         >
-          <ArrowUp size={20} color="#60a5fa" />
+          <ArrowUp size={20} color={colors.info} />
         </Button>
         <Button
           variant="ghost"
@@ -464,7 +464,7 @@ export default function TerminalTabPage() {
           onPress={handleArrowDown}
           className="mr-2"
         >
-          <ArrowDown size={20} color="#60a5fa" />
+          <ArrowDown size={20} color={colors.info} />
         </Button>
         <Button
           variant="ghost"
@@ -472,7 +472,7 @@ export default function TerminalTabPage() {
           onPress={handleArrowLeft}
           className="mr-2"
         >
-          <ArrowLeft size={20} color="#60a5fa" />
+          <ArrowLeft size={20} color={colors.info} />
         </Button>
         <Button
           variant="ghost"
@@ -480,7 +480,7 @@ export default function TerminalTabPage() {
           onPress={handleArrowRight}
           className="mr-2"
         >
-          <ArrowRight size={20} color="#60a5fa" />
+          <ArrowRight size={20} color={colors.info} />
         </Button>
         <View className="flex-1" />
         <Button
@@ -495,18 +495,18 @@ export default function TerminalTabPage() {
           }}
           className="flex-row items-center"
         >
-          <KeyboardIcon size={18} color="#60a5fa" />
+          <KeyboardIcon size={18} color={colors.info} />
           {isKeyboardVisible ? (
-            <ChevronDown size={14} color="#60a5fa" style={{ marginLeft: 4 }} />
+            <ChevronDown size={14} color={colors.info} style={{ marginLeft: 4 }} />
           ) : (
-            <ChevronUp size={14} color="#60a5fa" style={{ marginLeft: 4 }} />
+            <ChevronUp size={14} color={colors.info} style={{ marginLeft: 4 }} />
           )}
         </Button>
       </View>
 
       {/* Input */}
       <View className="flex-row items-center border-t border-border bg-card p-2">
-        <Text style={{ color: "#4ade80", fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace" }} className="mr-2">
+        <Text style={{ color: colors.terminal, fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace" }} className="mr-2">
           $
         </Text>
         <TextInput
@@ -529,7 +529,7 @@ export default function TerminalTabPage() {
           onPress={handleSend}
           disabled={!input.trim()}
         >
-          <Send size={18} color={input.trim() ? "#22c55e" : colors.mutedForeground} />
+          <Send size={18} color={input.trim() ? colors.success : colors.mutedForeground} />
         </Button>
       </View>
     </KeyboardAvoidingView>

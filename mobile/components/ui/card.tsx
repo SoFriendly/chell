@@ -8,7 +8,7 @@ const Card = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <View
     ref={ref}
-    className={cn("rounded-lg border border-border bg-card p-4", className)}
+    className={cn("rounded-lg border border-border bg-card text-card-foreground shadow-sm", className)}
     {...props}
   />
 ));
@@ -18,7 +18,7 @@ const CardHeader = React.forwardRef<
   View,
   React.ComponentPropsWithoutRef<typeof View>
 >(({ className, ...props }, ref) => (
-  <View ref={ref} className={cn("mb-3", className)} {...props} />
+  <View ref={ref} className={cn("flex-col gap-1.5 p-6", className)} {...props} />
 ));
 CardHeader.displayName = "CardHeader";
 
@@ -28,7 +28,7 @@ const CardTitle = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <Text
     ref={ref}
-    className={cn("text-lg font-semibold text-foreground", className)}
+    className={cn("text-xl font-semibold leading-none tracking-tight text-foreground", className)}
     {...props}
   />
 ));
@@ -50,7 +50,7 @@ const CardContent = React.forwardRef<
   View,
   React.ComponentPropsWithoutRef<typeof View>
 >(({ className, ...props }, ref) => (
-  <View ref={ref} className={cn("", className)} {...props} />
+  <View ref={ref} className={cn("p-6 pt-0", className)} {...props} />
 ));
 CardContent.displayName = "CardContent";
 
@@ -60,7 +60,7 @@ const CardFooter = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <View
     ref={ref}
-    className={cn("mt-3 flex-row items-center", className)}
+    className={cn("flex-row items-center p-6 pt-0", className)}
     {...props}
   />
 ));

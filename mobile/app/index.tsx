@@ -212,7 +212,7 @@ export default function HomeScreen() {
         <Card className="mb-4">
           <CardHeader>
             <View className="flex-row items-center">
-              <Download size={18} color="#60a5fa" />
+              <Download size={18} color={colors.info} />
               <CardTitle className="ml-2">Quick Actions</CardTitle>
             </View>
           </CardHeader>
@@ -233,7 +233,7 @@ export default function HomeScreen() {
         <Card className="mb-4">
           <CardHeader>
             <View className="flex-row items-center">
-              <FolderOpen size={18} color="#22c55e" />
+              <FolderOpen size={18} color={colors.success} />
               <CardTitle className="ml-2">
                 Projects{" "}
                 {availableProjects.length > 0 &&
@@ -258,24 +258,24 @@ export default function HomeScreen() {
                 {availableProjects.map((project) => (
                   <Pressable
                     key={project.id}
-                    className="flex-row items-center p-3 rounded-lg border border-border"
+                    className="flex-row items-center p-4 rounded-lg border border-border bg-card active:bg-muted/50"
                     onPress={() => handleSelectProject(project)}
                   >
                     <View className="w-10 h-10 rounded-lg items-center justify-center bg-muted">
                       <Folder size={20} color={colors.mutedForeground} />
                     </View>
                     <View className="ml-3 flex-1">
-                      <Text className="font-medium text-foreground">
+                      <Text className="font-medium text-foreground text-sm">
                         {project.name}
                       </Text>
                       <Text
-                        className="text-muted-foreground text-xs"
+                        className="text-muted-foreground text-xs font-mono mt-0.5"
                         numberOfLines={1}
                       >
                         {project.path}
                       </Text>
                     </View>
-                    <ChevronRight size={18} color={colors.mutedForeground} />
+                    <ChevronRight size={16} color={colors.mutedForeground} />
                   </Pressable>
                 ))}
               </View>
@@ -298,7 +298,7 @@ export default function HomeScreen() {
           >
             <View className="flex-row items-center justify-between mb-6">
               <View className="flex-row items-center">
-                <GitBranch size={20} color="#60a5fa" />
+                <GitBranch size={20} color={colors.info} />
                 <Text className="text-foreground text-lg font-semibold ml-2">
                   Clone Repository
                 </Text>
