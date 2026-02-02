@@ -71,7 +71,6 @@ export default function ConnectPage() {
       await pairFromQR(data);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setShowScanner(false);
-      Alert.alert("Success", "Connected to desktop!");
       router.back();
     } catch (err) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
