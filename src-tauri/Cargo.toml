@@ -1,6 +1,6 @@
 [package]
 name = "chell"
-version = "0.1.37"
+version = "0.1.38"
 description = "A cross-platform visual git client with integrated terminal for AI coding assistants"
 authors = ["you"]
 edition = "2021"
@@ -32,3 +32,4 @@ log = "0.4"
 env_logger = "0.11"
 which = "6"
 reqwest = { version = "0.13", features = ["json"] }
+base64 = "0.22"

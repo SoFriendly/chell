@@ -127,7 +127,6 @@ export default function GitPanel({ projectPath, projectName, onRefresh, onFileDr
   const [renamingFile, setRenamingFile] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
   const lastDiffsHash = useRef<string>("");
-  const refreshIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const hasGeneratedInitialMessage = useRef(false);
   const lastClickedIndex = useRef<number>(-1);
 
@@ -139,18 +138,8 @@ export default function GitPanel({ projectPath, projectName, onRefresh, onFileDr
   const unstagedChanges = diffs;
   const stagedChanges: FileDiff[] = [];
 
-  // Auto-refresh git status every 2 seconds for real-time updates
-  useEffect(() => {
-    refreshIntervalRef.current = setInterval(() => {
-      onRefresh();
-    }, 2000);
-
-    return () => {
-      if (refreshIntervalRef.current) {
-        clearInterval(refreshIntervalRef.current);
-      }
-    };
-  }, [onRefresh]);
+  // Auto-refresh disabled to avoid UI jank during terminal use
+  // User can manually refresh with the refresh button or after git operations
 
   // Auto-generate commit message only when the set of changed files changes
   useEffect(() => {

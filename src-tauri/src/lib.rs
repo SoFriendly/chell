@@ -1,3 +1,4 @@
+use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
 use parking_lot::Mutex;
 use portable_pty::{native_pty_system, CommandBuilder, PtyPair, PtySize};
 use serde::{Deserialize, Serialize};
@@ -268,19 +269,15 @@ fn spawn_terminal(
 
     // Spawn thread to read terminal output
     thread::spawn(move || {
-        let mut buffer = [0u8; 1024];
+        let mut buffer = [0u8; 16384]; // Larger buffer for better throughput
+        let event_name = format!("terminal-output-{}", terminal_id);
         loop {
             match reader.read(&mut buffer) {
                 Ok(0) => break,
                 Ok(n) => {
-                    let data = buffer[..n].to_vec();
-                    // Emit specific event for desktop terminal component
-                    let _ = handle.emit(&format!("terminal-output-{}", terminal_id), data.clone());
-                    // Emit generic event for portal forwarding to mobile
-                    let _ = handle.emit("terminal-output", serde_json::json!({
-                        "terminalId": terminal_id,
-                        "data": data
-                    }));
+                    // Use base64 encoding for efficient transfer (much smaller than JSON array)
+                    let encoded = BASE64.encode(&buffer[..n]);
+                    let _ = handle.emit(&event_name, encoded);
                 }
                 Err(_) => break,
             }
@@ -307,24 +304,15 @@ fn spawn_terminal(
 
 #[tauri::command]
 fn write_terminal(id: String, data: String, state: tauri::State<Arc<AppState>>) -> Result<(), String> {
-    println!("[write_terminal] id: {}, data: {:?}", id, data);
     let mut terminals = state.terminals.lock();
     if let Some(terminal) = terminals.get_mut(&id) {
         terminal
             .writer
             .write_all(data.as_bytes())
-            .map_err(|e| {
-                println!("[write_terminal] write_all error: {}", e);
-                e.to_string()
-            })?;
-        terminal.writer.flush().map_err(|e| {
-            println!("[write_terminal] flush error: {}", e);
-            e.to_string()
-        })?;
-        println!("[write_terminal] success");
+            .map_err(|e| e.to_string())?;
+        terminal.writer.flush().map_err(|e| e.to_string())?;
         Ok(())
     } else {
-        println!("[write_terminal] terminal not found: {}", id);
         Err(format!("Terminal not found: {}", id))
     }
 }
