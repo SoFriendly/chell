@@ -113,9 +113,10 @@ struct TerminalState {
     writer: Box<dyn Write + Send>,
 }
 
-// Git watcher state - holds the debouncer to keep it alive
+// Git watcher state - holds the debouncer and stop signal
 struct GitWatcher {
     _debouncer: notify_debouncer_mini::Debouncer<notify::RecommendedWatcher>,
+    _stop_tx: std::sync::mpsc::Sender<()>,
 }
 
 struct AppState {
@@ -573,6 +574,7 @@ fn watch_repo(
 ) -> Result<(), String> {
     use notify::RecursiveMode;
     use std::path::Path;
+    use std::sync::mpsc;
 
     // Check if already watching this repo
     {
@@ -587,23 +589,49 @@ fn watch_repo(
         return Err("Not a git repository".to_string());
     }
 
-    let repo_path_clone = repo_path.clone();
+    // Create channels for communication
+    let (event_tx, event_rx) = mpsc::channel::<()>();
+    let (stop_tx, stop_rx) = mpsc::channel::<()>();
+
+    // Spawn a thread to handle events and emit to frontend
+    let repo_path_for_thread = repo_path.clone();
     let app_handle_clone = app_handle.clone();
+    thread::spawn(move || {
+        loop {
+            // Check for stop signal (non-blocking)
+            if stop_rx.try_recv().is_ok() {
+                break;
+            }
+
+            // Wait for events with timeout so we can check stop signal
+            match event_rx.recv_timeout(Duration::from_millis(100)) {
+                Ok(()) => {
+                    // Emit event to frontend (safe on this thread)
+                    if let Err(e) = app_handle_clone.emit("git-files-changed", &repo_path_for_thread) {
+                        println!("Failed to emit git-files-changed: {:?}", e);
+                    }
+                }
+                Err(mpsc::RecvTimeoutError::Timeout) => continue,
+                Err(mpsc::RecvTimeoutError::Disconnected) => break,
+            }
+        }
+    });
 
     // Create a debounced watcher with 500ms delay to batch rapid changes
+    let event_tx_clone = event_tx.clone();
     let mut debouncer = new_debouncer(
         Duration::from_millis(500),
         move |result: Result<Vec<notify_debouncer_mini::DebouncedEvent>, notify::Error>| {
             match result {
                 Ok(events) => {
-                    // Check if any event is relevant (not just access)
+                    // Check if any event is relevant
                     let has_changes = events.iter().any(|e| {
                         matches!(e.kind, DebouncedEventKind::Any)
                     });
 
                     if has_changes {
-                        // Emit event to frontend
-                        let _ = app_handle_clone.emit("git-files-changed", &repo_path_clone);
+                        // Send to the event thread (ignore errors if channel closed)
+                        let _ = event_tx_clone.send(());
                     }
                 }
                 Err(e) => {
@@ -626,6 +654,7 @@ fn watch_repo(
     // Store the watcher
     let git_watcher = GitWatcher {
         _debouncer: debouncer,
+        _stop_tx: stop_tx,
     };
     state.git_watchers.lock().insert(repo_path, git_watcher);
 
@@ -976,28 +1005,92 @@ async fn generate_commit_message(
         return Err("No API key provided".to_string());
     }
 
-    // Build a summary of changes
-    let mut changes_summary = String::new();
+    // Metadata/config files that should be summarized briefly
+    let metadata_patterns = [
+        "package.json", "package-lock.json", "Cargo.toml", "Cargo.lock",
+        "yarn.lock", "pnpm-lock.yaml", "composer.lock", "Gemfile.lock",
+        "poetry.lock", "go.sum", "pubspec.lock", ".version", "version.txt",
+        "VERSION", "tauri.conf.json", "app.json",
+    ];
+
+    let is_metadata_file = |path: &str| -> bool {
+        let filename = path.rsplit('/').next().unwrap_or(path);
+        metadata_patterns.iter().any(|p| filename == *p || filename.ends_with(".lock"))
+    };
+
+    // Separate diffs into code changes and metadata changes
+    let mut code_diffs: Vec<&FileDiff> = Vec::new();
+    let mut metadata_diffs: Vec<&FileDiff> = Vec::new();
+
     for diff in &diffs {
-        changes_summary.push_str(&format!("- {} ({})\n", diff.path, diff.status));
+        if is_metadata_file(&diff.path) {
+            metadata_diffs.push(diff);
+        } else {
+            code_diffs.push(diff);
+        }
+    }
+
+    // Build summary - prioritize code changes
+    let mut changes_summary = String::new();
+
+    // First, add code changes with full diffs (up to a limit per file)
+    for diff in &code_diffs {
+        changes_summary.push_str(&format!("## {} ({})\n", diff.path, diff.status));
+        let mut file_lines = 0;
         for hunk in &diff.hunks {
             for line in &hunk.lines {
                 if line.line_type == "addition" || line.line_type == "deletion" {
                     let prefix = if line.line_type == "addition" { "+" } else { "-" };
-                    changes_summary.push_str(&format!("  {}{}\n", prefix, line.content));
+                    changes_summary.push_str(&format!("{}{}\n", prefix, line.content));
+                    file_lines += 1;
+                    // Limit lines per file to ensure we see all files
+                    if file_lines > 50 {
+                        changes_summary.push_str("  ... (more changes in this file)\n");
+                        break;
+                    }
                 }
             }
+            if file_lines > 50 { break; }
+        }
+        changes_summary.push('\n');
+
+        // Stop if we're getting too long, but ensure we list remaining files
+        if changes_summary.len() > 3000 {
+            break;
         }
     }
 
-    // Truncate if too long
-    if changes_summary.len() > 4000 {
-        changes_summary = changes_summary[..4000].to_string();
+    // Then summarize metadata files briefly (just list them with key changes)
+    if !metadata_diffs.is_empty() {
+        changes_summary.push_str("## Metadata/Config changes:\n");
+        for diff in &metadata_diffs {
+            changes_summary.push_str(&format!("- {} ({})", diff.path, diff.status));
+            // For version bumps, try to extract the version change
+            if diff.path.contains("package.json") || diff.path.contains("Cargo.toml") || diff.path.contains("tauri.conf") {
+                for hunk in &diff.hunks {
+                    for line in &hunk.lines {
+                        if (line.content.contains("version") || line.content.contains("\"version\""))
+                            && (line.line_type == "addition" || line.line_type == "deletion") {
+                            let prefix = if line.line_type == "addition" { "+" } else { "-" };
+                            changes_summary.push_str(&format!("\n  {}{}", prefix, line.content.trim()));
+                        }
+                    }
+                }
+            }
+            changes_summary.push('\n');
+        }
+    }
+
+    // Truncate if still too long
+    if changes_summary.len() > 5000 {
+        changes_summary = changes_summary[..5000].to_string();
         changes_summary.push_str("\n... (truncated)");
     }
 
     let prompt = format!(
         r#"Analyze these git changes and generate a commit message.
+
+IMPORTANT: Focus on the actual CODE changes, not just version bumps or lock file updates. If there are both code changes and version/metadata changes, the commit message should describe what the code does, not just "bump version".
 
 Changes:
 {}
@@ -1006,6 +1099,7 @@ Respond with JSON only, no markdown:
 {{"subject": "short imperative subject line (max 50 chars)", "description": "optional longer description explaining why (can be empty string)"}}
 
 Examples of good subjects: "Add user authentication", "Fix null pointer in parser", "Refactor database queries"
+Bad subjects: "Update package.json", "Bump version", "Update dependencies"
 Keep the description brief or empty if the subject is self-explanatory."#,
         changes_summary
     );
