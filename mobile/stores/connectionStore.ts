@@ -67,6 +67,147 @@ function getDeviceName(): string {
   return "Mobile Device";
 }
 
+// Shared message handler setup - used by both connect() and pairFromQR()
+function setupMessageHandler(
+  ws: ChellWebSocket,
+  get: () => ConnectionStore,
+  set: (partial: any) => void,
+  desktopNameOverride?: string
+) {
+  ws.onMessage((message: WSMessage) => {
+    switch (message.type) {
+      case "pair_response":
+        if (message.success && message.sessionToken) {
+          const portalId = message.desktopDeviceId || "";
+
+          // Save token securely
+          SecureStore.setItemAsync(
+            SECURE_TOKEN_PREFIX + portalId,
+            message.sessionToken
+          );
+          ws.setSessionToken(message.sessionToken);
+
+          // Add to linked portals
+          const newPortal: LinkedPortal = {
+            id: portalId,
+            name: message.desktopDeviceName || desktopNameOverride || "Desktop",
+            relayUrl: get().wsUrl,
+            pairedAt: Date.now(),
+            lastSeen: Date.now(),
+            isOnline: true,
+          };
+
+          set((state) => ({
+            status: "connected",
+            sessionToken: message.sessionToken,
+            deviceId: message.mobileDeviceId || null,
+            desktopDeviceName: message.desktopDeviceName || desktopNameOverride || null,
+            lastConnected: Date.now(),
+            error: null,
+            activePortalId: portalId,
+            linkedPortals: [
+              ...state.linkedPortals.filter((p) => p.id !== portalId),
+              newPortal,
+            ],
+          }));
+        } else {
+          set({
+            status: "disconnected",
+            error: message.error || "Pairing failed",
+          });
+        }
+        break;
+
+      case "status_update":
+        // Update portal online status and project list
+        console.log("[ConnectionStore] Received status_update:", JSON.stringify(message).slice(0, 300));
+        console.log("[ConnectionStore] Projects in message:", (message as any).projects);
+        if (message.connectionStatus === "connected") {
+          const projects = (message.projects as DesktopProject[]) || [];
+          const activeProjectId = message.activeProjectId as string | undefined;
+          console.log("[ConnectionStore] Parsed projects:", projects.length, projects);
+
+          // Find active project from list
+          const activeProject = activeProjectId
+            ? projects.find((p) => p.id === activeProjectId)
+            : null;
+
+          set((state) => ({
+            availableProjects: projects,
+            activeProject: activeProject
+              ? { ...activeProject, lastOpened: "" }
+              : state.activeProject,
+            gitStatus: message.gitStatus || state.gitStatus,
+            linkedPortals: state.linkedPortals.map((p) =>
+              p.id === state.activePortalId
+                ? { ...p, isOnline: true, lastSeen: Date.now() }
+                : p
+            ),
+          }));
+        } else {
+          set((state) => ({
+            linkedPortals: state.linkedPortals.map((p) =>
+              p.id === state.activePortalId
+                ? { ...p, isOnline: false }
+                : p
+            ),
+          }));
+        }
+        break;
+
+      case "project_changed":
+        // Desktop confirmed project change
+        const changedProjectId = message.projectId as string;
+        set((state) => {
+          const project = state.availableProjects.find(
+            (p) => p.id === changedProjectId
+          );
+          return {
+            activeProject: project
+              ? { ...project, lastOpened: "" }
+              : state.activeProject,
+          };
+        });
+        break;
+
+      case "terminal_output":
+        // Forward terminal output to terminalStore
+        const { terminalId, data } = message as { terminalId: string; data: string };
+        console.log("[ConnectionStore] Terminal output for", terminalId, ":", data.slice(0, 50));
+        import("./terminalStore").then(({ useTerminalStore }) => {
+          useTerminalStore.getState().appendOutput(terminalId, data);
+        });
+        break;
+
+      case "git_files_changed":
+        // Desktop detected git file changes, refresh git status
+        const changedRepoPath = (message as { repoPath: string }).repoPath;
+        const currentProject = get().activeProject;
+        // Only refresh if this is the active project
+        if (currentProject && currentProject.path === changedRepoPath) {
+          console.log("[ConnectionStore] Git files changed, refreshing status");
+          import("./gitStore").then(({ useGitStore }) => {
+            useGitStore.getState().refresh(changedRepoPath);
+          });
+        }
+        break;
+
+      case "error":
+        set({ error: message.message });
+        break;
+    }
+  });
+
+  ws.onDisconnect(() => {
+    set((state) => ({
+      status: "disconnected",
+      linkedPortals: state.linkedPortals.map((p) =>
+        p.id === state.activePortalId ? { ...p, isOnline: false } : p
+      ),
+    }));
+  });
+}
+
 export const useConnectionStore = create<ConnectionStore>()(
   persist(
     (set, get) => ({
@@ -98,139 +239,8 @@ export const useConnectionStore = create<ConnectionStore>()(
         try {
           const ws = initWebSocket(wsUrl);
 
-          // Set up message handler
-          ws.onMessage((message: WSMessage) => {
-            switch (message.type) {
-              case "pair_response":
-                if (message.success && message.sessionToken) {
-                  const portalId = message.desktopDeviceId || "";
-
-                  // Save token securely
-                  SecureStore.setItemAsync(
-                    SECURE_TOKEN_PREFIX + portalId,
-                    message.sessionToken
-                  );
-                  ws.setSessionToken(message.sessionToken);
-
-                  // Add to linked portals
-                  const newPortal: LinkedPortal = {
-                    id: portalId,
-                    name: message.desktopDeviceName || "Desktop",
-                    relayUrl: get().wsUrl,
-                    pairedAt: Date.now(),
-                    lastSeen: Date.now(),
-                    isOnline: true,
-                  };
-
-                  set((state) => ({
-                    status: "connected",
-                    sessionToken: message.sessionToken,
-                    deviceId: message.mobileDeviceId || null,
-                    desktopDeviceName: message.desktopDeviceName || null,
-                    lastConnected: Date.now(),
-                    error: null,
-                    activePortalId: portalId,
-                    linkedPortals: [
-                      ...state.linkedPortals.filter((p) => p.id !== portalId),
-                      newPortal,
-                    ],
-                  }));
-                } else {
-                  set({
-                    status: "disconnected",
-                    error: message.error || "Pairing failed",
-                  });
-                }
-                break;
-
-              case "status_update":
-                // Update portal online status and project list
-                console.log("[ConnectionStore] Received status_update:", JSON.stringify(message).slice(0, 300));
-                console.log("[ConnectionStore] Projects in message:", (message as any).projects);
-                if (message.connectionStatus === "connected") {
-                  const projects = (message.projects as DesktopProject[]) || [];
-                  const activeProjectId = message.activeProjectId as string | undefined;
-                  console.log("[ConnectionStore] Parsed projects:", projects.length, projects);
-
-                  // Find active project from list
-                  const activeProject = activeProjectId
-                    ? projects.find((p) => p.id === activeProjectId)
-                    : null;
-
-                  set((state) => ({
-                    availableProjects: projects,
-                    activeProject: activeProject
-                      ? { ...activeProject, lastOpened: "" }
-                      : state.activeProject,
-                    gitStatus: message.gitStatus || state.gitStatus,
-                    linkedPortals: state.linkedPortals.map((p) =>
-                      p.id === state.activePortalId
-                        ? { ...p, isOnline: true, lastSeen: Date.now() }
-                        : p
-                    ),
-                  }));
-                } else {
-                  set((state) => ({
-                    linkedPortals: state.linkedPortals.map((p) =>
-                      p.id === state.activePortalId
-                        ? { ...p, isOnline: false }
-                        : p
-                    ),
-                  }));
-                }
-                break;
-
-              case "project_changed":
-                // Desktop confirmed project change
-                const changedProjectId = message.projectId as string;
-                set((state) => {
-                  const project = state.availableProjects.find(
-                    (p) => p.id === changedProjectId
-                  );
-                  return {
-                    activeProject: project
-                      ? { ...project, lastOpened: "" }
-                      : state.activeProject,
-                  };
-                });
-                break;
-
-              case "terminal_output":
-                // Forward terminal output to terminalStore
-                const { terminalId, data } = message as { terminalId: string; data: string };
-                console.log("[ConnectionStore] Terminal output for", terminalId, ":", data.slice(0, 50));
-                import("./terminalStore").then(({ useTerminalStore }) => {
-                  useTerminalStore.getState().appendOutput(terminalId, data);
-                });
-                break;
-
-              case "git_files_changed":
-                // Desktop detected git file changes, refresh git status
-                const changedRepoPath = (message as { repoPath: string }).repoPath;
-                const currentProject = get().activeProject;
-                // Only refresh if this is the active project
-                if (currentProject && currentProject.path === changedRepoPath) {
-                  console.log("[ConnectionStore] Git files changed, refreshing status");
-                  import("./gitStore").then(({ useGitStore }) => {
-                    useGitStore.getState().refresh(changedRepoPath);
-                  });
-                }
-                break;
-
-              case "error":
-                set({ error: message.message });
-                break;
-            }
-          });
-
-          ws.onDisconnect(() => {
-            set((state) => ({
-              status: "disconnected",
-              linkedPortals: state.linkedPortals.map((p) =>
-                p.id === state.activePortalId ? { ...p, isOnline: false } : p
-              ),
-            }));
-          });
+          // Set up message handler using shared function
+          setupMessageHandler(ws, get, set);
 
           await ws.connect();
 
@@ -308,48 +318,8 @@ export const useConnectionStore = create<ConnectionStore>()(
 
           const ws = initWebSocket(relay);
 
-          // Set up message handler before connecting
-          ws.onMessage((message: WSMessage) => {
-            if (message.type === "pair_response") {
-              if (message.success && message.sessionToken) {
-                const portalId = message.desktopDeviceId || "";
-
-                SecureStore.setItemAsync(
-                  SECURE_TOKEN_PREFIX + portalId,
-                  message.sessionToken
-                );
-                ws.setSessionToken(message.sessionToken);
-
-                const newPortal: LinkedPortal = {
-                  id: portalId,
-                  name: message.desktopDeviceName || desktopName || "Desktop",
-                  relayUrl: relay,
-                  pairedAt: Date.now(),
-                  lastSeen: Date.now(),
-                  isOnline: true,
-                };
-
-                set((state) => ({
-                  status: "connected",
-                  sessionToken: message.sessionToken,
-                  deviceId: message.mobileDeviceId || null,
-                  desktopDeviceName: message.desktopDeviceName || desktopName || null,
-                  lastConnected: Date.now(),
-                  error: null,
-                  activePortalId: portalId,
-                  linkedPortals: [
-                    ...state.linkedPortals.filter((p) => p.id !== portalId),
-                    newPortal,
-                  ],
-                }));
-              } else {
-                set({
-                  status: "disconnected",
-                  error: message.error || "Pairing failed",
-                });
-              }
-            }
-          });
+          // Set up full message handler (handles pair_response, status_update, etc.)
+          setupMessageHandler(ws, get, set, desktopName);
 
           await ws.connect();
 

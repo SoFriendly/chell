@@ -555,7 +555,13 @@ fn edit_file_line(file_path: String, line_number: usize, new_content: String) ->
 
     // Create a new vector with the updated line
     let mut new_lines: Vec<String> = lines.iter().map(|s| s.to_string()).collect();
-    new_lines[idx] = new_content;
+
+    // If new content is empty, delete the line entirely
+    if new_content.is_empty() {
+        new_lines.remove(idx);
+    } else {
+        new_lines[idx] = new_content;
+    }
 
     // Write back with proper line endings
     let new_content = new_lines.join("\n");

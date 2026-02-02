@@ -135,7 +135,7 @@ export class ChellWebSocket {
     this.messageHandlers.forEach((handler) => handler(message));
   }
 
-  private send(message: Omit<WSMessage, "timestamp">): void {
+  send(message: Omit<WSMessage, "timestamp">): void {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
       console.error("[ChellWS] send failed - WebSocket not connected, state:", this.ws?.readyState);
       throw new Error("WebSocket not connected");
