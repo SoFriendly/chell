@@ -218,6 +218,7 @@ export const usePortalStore = create<PortalState>()(
           get().sendMessage({
             type: "register_desktop",
             id: crypto.randomUUID(),
+            deviceId: get().deviceId,
             deviceName: get().deviceName,
             pairingCode: newCode,
             pairingPassphrase: newPassphrase,
