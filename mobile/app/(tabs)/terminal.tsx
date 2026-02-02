@@ -309,7 +309,7 @@ export default function TerminalTabPage() {
             >
               <TerminalIcon
                 size={14}
-                color={terminal.id === activeTerminalId ? colors.success : colors.mutedForeground}
+                color={terminal.id === activeTerminalId ? colors.foreground : colors.mutedForeground}
               />
               <Text
                 className={`ml-2 text-sm ${
@@ -421,7 +421,7 @@ export default function TerminalTabPage() {
               disabled={!aiInput.trim()}
               className="flex-1"
             >
-              <Sparkles size={14} color={colors.ai} />
+              <Sparkles size={14} color={colors.foreground} />
               <Text className="ml-1 text-foreground">Generate</Text>
             </Button>
             {generatedCommand && (

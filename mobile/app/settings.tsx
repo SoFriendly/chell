@@ -321,7 +321,7 @@ export default function SettingsPage() {
                   <View className="flex-row items-center">
                     <Icon
                       size={20}
-                      color={isActive ? colors.primary : colors.mutedForeground}
+                      color={isActive ? colors.foreground : colors.mutedForeground}
                     />
                     <Text
                       className={`ml-3 font-medium ${
@@ -331,7 +331,7 @@ export default function SettingsPage() {
                       {t.name}
                     </Text>
                   </View>
-                  {isActive && <Check size={20} color={colors.primary} />}
+                  {isActive && <Check size={20} color={colors.foreground} />}
                 </Pressable>
               );
             })}
@@ -403,7 +403,7 @@ export default function SettingsPage() {
       >
         <View className="flex-1 bg-black">
           <CameraView
-            className="flex-1"
+            style={{ flex: 1 }}
             facing="back"
             barcodeScannerSettings={{
               barcodeTypes: ["qr"],

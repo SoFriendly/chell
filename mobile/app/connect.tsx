@@ -207,7 +207,7 @@ export default function ConnectPage() {
         <CardContent>
           <Button
             onPress={handleScanQR}
-            icon={<Camera size={18} color="#000" />}
+            icon={<Camera size={18} color={colors.primaryForeground} />}
           >
             Scan QR Code
           </Button>
@@ -339,7 +339,7 @@ export default function ConnectPage() {
       >
         <View className="flex-1 bg-black">
           <CameraView
-            className="flex-1"
+            style={{ flex: 1 }}
             facing="back"
             barcodeScannerSettings={{
               barcodeTypes: ["qr"],

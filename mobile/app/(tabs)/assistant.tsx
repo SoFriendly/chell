@@ -326,7 +326,7 @@ export default function AssistantTabPage() {
             >
               <Bot
                 size={14}
-                color={tab.id === activeTabId ? colors.info : colors.mutedForeground}
+                color={tab.id === activeTabId ? colors.foreground : colors.mutedForeground}
               />
               <Text
                 className={`ml-2 text-sm ${
