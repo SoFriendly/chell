@@ -40,6 +40,9 @@ interface ConnectionStore extends ConnectionState {
   // Remote desktop terminals
   remoteTerminals: RemoteTerminal[];
 
+  // Whether initial status has been received from desktop
+  hasReceivedInitialStatus: boolean;
+
   // Actions
   setWsUrl: (url: string) => void;
   connect: () => Promise<void>;
@@ -146,6 +149,7 @@ function setupMessageHandler(
           set((state) => ({
             availableProjects: projects,
             remoteTerminals: terminals,
+            hasReceivedInitialStatus: true,
             activeProject: activeProject
               ? { ...activeProject, lastOpened: "" }
               : state.activeProject,
@@ -237,6 +241,7 @@ export const useConnectionStore = create<ConnectionStore>()(
       activePortalId: null,
       availableProjects: [],
       remoteTerminals: [],
+      hasReceivedInitialStatus: false,
 
       setWsUrl: (url: string) => set({ wsUrl: url }),
 
@@ -247,7 +252,7 @@ export const useConnectionStore = create<ConnectionStore>()(
           return;
         }
 
-        set({ status: "connecting", error: null });
+        set({ status: "connecting", error: null, hasReceivedInitialStatus: false });
 
         try {
           const ws = initWebSocket(wsUrl);
@@ -271,10 +276,25 @@ export const useConnectionStore = create<ConnectionStore>()(
               console.log("[ConnectionStore] Resuming session...");
               ws.resumeSession(get().deviceId || "mobile");
 
-              set({
+              set((state) => ({
                 status: "connected",
                 sessionToken: savedToken,
-              });
+                linkedPortals: state.linkedPortals.map((p) =>
+                  p.id === activePortalId
+                    ? { ...p, isOnline: true, lastSeen: Date.now() }
+                    : p
+                ),
+              }));
+
+              // Request current status from desktop (including terminals)
+              console.log("[ConnectionStore] Requesting status after resume...");
+              setTimeout(() => {
+                try {
+                  ws.requestStatus();
+                } catch (err) {
+                  console.error("[ConnectionStore] Failed to request status:", err);
+                }
+              }, 500);
               return;
             }
           }
@@ -406,10 +426,12 @@ export const useConnectionStore = create<ConnectionStore>()(
         }
 
         // Also notify the desktop to switch its active tab
+        const { sessionToken } = get();
         const ws = getWebSocket();
         ws.send({
           type: "select_project",
           id: Math.random().toString(36).substring(2, 15),
+          sessionToken,
           projectId,
         });
       },
@@ -442,10 +464,12 @@ export const useConnectionStore = create<ConnectionStore>()(
 
       attachTerminal: (terminalId: string) => {
         try {
+          const { sessionToken } = get();
           const ws = getWebSocket();
           ws.send({
             type: "attach_terminal",
             id: Math.random().toString(36).substring(2, 15),
+            sessionToken,
             terminalId,
           });
           console.log("[ConnectionStore] Attaching to remote terminal:", terminalId);
@@ -456,10 +480,12 @@ export const useConnectionStore = create<ConnectionStore>()(
 
       detachTerminal: (terminalId: string) => {
         try {
+          const { sessionToken } = get();
           const ws = getWebSocket();
           ws.send({
             type: "detach_terminal",
             id: Math.random().toString(36).substring(2, 15),
+            sessionToken,
             terminalId,
           });
           console.log("[ConnectionStore] Detaching from remote terminal:", terminalId);

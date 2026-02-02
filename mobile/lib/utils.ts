@@ -10,7 +10,9 @@ export function generateId(): string {
 }
 
 export function formatTimestamp(timestamp: number): string {
-  const date = new Date(timestamp);
+  // Handle Unix timestamps in seconds (convert to milliseconds)
+  const ms = timestamp < 10000000000 ? timestamp * 1000 : timestamp;
+  const date = new Date(ms);
   const now = new Date();
   const diff = now.getTime() - date.getTime();
 

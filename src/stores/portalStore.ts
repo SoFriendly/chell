@@ -165,6 +165,10 @@ export const usePortalStore = create<PortalState>()(
           ws.onmessage = (event) => {
             try {
               const data = JSON.parse(event.data);
+              // Log message types to terminal for debugging
+              import("@tauri-apps/api/core").then(({ invoke }) => {
+                invoke("debug_log", { message: `Portal received WS message: ${data.type}` });
+              });
               get().handleMessage(data);
             } catch (err) {
               console.error("[Portal] Failed to parse message:", err);
@@ -361,19 +365,60 @@ export const usePortalStore = create<PortalState>()(
             const { terminalId } = message as { terminalId: string };
             console.log("[Portal] Mobile attaching to terminal:", terminalId);
 
-            // Add to mobileTerminalIds so output gets forwarded
-            set((state) => ({
-              mobileTerminalIds: state.mobileTerminalIds.has(terminalId)
-                ? state.mobileTerminalIds
-                : new Set([...state.mobileTerminalIds, terminalId]),
-            }));
+            // Fetch buffer content and send to mobile BEFORE enabling live output forwarding
+            // This ensures buffer arrives first, then live output follows
+            import("@tauri-apps/api/core").then(async ({ invoke }) => {
+              try {
+                const buffer = await invoke<string>("get_terminal_buffer", { id: terminalId });
+                console.log("[Portal] Got buffer for terminal", terminalId, "length:", buffer.length);
 
-            // Send confirmation back
-            get().sendMessage({
-              type: "attach_terminal_response",
-              id: crypto.randomUUID(),
-              terminalId,
-              success: true,
+                if (buffer && buffer.length > 0) {
+                  // Decode base64 buffer to text
+                  const bytes = Uint8Array.from(atob(buffer), c => c.charCodeAt(0));
+                  const text = new TextDecoder().decode(bytes);
+
+                  if (text) {
+                    // Send buffered output to mobile
+                    get().sendMessage({
+                      type: "terminal_output",
+                      id: crypto.randomUUID(),
+                      terminalId,
+                      data: text,
+                    });
+                  }
+                }
+
+                // NOW add to mobileTerminalIds so future live output gets forwarded
+                // (after buffer has been sent)
+                set((state) => ({
+                  mobileTerminalIds: state.mobileTerminalIds.has(terminalId)
+                    ? state.mobileTerminalIds
+                    : new Set([...state.mobileTerminalIds, terminalId]),
+                }));
+
+                // Send confirmation back
+                get().sendMessage({
+                  type: "attach_terminal_response",
+                  id: crypto.randomUUID(),
+                  terminalId,
+                  success: true,
+                });
+              } catch (err) {
+                console.error("[Portal] Failed to get terminal buffer:", err);
+                // Still add to forwarding list and send confirmation
+                set((state) => ({
+                  mobileTerminalIds: state.mobileTerminalIds.has(terminalId)
+                    ? state.mobileTerminalIds
+                    : new Set([...state.mobileTerminalIds, terminalId]),
+                }));
+                get().sendMessage({
+                  type: "attach_terminal_response",
+                  id: crypto.randomUUID(),
+                  terminalId,
+                  success: true,
+                  error: err instanceof Error ? err.message : String(err),
+                });
+              }
             });
             break;
           }
@@ -393,40 +438,49 @@ export const usePortalStore = create<PortalState>()(
 
           case "request_status": {
             // Send current status to mobile including theme, custom colors, project list, and terminals
+            console.log("[Portal] Received request_status from mobile");
+            import("@tauri-apps/api/core").then(({ invoke }) => {
+              invoke("debug_log", { message: "Portal received request_status from mobile" });
+            });
             Promise.all([
               import("@/stores/settingsStore"),
               import("@/stores/projectStore"),
-              import("@/stores/terminalStore"),
-            ]).then(([{ useSettingsStore }, { useProjectStore }, { useTerminalStore }]) => {
+              import("@tauri-apps/api/core"),
+            ]).then(async ([{ useSettingsStore }, { useProjectStore }, { invoke }]) => {
               const { theme, customTheme } = useSettingsStore.getState();
               const { projects, tabs, activeTabId } = useProjectStore.getState();
-              const { terminals } = useTerminalStore.getState();
+
+              // TEMPORARILY DISABLED: Desktop terminal listing
+              // let terminals: Array<{ id: string; title: string; cwd: string }> = [];
+              // try {
+              //   terminals = await invoke<Array<{ id: string; title: string; cwd: string }>>("list_terminals");
+              //   console.log("[Portal] Got terminals from backend:", terminals);
+              // } catch (err) {
+              //   console.error("[Portal] Failed to list terminals:", err);
+              // }
 
               // Find active project from active tab
               const activeTab = tabs.find((t) => t.id === activeTabId);
               const activeProjectId = activeTab?.projectId || null;
 
-              // Known assistant commands - used to infer terminal type
-              const assistantCommands = ["claude", "aider", "gemini", "codex", "opencode"];
-
-              // Get list of desktop terminals for mobile to see
-              // Infer type from title/command
-              const terminalList = Object.values(terminals).map((t) => {
-                const titleLower = t.title.toLowerCase();
-                const isAssistant = assistantCommands.some(cmd =>
-                  titleLower === cmd ||
-                  titleLower.includes(cmd) ||
-                  titleLower.includes("claude code") ||
-                  titleLower.includes("gemini cli") ||
-                  titleLower.includes("openai codex")
-                );
-                return {
-                  id: t.id,
-                  title: t.title,
-                  cwd: t.cwd,
-                  type: isAssistant ? "assistant" : "shell",
-                };
-              });
+              // TEMPORARILY DISABLED: Desktop terminals are not sent to mobile
+              // Mobile can only spawn its own terminals for now
+              // const terminalList = terminals.map((t) => {
+              //   const titleLower = t.title.toLowerCase();
+              //   const isAssistant = assistantCommands.some(cmd =>
+              //     titleLower === cmd ||
+              //     titleLower.includes(cmd) ||
+              //     titleLower.includes("claude code") ||
+              //     titleLower.includes("gemini cli") ||
+              //     titleLower.includes("openai codex")
+              //   );
+              //   return {
+              //     id: t.id,
+              //     title: t.title,
+              //     cwd: t.cwd,
+              //     type: isAssistant ? "assistant" : "shell",
+              //   };
+              // });
 
               const statusUpdate: Record<string, unknown> = {
                 type: "status_update",
@@ -440,7 +494,7 @@ export const usePortalStore = create<PortalState>()(
                   path: p.path,
                 })),
                 activeProjectId,
-                terminals: terminalList,
+                terminals: [], // Desktop terminals disabled - mobile spawns its own
               };
 
               // Include custom theme colors if using custom theme
@@ -451,6 +505,8 @@ export const usePortalStore = create<PortalState>()(
                 };
               }
 
+              console.log("[Portal] Sending status_update (desktop terminals disabled)");
+              invoke("debug_log", { message: "Portal sending status_update (desktop terminals disabled - mobile spawns its own)" });
               get().sendMessage(statusUpdate);
             });
             break;
@@ -480,6 +536,10 @@ export const usePortalStore = create<PortalState>()(
           }
 
           case "error":
+            console.error("[Portal] Error from relay:", message.code, message.message);
+            import("@tauri-apps/api/core").then(({ invoke }) => {
+              invoke("debug_log", { message: `Portal error: ${message.code} - ${message.message}` });
+            });
             set({ error: message.message as string });
             break;
         }

@@ -111,6 +111,19 @@ pub struct FileTreeNode {
 struct TerminalState {
     pty_pair: PtyPair,
     writer: Box<dyn Write + Send>,
+    title: String,  // Command/title for display
+    cwd: String,    // Working directory
+    output_buffer: Arc<Mutex<Vec<u8>>>,  // Buffer for recent output (for mobile attach)
+}
+
+const MAX_OUTPUT_BUFFER_SIZE: usize = 100 * 1024; // 100KB buffer
+
+// Terminal info for listing
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TerminalInfo {
+    pub id: String,
+    pub title: String,
+    pub cwd: String,
 }
 
 // Git watcher state - holds the debouncer and stop signal
@@ -294,6 +307,11 @@ fn spawn_terminal(
 
     let terminal_id = id.clone();
     let handle = app_handle.clone();
+    let state_for_read = state.inner().clone();
+
+    // Create output buffer for mobile attach replay
+    let output_buffer: Arc<Mutex<Vec<u8>>> = Arc::new(Mutex::new(Vec::with_capacity(MAX_OUTPUT_BUFFER_SIZE)));
+    let output_buffer_clone = output_buffer.clone();
 
     // Spawn thread to read terminal output
     thread::spawn(move || {
@@ -303,6 +321,17 @@ fn spawn_terminal(
             match reader.read(&mut buffer) {
                 Ok(0) => break,
                 Ok(n) => {
+                    // Only buffer output if portal mode is enabled (for mobile attach replay)
+                    if *state_for_read.portal_enabled.lock() {
+                        let mut buf = output_buffer_clone.lock();
+                        buf.extend_from_slice(&buffer[..n]);
+                        // Trim if over max size (keep most recent data)
+                        if buf.len() > MAX_OUTPUT_BUFFER_SIZE {
+                            let excess = buf.len() - MAX_OUTPUT_BUFFER_SIZE;
+                            buf.drain(0..excess);
+                        }
+                    }
+
                     // Use base64 encoding for efficient transfer (much smaller than JSON array)
                     let encoded = BASE64.encode(&buffer[..n]);
                     // Emit to terminal-specific event (for desktop Terminal component)
@@ -326,9 +355,20 @@ fn spawn_terminal(
         state_clone.terminals.lock().remove(&terminal_id_exit);
     });
 
+    // Determine title from shell command
+    let title = if shell.is_empty() {
+        "Shell".to_string()
+    } else {
+        // Use the command name as the title
+        shell.split_whitespace().next().unwrap_or("Shell").to_string()
+    };
+
     let terminal_state = TerminalState {
         pty_pair,
         writer,
+        title,
+        cwd: cwd.clone(),
+        output_buffer,
     };
 
     state.terminals.lock().insert(id.clone(), terminal_state);
@@ -378,6 +418,42 @@ fn resize_terminal(
 fn kill_terminal(id: String, state: tauri::State<Arc<AppState>>) -> Result<(), String> {
     state.terminals.lock().remove(&id);
     Ok(())
+}
+
+#[tauri::command]
+fn list_terminals(state: tauri::State<Arc<AppState>>) -> Vec<TerminalInfo> {
+    let terminals = state.terminals.lock();
+    println!("[list_terminals] Found {} terminals", terminals.len());
+    terminals
+        .iter()
+        .map(|(id, t)| {
+            println!("[list_terminals] Terminal: {} title={} cwd={}", id, t.title, t.cwd);
+            TerminalInfo {
+                id: id.clone(),
+                title: t.title.clone(),
+                cwd: t.cwd.clone(),
+            }
+        })
+        .collect()
+}
+
+#[tauri::command]
+fn clear_terminals(state: tauri::State<Arc<AppState>>) {
+    let mut terminals = state.terminals.lock();
+    terminals.clear();
+    println!("[clear_terminals] Cleared all terminals");
+}
+
+#[tauri::command]
+fn get_terminal_buffer(id: String, state: tauri::State<Arc<AppState>>) -> Result<String, String> {
+    let terminals = state.terminals.lock();
+    if let Some(terminal) = terminals.get(&id) {
+        let buf = terminal.output_buffer.lock();
+        // Return base64-encoded buffer content
+        Ok(BASE64.encode(&buf[..]))
+    } else {
+        Err(format!("Terminal not found: {}", id))
+    }
 }
 
 // Git commands
@@ -1542,6 +1618,9 @@ pub fn run() {
             write_terminal,
             resize_terminal,
             kill_terminal,
+            list_terminals,
+            clear_terminals,
+            get_terminal_buffer,
             // Git
             is_git_repo,
             get_status,

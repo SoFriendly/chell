@@ -1,12 +1,15 @@
 import "../global.css";
 import { useEffect } from "react";
-import { Stack } from "expo-router";
+import { Stack, router } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { useFonts } from "expo-font";
 import * as SplashScreen from "expo-splash-screen";
+import { Pressable, View, Text } from "react-native";
+import { ChevronLeft, Home, Settings, GitBranch, ChevronDown, ArrowUp, ArrowDown } from "lucide-react-native";
 import { ThemeProvider, useTheme } from "~/components/ThemeProvider";
 import { useConnectionStore } from "~/stores/connectionStore";
 import { useThemeStore } from "~/stores/themeStore";
+import { useGitStore } from "~/stores/gitStore";
 import type { WSMessage } from "~/types";
 import { getWebSocket } from "~/lib/websocket";
 
@@ -16,6 +19,7 @@ SplashScreen.preventAutoHideAsync();
 function RootLayoutContent() {
   const { status, connect, wsUrl, requestStatus } = useConnectionStore();
   const { syncFromDesktop, syncWithDesktop } = useThemeStore();
+  const { status: gitStatus, toggleBranchPicker } = useGitStore();
   const { theme, colors } = useTheme();
 
   // Auto-connect on app start if URL is configured
@@ -77,6 +81,7 @@ function RootLayoutContent() {
           headerRightContainerStyle: {
             paddingRight: 8,
           },
+          headerBackTitleVisible: false,
           contentStyle: {
             backgroundColor: colors.background,
           },
@@ -87,19 +92,68 @@ function RootLayoutContent() {
           options={{
             title: "Chell",
             headerShown: true,
+            headerBackTitle: "",
           }}
         />
         <Stack.Screen
           name="(tabs)"
           options={{
-            headerShown: false,
+            headerBackTitle: "",
+            headerTitle: () => (
+              <Pressable
+                onPress={toggleBranchPicker}
+                style={{ flexDirection: 'row', alignItems: 'center' }}
+              >
+                <GitBranch size={16} color={colors.primary} />
+                <Text style={{ color: colors.foreground, fontWeight: '600', marginLeft: 8 }} numberOfLines={1}>
+                  {gitStatus?.branch || "main"}
+                </Text>
+                <ChevronDown size={14} color={colors.mutedForeground} style={{ marginLeft: 4 }} />
+                {gitStatus && gitStatus.behind > 0 && (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', marginLeft: 8, backgroundColor: colors.muted, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+                    <ArrowDown size={10} color={colors.foreground} />
+                    <Text style={{ color: colors.foreground, fontSize: 10, marginLeft: 2 }}>{gitStatus.behind}</Text>
+                  </View>
+                )}
+                {gitStatus && gitStatus.ahead > 0 && (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', marginLeft: 4, backgroundColor: colors.muted, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+                    <ArrowUp size={10} color={colors.foreground} />
+                    <Text style={{ color: colors.foreground, fontSize: 10, marginLeft: 2 }}>{gitStatus.ahead}</Text>
+                  </View>
+                )}
+              </Pressable>
+            ),
+            headerLeft: () => (
+              <Pressable
+                onPress={() => {
+                  useConnectionStore.getState().setActiveProject(null);
+                  router.dismissAll();
+                  router.replace("/");
+                }}
+                style={{ padding: 8 }}
+              >
+                <Home size={22} color={colors.foreground} />
+              </Pressable>
+            ),
+            headerRight: () => (
+              <Pressable
+                onPress={() => router.push("/settings")}
+                style={{ padding: 8 }}
+              >
+                <Settings size={22} color={colors.foreground} />
+              </Pressable>
+            ),
           }}
         />
         <Stack.Screen
           name="settings"
           options={{
             title: "Settings",
-            headerBackTitleVisible: false,
+            headerLeft: () => (
+              <Pressable onPress={() => router.back()} style={{ padding: 4 }}>
+                <ChevronLeft size={24} color={colors.foreground} />
+              </Pressable>
+            ),
           }}
         />
         <Stack.Screen

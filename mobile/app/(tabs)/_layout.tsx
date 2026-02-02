@@ -14,71 +14,12 @@ export default function TabsLayout() {
   return (
     <Tabs
       screenOptions={{
-        headerStyle: {
-          backgroundColor: colors.background,
-        },
-        headerTintColor: colors.foreground,
-        headerTitleStyle: {
-          fontWeight: "600",
-        },
-        headerLeftContainerStyle: {
-          paddingLeft: 8,
-        },
-        headerRightContainerStyle: {
-          paddingRight: 8,
-        },
-        headerTitle: () => (
-          <Pressable
-            onPress={toggleBranchPicker}
-            style={{ flexDirection: 'row', alignItems: 'center' }}
-          >
-            <GitBranch size={16} color={colors.primary} />
-            <Text style={{ color: colors.foreground, fontWeight: '600', marginLeft: 8 }} numberOfLines={1}>
-              {gitStatus?.branch || "main"}
-            </Text>
-            <ChevronDown size={14} color={colors.mutedForeground} style={{ marginLeft: 4 }} />
-            {gitStatus && gitStatus.behind > 0 && (
-              <View style={{ flexDirection: 'row', alignItems: 'center', marginLeft: 8, backgroundColor: colors.muted, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
-                <ArrowDown size={10} color={colors.foreground} />
-                <Text style={{ color: colors.foreground, fontSize: 10, marginLeft: 2 }}>{gitStatus.behind}</Text>
-              </View>
-            )}
-            {gitStatus && gitStatus.ahead > 0 && (
-              <View style={{ flexDirection: 'row', alignItems: 'center', marginLeft: 4, backgroundColor: colors.muted, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
-                <ArrowUp size={10} color={colors.foreground} />
-                <Text style={{ color: colors.foreground, fontSize: 10, marginLeft: 2 }}>{gitStatus.ahead}</Text>
-              </View>
-            )}
-          </Pressable>
-        ),
-        headerLeft: () => (
-          <Pressable
-            onPress={() => {
-              // Clear active project and navigate to project list
-              useConnectionStore.getState().setActiveProject(null);
-              router.dismissAll();
-              router.replace("/");
-            }}
-            style={{ padding: 8 }}
-          >
-            <Home size={22} color={colors.foreground} />
-          </Pressable>
-        ),
-        headerRight: () => (
-          <Pressable
-            onPress={() => router.push("/settings")}
-            style={{ padding: 8 }}
-          >
-            <Settings size={22} color={colors.foreground} />
-          </Pressable>
-        ),
+        headerShown: false,
         tabBarStyle: {
           backgroundColor: colors.card,
           borderTopColor: colors.border,
           borderTopWidth: 1,
-          height: 60 + insets.bottom,
-          paddingBottom: 8 + insets.bottom,
-          paddingTop: 8,
+          paddingTop: 12,
         },
         tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: colors.mutedForeground,

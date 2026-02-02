@@ -726,12 +726,12 @@ export default function GitTabPage() {
               </Text>
             </View>
           ) : (
-            <Card>
+            <Card className="py-2">
               <CardContent className="p-0">
                 {history.map((historyCommit, index) => (
                   <View
                     key={historyCommit.id}
-                    className={`flex-row items-start gap-3 px-3 py-3 ${
+                    className={`flex-row items-start gap-3 px-3 py-2 ${
                       index < history.length - 1 ? "border-b border-border" : ""
                     }`}
                   >

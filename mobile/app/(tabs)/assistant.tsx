@@ -39,6 +39,7 @@ interface AssistantTab {
   name: string;
   command: string;
   terminalId: string | null;
+  source: "mobile" | "remote";
 }
 
 interface AssistantOption {
@@ -60,7 +61,7 @@ export default function AssistantTabPage() {
   console.log("[Assistant] Component rendering");
   const router = useRouter();
   const { colors } = useTheme();
-  const { status, activeProject, invoke } = useConnectionStore();
+  const { status, activeProject, invoke, remoteTerminals, attachTerminal, detachTerminal, hasReceivedInitialStatus, availableProjects } = useConnectionStore();
   console.log("[Assistant] Status:", status, "activeProject:", activeProject?.name);
   const {
     spawnTerminal,
@@ -70,14 +71,19 @@ export default function AssistantTabPage() {
     resizeTerminal,
   } = useTerminalStore();
 
+  // Filter remote terminals to only show assistants
+  const remoteAssistants = remoteTerminals.filter(t => t.type === "assistant");
+
   const [tabs, setTabs] = useState<AssistantTab[]>([]);
   const [activeTabId, setActiveTabId] = useState<string | null>(null);
   const [showDropdown, setShowDropdown] = useState(false);
   const [installedCommands, setInstalledCommands] = useState<string[]>([]);
   const [isCheckingInstalled, setIsCheckingInstalled] = useState(true);
-  const [hasAutoLaunched, setHasAutoLaunched] = useState(false);
+  const [hasAutoLoaded, setHasAutoLoaded] = useState(false);
   const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
   const terminalRef = useRef<AssistantTerminalWebViewRef>(null);
+  const [attachedRemoteIds, setAttachedRemoteIds] = useState<Set<string>>(new Set());
+  const [dismissedRemoteIds, setDismissedRemoteIds] = useState<Set<string>>(new Set());
 
 
   const isConnected = status === "connected";
@@ -133,34 +139,117 @@ export default function AssistantTabPage() {
     };
   }, [isConnected, invoke]);
 
-  // Auto-launch default assistant (claude) when first opening
+  // Load remote assistant sessions or auto-launch a local one
   useEffect(() => {
-    console.log("[Assistant] Auto-launch check:", {
+    console.log("[Assistant] Auto-load check:", {
       projectPath: !!projectPath,
       isConnected,
-      hasAutoLaunched,
+      hasAutoLoaded,
       installedCommandsLength: installedCommands.length,
       isCheckingInstalled,
+      hasReceivedInitialStatus,
+      remoteAssistantsCount: remoteAssistants.length,
+      remoteTerminalsCount: remoteTerminals.length,
+      remoteTerminalTypes: remoteTerminals.map(t => ({ id: t.id.slice(0, 8), title: t.title, type: t.type })),
     });
 
-    if (projectPath && isConnected && !hasAutoLaunched && installedCommands.length > 0) {
-      // Default to claude if installed, otherwise first installed
-      const defaultCommand = installedCommands.includes("claude")
-        ? "claude"
-        : installedCommands[0] || "";
+    // Wait for both: installed commands check AND initial status from desktop
+    if (projectPath && isConnected && !hasAutoLoaded && !isCheckingInstalled && hasReceivedInitialStatus) {
+      console.log("[Assistant] Auto-load conditions met, remoteAssistants:", remoteAssistants.length);
 
-      console.log("[Assistant] Auto-launching:", defaultCommand);
+      // First, try to load remote assistant sessions
+      if (remoteAssistants.length > 0) {
+        console.log("[Assistant] Loading remote assistant sessions:", remoteAssistants.map(t => t.title));
 
-      if (defaultCommand) {
-        const option = ASSISTANT_OPTIONS.find((o) => o.command === defaultCommand);
-        if (option) {
-          handleAddTab(option);
-          setHasAutoLaunched(true);
+        // Create tabs for remote assistants
+        const remoteTabs: AssistantTab[] = remoteAssistants.map(remote => ({
+          id: `remote-${remote.id}`,
+          name: remote.title,
+          command: "",
+          terminalId: remote.id,
+          source: "remote" as const,
+        }));
+
+        setTabs(remoteTabs);
+
+        // Attach to all remote assistants
+        remoteAssistants.forEach(remote => {
+          attachTerminal(remote.id);
+          setAttachedRemoteIds(prev => {
+            const next = new Set(Array.from(prev));
+            next.add(remote.id);
+            return next;
+          });
+        });
+
+        // Activate the first remote tab
+        if (remoteTabs.length > 0) {
+          setActiveTabId(remoteTabs[0].id);
+        }
+
+        setHasAutoLoaded(true);
+      } else if (installedCommands.length > 0) {
+        // No remote assistants, auto-launch a local one
+        const defaultCommand = installedCommands.includes("claude")
+          ? "claude"
+          : installedCommands[0] || "";
+
+        console.log("[Assistant] No remote assistants found, auto-launching local:", defaultCommand);
+
+        if (defaultCommand) {
+          const option = ASSISTANT_OPTIONS.find((o) => o.command === defaultCommand);
+          if (option) {
+            handleAddTab(option);
+            setHasAutoLoaded(true);
+          }
         }
       }
     }
-  }, [projectPath, isConnected, hasAutoLaunched, installedCommands]);
+  }, [projectPath, isConnected, hasAutoLoaded, installedCommands, isCheckingInstalled, hasReceivedInitialStatus, remoteAssistants.length]);
 
+  // Cleanup: detach from all remote terminals when component unmounts
+  useEffect(() => {
+    return () => {
+      Array.from(attachedRemoteIds).forEach(terminalId => {
+        detachTerminal(terminalId);
+      });
+    };
+  }, []);
+
+  // Handle new remote assistants appearing after initial load
+  useEffect(() => {
+    if (!hasAutoLoaded || !isConnected) return;
+
+    // Find new remote assistants that we don't have tabs for (and weren't dismissed)
+    const currentTabIds = new Set(tabs.filter(t => t.source === "remote").map(t => t.terminalId));
+    const newAssistants = remoteAssistants.filter(ra =>
+      !currentTabIds.has(ra.id) && !dismissedRemoteIds.has(ra.id)
+    );
+
+    if (newAssistants.length > 0) {
+      console.log("[Assistant] New remote assistants detected:", newAssistants.map(t => t.title));
+
+      const newTabs: AssistantTab[] = newAssistants.map(remote => ({
+        id: `remote-${remote.id}`,
+        name: remote.title,
+        command: "",
+        terminalId: remote.id,
+        source: "remote" as const,
+      }));
+
+      setTabs(prev => [...prev, ...newTabs]);
+
+      // Attach to new remote assistants
+      newAssistants.forEach(remote => {
+        attachTerminal(remote.id);
+        setAttachedRemoteIds(prev => {
+          const next = new Set(Array.from(prev));
+          next.add(remote.id);
+          return next;
+        });
+      });
+    }
+  }, [remoteAssistants, hasAutoLoaded, isConnected, dismissedRemoteIds]);
 
   const handleAddTab = async (option: AssistantOption) => {
     if (!projectPath) return;
@@ -171,6 +260,7 @@ export default function AssistantTabPage() {
       name: option.name,
       command: option.command,
       terminalId: null,
+      source: "mobile",
     };
 
     setTabs((prev) => [...prev, newTab]);
@@ -194,7 +284,24 @@ export default function AssistantTabPage() {
   const handleCloseTab = async (tabId: string) => {
     const tab = tabs.find((t) => t.id === tabId);
     if (tab?.terminalId) {
-      await killTerminal(tab.terminalId);
+      if (tab.source === "remote") {
+        // For remote tabs, just detach - don't kill the session
+        detachTerminal(tab.terminalId);
+        setAttachedRemoteIds(prev => {
+          const next = new Set(prev);
+          next.delete(tab.terminalId!);
+          return next;
+        });
+        // Track as dismissed so it doesn't get re-added
+        setDismissedRemoteIds(prev => {
+          const next = new Set(Array.from(prev));
+          next.add(tab.terminalId!);
+          return next;
+        });
+      } else {
+        // For local tabs, kill the terminal
+        await killTerminal(tab.terminalId);
+      }
     }
 
     setTabs((prev) => prev.filter((t) => t.id !== tabId));
@@ -207,12 +314,20 @@ export default function AssistantTabPage() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
   };
 
+  const { sendTerminalInput: sendRemoteInput } = useConnectionStore();
+
   const handleTerminalInput = useCallback(
     (data: string) => {
       if (!activeTab?.terminalId) return;
-      sendInput(activeTab.terminalId, data);
+      if (activeTab.source === "remote") {
+        // For remote terminals, use the connection store
+        sendRemoteInput(activeTab.terminalId, data);
+      } else {
+        // For local terminals, use the terminal store
+        sendInput(activeTab.terminalId, data);
+      }
     },
-    [activeTab, sendInput]
+    [activeTab, sendInput, sendRemoteInput]
   );
 
   const handleTerminalResize = useCallback(
@@ -223,56 +338,58 @@ export default function AssistantTabPage() {
     [activeTab, resizeTerminal]
   );
 
-  const handleEsc = useCallback(() => {
+  // Helper to send input to the correct terminal (local vs remote)
+  const sendToTerminal = useCallback((data: string) => {
     if (!activeTab?.terminalId) return;
-    sendInput(activeTab.terminalId, "\x1b");
+    if (activeTab.source === "remote") {
+      sendRemoteInput(activeTab.terminalId, data);
+    } else {
+      sendInput(activeTab.terminalId, data);
+    }
+  }, [activeTab, sendInput, sendRemoteInput]);
+
+  const handleEsc = useCallback(() => {
+    sendToTerminal("\x1b");
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-  }, [activeTab, sendInput]);
+  }, [sendToTerminal]);
 
   const handleCtrlC = useCallback(() => {
-    if (!activeTab?.terminalId) return;
-    sendInput(activeTab.terminalId, "\x03");
+    sendToTerminal("\x03");
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-  }, [activeTab, sendInput]);
+  }, [sendToTerminal]);
 
   const handleArrowUp = useCallback(() => {
-    if (!activeTab?.terminalId) return;
-    sendInput(activeTab.terminalId, "\x1b[A");
+    sendToTerminal("\x1b[A");
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-  }, [activeTab, sendInput]);
+  }, [sendToTerminal]);
 
   const handleArrowDown = useCallback(() => {
-    if (!activeTab?.terminalId) return;
-    sendInput(activeTab.terminalId, "\x1b[B");
+    sendToTerminal("\x1b[B");
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-  }, [activeTab, sendInput]);
+  }, [sendToTerminal]);
 
   const handleArrowLeft = useCallback(() => {
-    if (!activeTab?.terminalId) return;
-    sendInput(activeTab.terminalId, "\x1b[D");
+    sendToTerminal("\x1b[D");
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-  }, [activeTab, sendInput]);
+  }, [sendToTerminal]);
 
   const handleArrowRight = useCallback(() => {
-    if (!activeTab?.terminalId) return;
-    sendInput(activeTab.terminalId, "\x1b[C");
+    sendToTerminal("\x1b[C");
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-  }, [activeTab, sendInput]);
+  }, [sendToTerminal]);
 
   const handlePaste = useCallback(async () => {
-    if (!activeTab?.terminalId) return;
     const text = await Clipboard.getStringAsync();
     if (text) {
-      sendInput(activeTab.terminalId, text);
+      sendToTerminal(text);
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
-  }, [activeTab, sendInput]);
+  }, [sendToTerminal]);
 
   const handleNewLine = useCallback(() => {
-    if (!activeTab?.terminalId) return;
-    sendInput(activeTab.terminalId, "\n");
+    sendToTerminal("\n");
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-  }, [activeTab, sendInput]);
+  }, [sendToTerminal]);
 
   // Not connected state
   if (!isConnected) {
@@ -324,7 +441,8 @@ export default function AssistantTabPage() {
               }`}
               onPress={() => setActiveTabId(tab.id)}
             >
-              {tab.command === "" ? (
+              {/* Assistant/Shell icon */}
+              {tab.command === "" && tab.source === "mobile" ? (
                 <TerminalIcon
                   size={14}
                   color={tab.id === activeTabId ? colors.foreground : colors.mutedForeground}

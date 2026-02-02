@@ -8,7 +8,6 @@ import {
   Modal,
   Switch,
 } from "react-native";
-import { Stack } from "expo-router";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import * as Haptics from "expo-haptics";
 import {
@@ -41,6 +40,8 @@ export default function SettingsPage() {
     removePortal,
     disconnect,
   } = useConnectionStore();
+
+  console.log("[Settings] Rendering - status:", status, "activePortalId:", activePortalId, "linkedPortals:", linkedPortals.map(p => ({ id: p.id, isOnline: p.isOnline })));
 
   const { theme, setTheme, syncWithDesktop, setSyncWithDesktop } = useThemeStore();
 
@@ -154,11 +155,6 @@ export default function SettingsPage() {
 
   return (
     <>
-      <Stack.Screen
-        options={{
-          title: "Settings",
-        }}
-      />
       <ScrollView
         className="flex-1 bg-background"
         contentContainerStyle={{ padding: 24 }}

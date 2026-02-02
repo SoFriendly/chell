@@ -131,6 +131,22 @@ export class SessionDO implements DurableObject {
         ws.send(JSON.stringify({ type: "pong", id: message.id, timestamp: Date.now() }));
         break;
 
+      case "select_project":
+        await this.handleSelectProject(ws, message);
+        break;
+
+      case "attach_terminal":
+        await this.handleAttachTerminal(ws, message);
+        break;
+
+      case "detach_terminal":
+        await this.handleDetachTerminal(ws, message);
+        break;
+
+      case "project_changed":
+        await this.handleProjectChanged(ws, message);
+        break;
+
       default:
         this.sendError(ws, "UNKNOWN_MESSAGE", `Unknown message type: ${message.type}`);
     }
@@ -453,7 +469,7 @@ export class SessionDO implements DurableObject {
     const state = this.connections.get(ws);
     if (!state || state.type !== "desktop") return;
 
-    // Forward to all mobile clients
+    // Forward to all mobile clients (don't break - desktop may have multiple session tokens)
     for (const [token, desktop] of this.desktopBySession) {
       if (desktop === ws) {
         const mobiles = this.mobilesBySession.get(token);
@@ -462,12 +478,30 @@ export class SessionDO implements DurableObject {
             mobileWs.send(JSON.stringify(message));
           }
         }
-        break;
+        // Don't break - continue to find all session tokens for this desktop
       }
     }
   }
 
   private async handleGitFilesChanged(ws: WebSocket, message: any) {
+    const state = this.connections.get(ws);
+    if (!state || state.type !== "desktop") return;
+
+    // Forward to all mobile clients (don't break - desktop may have multiple session tokens)
+    for (const [token, desktop] of this.desktopBySession) {
+      if (desktop === ws) {
+        const mobiles = this.mobilesBySession.get(token);
+        if (mobiles) {
+          for (const mobileWs of mobiles) {
+            mobileWs.send(JSON.stringify(message));
+          }
+        }
+        // Don't break - continue to find all session tokens for this desktop
+      }
+    }
+  }
+
+  private async handleProjectChanged(ws: WebSocket, message: any) {
     const state = this.connections.get(ws);
     if (!state || state.type !== "desktop") return;
 
@@ -480,7 +514,6 @@ export class SessionDO implements DurableObject {
             mobileWs.send(JSON.stringify(message));
           }
         }
-        break;
       }
     }
   }
@@ -502,6 +535,68 @@ export class SessionDO implements DurableObject {
         id: message.id,
         timestamp: Date.now(),
         sessionToken,
+      })
+    );
+  }
+
+  private async handleSelectProject(ws: WebSocket, message: any) {
+    const { sessionToken, projectId } = message;
+
+    // Find desktop for this session
+    const desktopWs = this.desktopBySession.get(sessionToken);
+    if (!desktopWs) {
+      this.sendError(ws, "DESKTOP_OFFLINE", "Desktop is not connected");
+      return;
+    }
+
+    // Forward request to desktop
+    desktopWs.send(
+      JSON.stringify({
+        type: "select_project",
+        id: message.id,
+        timestamp: Date.now(),
+        sessionToken,
+        projectId,
+      })
+    );
+  }
+
+  private async handleAttachTerminal(ws: WebSocket, message: any) {
+    const { sessionToken, terminalId } = message;
+
+    const desktopWs = this.desktopBySession.get(sessionToken);
+    if (!desktopWs) {
+      this.sendError(ws, "DESKTOP_OFFLINE", "Desktop is not connected");
+      return;
+    }
+
+    // Forward to desktop
+    desktopWs.send(
+      JSON.stringify({
+        type: "attach_terminal",
+        id: message.id,
+        timestamp: Date.now(),
+        terminalId,
+      })
+    );
+  }
+
+  private async handleDetachTerminal(ws: WebSocket, message: any) {
+    const { sessionToken, terminalId } = message;
+
+    const desktopWs = this.desktopBySession.get(sessionToken);
+    if (!desktopWs) {
+      this.sendError(ws, "DESKTOP_OFFLINE", "Desktop is not connected");
+      return;
+    }
+
+    // Forward to desktop
+    desktopWs.send(
+      JSON.stringify({
+        type: "detach_terminal",
+        id: message.id,
+        timestamp: Date.now(),
+        terminalId,
       })
     );
   }

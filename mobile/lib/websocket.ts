@@ -235,12 +235,13 @@ export class ChellWebSocket {
       throw new Error("Not authenticated");
     }
 
-    console.log("[ChellWS] Sending request_status");
+    console.log("[ChellWS] Sending request_status with sessionToken:", this.sessionToken.slice(0, 20) + "...");
     this.send({
       type: "request_status",
       id: generateId(),
       sessionToken: this.sessionToken,
     } as any);
+    console.log("[ChellWS] request_status message sent");
   }
 
   // Resume session after reconnecting with saved token
