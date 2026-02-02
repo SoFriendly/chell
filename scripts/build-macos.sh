@@ -30,12 +30,69 @@ echo "Building Chell..."
 echo "Apple ID: $APPLE_ID"
 echo "Team ID: $APPLE_TEAM_ID"
 
+# Set the certificate identity for code signing
+export APPLE_CERTIFICATE_IDENTITY="Developer ID Application: SoFriendly LLC (2H66PPM438)"
+export APPLE_SIGNING_IDENTITY="$APPLE_CERTIFICATE_IDENTITY"
+
 # Build the app
 pnpm tauri build
 
 echo ""
 echo "Build complete!"
 echo "Artifacts are in: src-tauri/target/release/bundle/"
+
+# Find the built app and DMG
+APP_PATH=$(find src-tauri/target/release/bundle/macos -name "*.app" -type d 2>/dev/null | head -1)
+DMG_PATH=$(find src-tauri/target/release/bundle/dmg -name "*.dmg" 2>/dev/null | head -1)
+
+# Sign the app if it exists
+if [ -n "$APP_PATH" ]; then
+  echo ""
+  echo "Signing app bundle..."
+  codesign --force --options runtime --deep --sign "$APPLE_CERTIFICATE_IDENTITY" "$APP_PATH"
+  codesign --verify --deep --strict --verbose=2 "$APP_PATH"
+  echo "App signed successfully"
+fi
+
+# Create a zip for notarization (required by Apple)
+if [ -n "$APP_PATH" ]; then
+  echo ""
+  echo "Creating zip for notarization..."
+  ZIP_PATH="src-tauri/target/release/bundle/Chell.zip"
+  ditto -c -k --keepParent "$APP_PATH" "$ZIP_PATH"
+  
+  echo "Submitting for notarization..."
+  xcrun notarytool submit "$ZIP_PATH" \
+    --apple-id "$APPLE_ID" \
+    --password "$APPLE_PASSWORD" \
+    --team-id "$APPLE_TEAM_ID" \
+    --wait
+  
+  echo "Stapling notarization ticket to app..."
+  xcrun stapler staple "$APP_PATH"
+  
+  # Remove the zip file
+  rm "$ZIP_PATH"
+  echo "App notarized successfully"
+fi
+
+# Sign and notarize the DMG
+if [ -n "$DMG_PATH" ]; then
+  echo ""
+  echo "Signing DMG..."
+  codesign --force --sign "$APPLE_CERTIFICATE_IDENTITY" "$DMG_PATH"
+  
+  echo "Submitting DMG for notarization..."
+  xcrun notarytool submit "$DMG_PATH" \
+    --apple-id "$APPLE_ID" \
+    --password "$APPLE_PASSWORD" \
+    --team-id "$APPLE_TEAM_ID" \
+    --wait
+  
+  echo "Stapling notarization ticket to DMG..."
+  xcrun stapler staple "$DMG_PATH"
+  echo "DMG signed and notarized successfully"
+fi
 
 # Get version for naming
 VERSION=$(grep '"version"' src-tauri/tauri.conf.json | head -1 | sed 's/.*"version": "\(.*\)".*/\1/')
