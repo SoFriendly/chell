@@ -91,16 +91,8 @@ export default function GitTabPage() {
     }
   }, [projectPath, isConnected]);
 
-  // Auto-refresh every 5 seconds when connected
-  useEffect(() => {
-    if (!projectPath || !isConnected) return;
-
-    const interval = setInterval(() => {
-      refresh(projectPath);
-    }, 5000);
-
-    return () => clearInterval(interval);
-  }, [projectPath, isConnected]);
+  // Note: Git status is now updated via push notifications from desktop
+  // when files change (git_files_changed event), so no polling needed.
 
   const onRefresh = useCallback(async () => {
     if (!projectPath || !isConnected) return;

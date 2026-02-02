@@ -1,4 +1,5 @@
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
+use notify_debouncer_mini::{new_debouncer, DebouncedEventKind};
 use parking_lot::Mutex;
 use portable_pty::{native_pty_system, CommandBuilder, PtyPair, PtySize};
 use serde::{Deserialize, Serialize};
@@ -7,6 +8,7 @@ use std::io::{Read, Write};
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::thread;
+use std::time::Duration;
 use tauri::Emitter;
 use tauri::Manager;
 #[cfg(target_os = "macos")]
@@ -111,10 +113,16 @@ struct TerminalState {
     writer: Box<dyn Write + Send>,
 }
 
+// Git watcher state - holds the debouncer to keep it alive
+struct GitWatcher {
+    _debouncer: notify_debouncer_mini::Debouncer<notify::RecommendedWatcher>,
+}
+
 struct AppState {
     terminals: Mutex<HashMap<String, TerminalState>>,
     database: Mutex<Database>,
     portal_enabled: Mutex<bool>,
+    git_watchers: Mutex<HashMap<String, GitWatcher>>,
 }
 
 // Debug command to print to terminal
@@ -554,6 +562,83 @@ fn pull_remote(repo_path: String, remote: String) -> Result<(), String> {
 #[tauri::command]
 fn push_remote(repo_path: String, remote: String) -> Result<(), String> {
     GitService::push(&repo_path, &remote)
+}
+
+// Git file watcher commands
+#[tauri::command]
+fn watch_repo(
+    repo_path: String,
+    app_handle: tauri::AppHandle,
+    state: tauri::State<Arc<AppState>>,
+) -> Result<(), String> {
+    use notify::RecursiveMode;
+    use std::path::Path;
+
+    // Check if already watching this repo
+    {
+        let watchers = state.git_watchers.lock();
+        if watchers.contains_key(&repo_path) {
+            return Ok(()); // Already watching
+        }
+    }
+
+    let git_dir = Path::new(&repo_path).join(".git");
+    if !git_dir.exists() {
+        return Err("Not a git repository".to_string());
+    }
+
+    let repo_path_clone = repo_path.clone();
+    let app_handle_clone = app_handle.clone();
+
+    // Create a debounced watcher with 500ms delay to batch rapid changes
+    let mut debouncer = new_debouncer(
+        Duration::from_millis(500),
+        move |result: Result<Vec<notify_debouncer_mini::DebouncedEvent>, notify::Error>| {
+            match result {
+                Ok(events) => {
+                    // Check if any event is relevant (not just access)
+                    let has_changes = events.iter().any(|e| {
+                        matches!(e.kind, DebouncedEventKind::Any)
+                    });
+
+                    if has_changes {
+                        // Emit event to frontend
+                        let _ = app_handle_clone.emit("git-files-changed", &repo_path_clone);
+                    }
+                }
+                Err(e) => {
+                    println!("Git watcher error: {:?}", e);
+                }
+            }
+        },
+    ).map_err(|e| e.to_string())?;
+
+    // Watch the .git directory (especially index file which changes on most operations)
+    debouncer.watcher().watch(&git_dir, RecursiveMode::Recursive)
+        .map_err(|e| e.to_string())?;
+
+    // Also watch the working directory for file changes (non-recursive to avoid performance issues)
+    // This catches new files, deletions, and modifications before they're staged
+    let work_dir = Path::new(&repo_path);
+    debouncer.watcher().watch(work_dir, RecursiveMode::NonRecursive)
+        .map_err(|e| e.to_string())?;
+
+    // Store the watcher
+    let git_watcher = GitWatcher {
+        _debouncer: debouncer,
+    };
+    state.git_watchers.lock().insert(repo_path, git_watcher);
+
+    Ok(())
+}
+
+#[tauri::command]
+fn unwatch_repo(
+    repo_path: String,
+    state: tauri::State<Arc<AppState>>,
+) -> Result<(), String> {
+    state.git_watchers.lock().remove(&repo_path);
+    Ok(())
 }
 
 // Project commands
@@ -1211,6 +1296,7 @@ pub fn run() {
         terminals: Mutex::new(HashMap::new()),
         database: Mutex::new(db),
         portal_enabled: Mutex::new(false),
+        git_watchers: Mutex::new(HashMap::new()),
     });
     let state_for_window_event = state.clone();
 
@@ -1249,6 +1335,8 @@ pub fn run() {
             fetch_remote,
             pull_remote,
             push_remote,
+            watch_repo,
+            unwatch_repo,
             // Project
             add_project,
             remove_project,

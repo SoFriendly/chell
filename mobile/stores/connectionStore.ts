@@ -204,6 +204,19 @@ export const useConnectionStore = create<ConnectionStore>()(
                 });
                 break;
 
+              case "git_files_changed":
+                // Desktop detected git file changes, refresh git status
+                const changedRepoPath = (message as { repoPath: string }).repoPath;
+                const currentProject = get().activeProject;
+                // Only refresh if this is the active project
+                if (currentProject && currentProject.path === changedRepoPath) {
+                  console.log("[ConnectionStore] Git files changed, refreshing status");
+                  import("./gitStore").then(({ useGitStore }) => {
+                    useGitStore.getState().refresh(changedRepoPath);
+                  });
+                }
+                break;
+
               case "error":
                 set({ error: message.message });
                 break;

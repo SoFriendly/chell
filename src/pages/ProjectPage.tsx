@@ -749,6 +749,32 @@ export default function ProjectPage() {
     return () => clearInterval(interval);
   }, [autoFetchRemote, currentProject?.path, refreshGitData]);
 
+  // File watcher for git status updates (replaces polling)
+  useEffect(() => {
+    if (!currentProject?.path) return;
+
+    const repoPath = currentProject.path;
+
+    // Start watching the repo
+    invoke("watch_repo", { repoPath }).catch((err) => {
+      console.error("Failed to start git watcher:", err);
+    });
+
+    // Listen for file change events
+    const unlisten = listen<string>("git-files-changed", (event) => {
+      // Only refresh if this event is for our repo
+      if (event.payload === repoPath) {
+        loadGitData(repoPath);
+      }
+    });
+
+    return () => {
+      // Stop watching when component unmounts or project changes
+      invoke("unwatch_repo", { repoPath }).catch(() => {});
+      unlisten.then((fn) => fn());
+    };
+  }, [currentProject?.path]);
+
   if (!currentProject) {
     return (
       <div className="flex h-full items-center justify-center bg-background">

@@ -499,3 +499,20 @@ export function setupTerminalForwarding() {
     });
   });
 }
+
+// Git file change forwarding - notify mobile when git files change
+export function setupGitChangeForwarding() {
+  import("@tauri-apps/api/event").then(({ listen }) => {
+    listen<string>("git-files-changed", (event) => {
+      const { isConnected, sendMessage } = usePortalStore.getState();
+      if (!isConnected) return;
+
+      // Notify mobile that git files changed for this repo
+      sendMessage({
+        type: "git_files_changed",
+        id: crypto.randomUUID(),
+        repoPath: event.payload,
+      });
+    });
+  });
+}
