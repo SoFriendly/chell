@@ -645,10 +645,10 @@ fn watch_repo(
     debouncer.watcher().watch(&git_dir, RecursiveMode::Recursive)
         .map_err(|e| e.to_string())?;
 
-    // Also watch the working directory for file changes (non-recursive to avoid performance issues)
+    // Also watch the working directory recursively for file changes
     // This catches new files, deletions, and modifications before they're staged
     let work_dir = Path::new(&repo_path);
-    debouncer.watcher().watch(work_dir, RecursiveMode::NonRecursive)
+    debouncer.watcher().watch(work_dir, RecursiveMode::Recursive)
         .map_err(|e| e.to_string())?;
 
     // Store the watcher

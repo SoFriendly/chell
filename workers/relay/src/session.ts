@@ -115,6 +115,10 @@ export class SessionDO implements DurableObject {
         await this.handleStatusUpdate(ws, message);
         break;
 
+      case "git_files_changed":
+        await this.handleGitFilesChanged(ws, message);
+        break;
+
       case "request_status":
         await this.handleRequestStatus(ws, message);
         break;
@@ -446,6 +450,24 @@ export class SessionDO implements DurableObject {
   }
 
   private async handleStatusUpdate(ws: WebSocket, message: StatusUpdateMessage) {
+    const state = this.connections.get(ws);
+    if (!state || state.type !== "desktop") return;
+
+    // Forward to all mobile clients
+    for (const [token, desktop] of this.desktopBySession) {
+      if (desktop === ws) {
+        const mobiles = this.mobilesBySession.get(token);
+        if (mobiles) {
+          for (const mobileWs of mobiles) {
+            mobileWs.send(JSON.stringify(message));
+          }
+        }
+        break;
+      }
+    }
+  }
+
+  private async handleGitFilesChanged(ws: WebSocket, message: any) {
     const state = this.connections.get(ws);
     if (!state || state.type !== "desktop") return;
 
