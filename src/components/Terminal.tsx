@@ -10,6 +10,7 @@ import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { useSettingsStore } from "@/stores/settingsStore";
+import { FilePathLinkProvider } from "@/utils/terminalLinkProvider";
 import "@xterm/xterm/css/xterm.css";
 
 interface TerminalProps {
@@ -210,8 +211,10 @@ export default function Terminal({ id, command = "", cwd, onTerminalReady, visib
 
     terminal.open(containerRef.current);
 
-    // NOTE: Custom link provider for file paths disabled to improve typing performance
-    // The WebLinksAddon still provides URL link detection
+    // Register custom file path link provider (on-demand, hover-only processing for performance)
+    // This only parses lines when the user hovers, not during typing
+    const filePathLinkProvider = new FilePathLinkProvider(terminal, cwd);
+    terminal.registerLinkProvider(filePathLinkProvider);
 
     // Block DEC mode 1004 (focus reporting) to prevent Claude Code from
     // switching to dashboard view when terminal loses focus.

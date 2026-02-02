@@ -760,6 +760,110 @@ fn reveal_in_file_manager(path: String) -> Result<(), String> {
     Ok(())
 }
 
+#[tauri::command]
+fn open_file_in_editor(path: String, line: Option<u32>, column: Option<u32>) -> Result<(), String> {
+    use std::path::Path;
+
+    let file_path = Path::new(&path);
+    if !file_path.exists() {
+        return Err(format!("File not found: {}", path));
+    }
+
+    let line_num = line.unwrap_or(1);
+    let col_num = column.unwrap_or(1);
+
+    // Try VS Code first (most common code editor with line number support)
+    let vscode_result = {
+        #[cfg(target_os = "macos")]
+        {
+            // Try 'code' command first, then fall back to VS Code app bundle
+            std::process::Command::new("code")
+                .arg("--goto")
+                .arg(format!("{}:{}:{}", path, line_num, col_num))
+                .spawn()
+                .or_else(|_| {
+                    std::process::Command::new("/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code")
+                        .arg("--goto")
+                        .arg(format!("{}:{}:{}", path, line_num, col_num))
+                        .spawn()
+                })
+        }
+        #[cfg(target_os = "windows")]
+        {
+            std::process::Command::new("code")
+                .arg("--goto")
+                .arg(format!("{}:{}:{}", path, line_num, col_num))
+                .spawn()
+        }
+        #[cfg(target_os = "linux")]
+        {
+            std::process::Command::new("code")
+                .arg("--goto")
+                .arg(format!("{}:{}:{}", path, line_num, col_num))
+                .spawn()
+        }
+    };
+
+    if vscode_result.is_ok() {
+        return Ok(());
+    }
+
+    // Try Cursor editor (VS Code fork)
+    let cursor_result = std::process::Command::new("cursor")
+        .arg("--goto")
+        .arg(format!("{}:{}:{}", path, line_num, col_num))
+        .spawn();
+
+    if cursor_result.is_ok() {
+        return Ok(());
+    }
+
+    // Try Zed editor
+    let zed_result = {
+        #[cfg(target_os = "macos")]
+        {
+            std::process::Command::new("zed")
+                .arg(format!("{}:{}", path, line_num))
+                .spawn()
+        }
+        #[cfg(not(target_os = "macos"))]
+        {
+            std::process::Command::new("zed")
+                .arg(format!("{}:{}", path, line_num))
+                .spawn()
+        }
+    };
+
+    if zed_result.is_ok() {
+        return Ok(());
+    }
+
+    // Fall back to system default application
+    #[cfg(target_os = "macos")]
+    {
+        std::process::Command::new("open")
+            .arg(&path)
+            .spawn()
+            .map_err(|e| e.to_string())?;
+    }
+    #[cfg(target_os = "windows")]
+    {
+        std::process::Command::new("cmd")
+            .args(["/C", "start", "", &path])
+            .spawn()
+            .map_err(|e| e.to_string())?;
+    }
+    #[cfg(target_os = "linux")]
+    {
+        std::process::Command::new("xdg-open")
+            .arg(&path)
+            .spawn()
+            .map_err(|e| e.to_string())?;
+    }
+
+    Ok(())
+}
+
 // List directories in a path
 #[tauri::command]
 fn list_directories(path: String) -> Result<Vec<String>, String> {
@@ -1440,6 +1544,7 @@ pub fn run() {
             open_folder_dialog,
             open_in_finder,
             reveal_in_file_manager,
+            open_file_in_editor,
             list_directories,
             get_shell_history,
             get_file_tree,
