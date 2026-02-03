@@ -22,6 +22,7 @@ interface ProjectContext {
   hasMakefile: boolean;
   configSnippet: string | null;
   configFiles: string[];
+  folderStructure: string | null;
 }
 
 interface SmartShellProps {
