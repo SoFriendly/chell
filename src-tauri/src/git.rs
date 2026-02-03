@@ -108,7 +108,6 @@ impl GitService {
 
         // Use RefCell to allow interior mutability
         let diffs: RefCell<HashMap<String, FileDiff>> = RefCell::new(HashMap::new());
-        let workdir = repo.workdir().map(|p| p.to_path_buf());
 
         diff.foreach(
             &mut |delta, _| {
@@ -118,14 +117,6 @@ impl GitService {
                     .or_else(|| delta.old_file().path())
                     .map(|p| p.to_string_lossy().to_string())
                     .unwrap_or_default();
-
-                // Skip directories - only show files
-                if let Some(ref wd) = workdir {
-                    let full_path = wd.join(&path);
-                    if full_path.is_dir() {
-                        return true; // Skip this entry
-                    }
-                }
 
                 let status = match delta.status() {
                     git2::Delta::Added | git2::Delta::Untracked => "added",
