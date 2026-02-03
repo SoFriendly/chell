@@ -152,6 +152,7 @@ fn spawn_terminal(
     cwd: String,
     cols: Option<u16>,
     rows: Option<u16>,
+    args: Option<Vec<String>>,
     app_handle: tauri::AppHandle,
     state: tauri::State<Arc<AppState>>,
 ) -> Result<String, String> {
@@ -171,7 +172,7 @@ fn spawn_terminal(
         })
         .map_err(|e| e.to_string())?;
 
-    println!("DEBUG spawn_terminal - shell: {:?}", shell);
+    println!("DEBUG spawn_terminal - shell: {:?}, args: {:?}", shell, args);
 
     let mut cmd = if shell.is_empty() {
         // Use default shell
@@ -184,8 +185,46 @@ fn spawn_terminal(
             { "powershell.exe".to_string() }
         });
         CommandBuilder::new(shell_path)
+    } else if let Some(ref arg_list) = args {
+        // Args provided separately - use them directly (handles paths with spaces)
+        let command = &shell;
+        let resolved_command = if command.contains('/') {
+            Some(command.to_string())
+        } else {
+            find_command_path(command).map(|p| p.to_string_lossy().to_string())
+        };
+
+        println!("DEBUG spawn_terminal - resolved command: {:?}", resolved_command);
+
+        if let Some(full_path) = resolved_command {
+            let mut cmd = CommandBuilder::new(&full_path);
+            for arg in arg_list {
+                cmd.arg(arg);
+            }
+            cmd
+        } else {
+            // Command not found in PATH - run through shell
+            let shell_path = std::env::var("SHELL").unwrap_or_else(|_| {
+                #[cfg(target_os = "macos")]
+                { "/bin/zsh".to_string() }
+                #[cfg(target_os = "linux")]
+                { "/bin/bash".to_string() }
+                #[cfg(target_os = "windows")]
+                { "powershell.exe".to_string() }
+            });
+
+            // Properly escape args for shell
+            let escaped_args: Vec<String> = arg_list.iter()
+                .map(|a| format!("'{}'", a.replace("'", "'\\''")))
+                .collect();
+            let full_cmd = format!("{} {}", shell, escaped_args.join(" "));
+
+            let mut cmd = CommandBuilder::new(&shell_path);
+            cmd.args(["-i", "-l", "-c", &format!("exec {}", full_cmd)]);
+            cmd
+        }
     } else {
-        // Parse the shell command
+        // Parse the shell command (legacy behavior)
         let parts: Vec<&str> = shell.split_whitespace().collect();
         if parts.is_empty() {
             return Err("Empty command".to_string());
@@ -473,8 +512,8 @@ fn get_diff(repo_path: String) -> Result<Vec<FileDiff>, String> {
 }
 
 #[tauri::command]
-fn commit(repo_path: String, message: String) -> Result<(), String> {
-    GitService::commit(&repo_path, &message)
+fn commit(repo_path: String, message: String, files: Option<Vec<String>>) -> Result<(), String> {
+    GitService::commit(&repo_path, &message, files)
 }
 
 #[tauri::command]

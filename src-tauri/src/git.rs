@@ -194,7 +194,7 @@ impl GitService {
         Ok(result)
     }
 
-    pub fn commit(repo_path: &str, message: &str) -> Result<(), String> {
+    pub fn commit(repo_path: &str, message: &str, files: Option<Vec<String>>) -> Result<(), String> {
         let repo = Repository::open(repo_path).map_err(|e| e.to_string())?;
 
         // Get all changed/untracked files from status
@@ -203,10 +203,22 @@ impl GitService {
         status_opts.recurse_untracked_dirs(true);
         let statuses = repo.statuses(Some(&mut status_opts)).map_err(|e| e.to_string())?;
 
+        // Create a set of files to commit (if specified)
+        let files_to_commit: Option<std::collections::HashSet<&str>> = files
+            .as_ref()
+            .map(|f| f.iter().map(|s| s.as_str()).collect());
+
         // Add each file individually to the index
         let mut index = repo.index().map_err(|e| e.to_string())?;
         for entry in statuses.iter() {
             if let Some(path) = entry.path() {
+                // Skip if we have a specific file list and this file isn't in it
+                if let Some(ref allowed) = files_to_commit {
+                    if !allowed.contains(path) {
+                        continue;
+                    }
+                }
+
                 let status = entry.status();
                 if status.is_wt_new() || status.is_wt_modified() || status.is_wt_renamed() || status.is_wt_typechange() {
                     index.add_path(std::path::Path::new(path)).map_err(|e| e.to_string())?;

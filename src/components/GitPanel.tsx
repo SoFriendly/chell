@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import {
   GitCommit,
   RefreshCw,
@@ -114,6 +115,7 @@ export default function GitPanel({ projectPath, projectName, onRefresh, onFileDr
   const [isSwitchingBranch, setIsSwitchingBranch] = useState(false);
   const [expandedFiles, setExpandedFiles] = useState<Set<string>>(new Set());
   const [selectedFiles, setSelectedFiles] = useState<Set<string>>(new Set());
+  const [filesToCommit, setFilesToCommit] = useState<Set<string>>(new Set());
   const [showDiscardSelectedDialog, setShowDiscardSelectedDialog] = useState(false);
   const [isDiscardingSelected, setIsDiscardingSelected] = useState(false);
   const [viewMode, setViewMode] = useState<"changes" | "history" | "files">("changes");
@@ -149,6 +151,7 @@ export default function GitPanel({ projectPath, projectName, onRefresh, onFileDr
       setCommitSubject("");
       setCommitDescription("");
       setSelectedFiles(new Set());
+      setFilesToCommit(new Set());
       lastDiffsHash.current = "";
       hasGeneratedInitialMessage.current = false;
     } else if (diffsHash !== lastDiffsHash.current) {
@@ -162,6 +165,27 @@ export default function GitPanel({ projectPath, projectName, onRefresh, onFileDr
         const next = new Set<string>();
         prev.forEach(path => {
           if (currentPaths.has(path)) next.add(path);
+        });
+        return next;
+      });
+
+      // Initialize filesToCommit with all current files (checked by default)
+      // Keep existing selections that still exist, add new files
+      setFilesToCommit(prev => {
+        const next = new Set<string>();
+        // Add all current files - new files default to checked
+        currentPaths.forEach(path => {
+          // If we had a previous hash and this file existed before, keep its selection state
+          // Otherwise (new file or first load), default to checked
+          if (previousHash && prev.has(path)) {
+            next.add(path);
+          } else if (!previousHash || !prev.size) {
+            // First load or empty previous selection - check all
+            next.add(path);
+          } else {
+            // New file - default to checked
+            next.add(path);
+          }
         });
         return next;
       });
@@ -280,26 +304,53 @@ export default function GitPanel({ projectPath, projectName, onRefresh, onFileDr
     return 'Show in File Manager';
   };
 
-  const handleOpenInTerminalEditor = (filePath: string) => {
+  const handleOpenInTerminalEditor = async (filePath: string) => {
     if (!preferredEditor) {
       toast.error("No preferred editor set. Configure it in Settings.");
       return;
     }
-    invoke("open_in_terminal_editor", {
-      path: `${projectPath}/${filePath}`,
-      editor: preferredEditor
-    }).catch((err) => {
-      toast.error(`Failed to open in ${preferredEditor}: ${err}`);
-    });
+
+    const fullPath = `${projectPath}/${filePath}`;
+    const fileName = filePath.split("/").pop() || filePath;
+    const title = `${preferredEditor} - ${fileName}`;
+
+    try {
+      const params = new URLSearchParams({
+        editor: preferredEditor,
+        file: fullPath,
+        cwd: projectPath,
+        title,
+      });
+
+      const webview = new WebviewWindow(`editor-${Date.now()}`, {
+        url: `/terminal?${params.toString()}`,
+        title,
+        width: 900,
+        height: 600,
+        center: true,
+        titleBarStyle: "overlay",
+        hiddenTitle: true,
+        visible: true,
+      });
+
+      webview.once("tauri://error", (e) => {
+        console.error("Failed to create editor window:", e);
+        toast.error(`Failed to open ${preferredEditor}`);
+      });
+    } catch (err) {
+      toast.error(`Failed to open ${preferredEditor}: ${err}`);
+    }
   };
 
   const generateCommitMessage = async () => {
-    if (diffs.length === 0) return;
+    // Filter diffs to only include selected files
+    const selectedDiffs = diffs.filter(d => filesToCommit.has(d.path));
+    if (selectedDiffs.length === 0) return;
 
     if (!groqApiKey) {
       toast.error("Please set your Groq API key in Settings to generate AI commit messages.");
       // Fallback to a simple message
-      const fileNames = diffs.map(d => d.path.split('/').pop()).join(', ');
+      const fileNames = selectedDiffs.map(d => d.path.split('/').pop()).join(', ');
       setCommitSubject(`Update ${fileNames}`);
       return;
     }
@@ -307,7 +358,7 @@ export default function GitPanel({ projectPath, projectName, onRefresh, onFileDr
     setIsGenerating(true);
     try {
       const suggestion = await invoke<CommitSuggestion>("generate_commit_message", {
-        diffs,
+        diffs: selectedDiffs,
         apiKey: groqApiKey,
       });
       setCommitSubject(suggestion.subject);
@@ -315,7 +366,7 @@ export default function GitPanel({ projectPath, projectName, onRefresh, onFileDr
     } catch (error) {
       console.error("Failed to generate commit message:", error);
       // Fallback to a simple message
-      const fileNames = diffs.map(d => d.path.split('/').pop()).join(', ');
+      const fileNames = selectedDiffs.map(d => d.path.split('/').pop()).join(', ');
       setCommitSubject(`Update ${fileNames}`);
     } finally {
       setIsGenerating(false);
@@ -327,12 +378,17 @@ export default function GitPanel({ projectPath, projectName, onRefresh, onFileDr
       toast.error("Please enter a commit message");
       return;
     }
+    if (filesToCommit.size === 0) {
+      toast.error("Please select at least one file to commit");
+      return;
+    }
     setIsCommitting(true);
     try {
       const fullMessage = commitDescription.trim()
         ? `${commitSubject}\n\n${commitDescription}`
         : commitSubject;
-      await invoke("commit", { repoPath: projectPath, message: fullMessage });
+      const files = Array.from(filesToCommit);
+      await invoke("commit", { repoPath: projectPath, message: fullMessage, files });
       toast.success("Changes committed");
       setCommitSubject("");
       setCommitDescription("");
@@ -566,6 +622,19 @@ export default function GitPanel({ projectPath, projectName, onRefresh, onFileDr
     });
   };
 
+  const toggleFileToCommit = (path: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setFilesToCommit((prev) => {
+      const next = new Set(prev);
+      if (next.has(path)) {
+        next.delete(path);
+      } else {
+        next.add(path);
+      }
+      return next;
+    });
+  };
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case "added":
@@ -656,7 +725,19 @@ export default function GitPanel({ projectPath, projectName, onRefresh, onFileDr
               ) : (
                 <span className="h-3 w-3 shrink-0" /> // Placeholder for alignment
               )}
-              <span className={cn("h-2 w-2 shrink-0 rounded-sm", getStatusColor(diff.status))} />
+              <button
+                onClick={(e) => toggleFileToCommit(diff.path, e)}
+                className={cn(
+                  "h-3.5 w-3.5 shrink-0 rounded-sm border flex items-center justify-center transition-colors",
+                  filesToCommit.has(diff.path)
+                    ? cn(getStatusColor(diff.status), "border-transparent")
+                    : "border-muted-foreground/50 bg-transparent"
+                )}
+              >
+                {filesToCommit.has(diff.path) && (
+                  <Check className="h-2.5 w-2.5 text-white" strokeWidth={3} />
+                )}
+              </button>
               <div className="flex-1 min-w-0">
                 <span className="block break-all font-mono text-xs">{diff.path}</span>
               </div>
@@ -1321,10 +1402,15 @@ export default function GitPanel({ projectPath, projectName, onRefresh, onFileDr
           <Button
             className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-medium"
             onClick={handleCommit}
-            disabled={isCommitting || !commitSubject.trim() || diffs.length === 0}
+            disabled={isCommitting || !commitSubject.trim() || filesToCommit.size === 0}
           >
             <span className="truncate">
-              {isCommitting ? "Committing..." : `Commit to ${currentBranch?.name || "main"}`}
+              {isCommitting
+                ? "Committing..."
+                : filesToCommit.size === diffs.length
+                  ? `Commit to ${currentBranch?.name || "main"}`
+                  : `Commit ${filesToCommit.size} file${filesToCommit.size !== 1 ? 's' : ''} to ${currentBranch?.name || "main"}`
+              }
             </span>
           </Button>
         )}

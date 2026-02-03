@@ -16,6 +16,7 @@ import "@xterm/xterm/css/xterm.css";
 interface TerminalProps {
   id?: string;  // Optional - if not provided, Terminal will spawn its own
   command?: string;  // Command to run (empty for default shell)
+  args?: string[];  // Args to pass to command (handles paths with spaces)
   cwd: string;
   onTerminalReady?: (terminalId: string) => void;  // Called when terminal is spawned
   visible?: boolean;  // Trigger resize when visibility changes
@@ -95,7 +96,7 @@ const TERMINAL_THEMES: Record<string, ITheme> = {
   },
 };
 
-export default function Terminal({ id, command = "", cwd, onTerminalReady, visible = true, autoFocusOnWindowFocus = false }: TerminalProps) {
+export default function Terminal({ id, command = "", args, cwd, onTerminalReady, visible = true, autoFocusOnWindowFocus = false }: TerminalProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const terminalRef = useRef<XTerm | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
@@ -354,12 +355,13 @@ export default function Terminal({ id, command = "", cwd, onTerminalReady, visib
 
     const spawnTerminal = async () => {
       try {
-        await invoke("debug_log", { message: `Terminal spawning with command: "${command}" (attempt ${retryCount + 1})` });
+        await invoke("debug_log", { message: `Terminal spawning with command: "${command}", args: ${JSON.stringify(args)} (attempt ${retryCount + 1})` });
         const newId = await invoke<string>("spawn_terminal", {
           shell: command,
           cwd,
           cols: initialDimensions.cols,
           rows: initialDimensions.rows,
+          args: args || null,
         });
         if (isMounted) {
           setTerminalId(newId);
@@ -382,7 +384,7 @@ export default function Terminal({ id, command = "", cwd, onTerminalReady, visib
     return () => {
       isMounted = false;
     };
-  }, [initialDimensions, id, command, cwd, onTerminalReady]);
+  }, [initialDimensions, id, command, args, cwd, onTerminalReady]);
 
   // Phase 4: Connect to PTY and handle ongoing resize
   useEffect(() => {
