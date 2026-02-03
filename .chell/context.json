@@ -1,0 +1,18 @@
+{
+  "projectType": "node",
+  "packageManager": "pnpm",
+  "scripts": [
+    "build",
+    "dev",
+    "preview",
+    "tauri"
+  ],
+  "hasDocker": false,
+  "hasMakefile": false,
+  "configSnippet": "=== package.json ===\n{\n  \"dependencies\": {\n    \"@radix-ui/react-accordion\": \"^1.2.12\",\n    \"@radix-ui/react-alert-dialog\": \"^1.1.15\",\n    \"@radix-ui/react-collapsible\": \"^1.1.12\",\n    \"@radix-ui/react-context-menu\": \"^2.2.16\",\n    \"@radix-ui/react-dialog\": \"^1.1.0\",\n    \"@radix-ui/react-dropdown-menu\": \"^2.1.16\",\n    \"@radix-ui/react-scroll-area\": \"^1.2.10\",\n    \"@radix-ui/react-select\": \"^2.2.6\",\n    \"@radix-ui/react-separator\": \"^1.1.8\",\n    \"@radix-ui/react-slot\": \"^1.1.0\",\n    \"@radix-ui/react-switch\": \"^1.2.6\",\n    \"@radix-ui/react-tabs\": \"^1.1.13\",\n    \"@radix-ui/react-tooltip\": \"^1.2.8\",\n    \"@tailwindcss/postcss\": \"^4.1.18\",\n    \"@tailwindcss/vite\": \"^4.1.18\",\n    \"@tauri-apps/api\": \"^2.9.1\",\n    \"@tauri-apps/plugin-dialog\": \"^2.6.0\",\n    \"@tauri-apps/plugin-opener\": \"^2.5.3\",\n    \"@tauri-apps/plugin-process\": \"^2.3.1\",\n    \"@tauri-apps/plugin-shell\": \"^2.3.4\"\n  },\n  \"devDependencies\": {\n    \"@tauri-apps/cli\": \"^2.9.6\",\n    \"@types/react\": \"^19.2.10\",\n    \"@types/react-dom\": \"^19.2.3\",\n    \"@vitejs/plugin-react\": \"^5.1.2\",\n    \"autoprefixer\": \"^10.4.24\",\n    \"postcss\": \"^8.5.6\",\n    \"tailwindcss\": \"^4.1.18\",\n    \"typescript\": \"~5.8.3\",\n    \"vite\": \"^7.3.1\"\n  },\n  \"scripts\": {\n    \"build\": \"tsc && vite build\",\n    \"dev\": \"vite\",\n    \"preview\": \"vite preview\",\n    \"tauri\": \"tauri\"\n  }\n}",
+  "configFiles": [
+    "package.json",
+    "tsconfig.json",
+    "vite.config.ts"
+  ]
+}

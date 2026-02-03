@@ -47,27 +47,11 @@ const steps: Step[] = [
     icon: <Sparkles className="h-12 w-12" />,
   },
   {
-    title: "Watch your code evolve",
+    title: "See every change as it happens",
     subtitle: "Git Panel",
     description:
-      "See every change as it happens. New files in green, modifications in orange, deletions in red. No more running git status — your codebase is always in view.",
+      "Watch your code evolve in real-time. Expand any file to see the diff, right-click to discard changes you don't want. Stay in control without breaking your flow.",
     icon: <GitBranch className="h-12 w-12" />,
-    highlight: "git",
-  },
-  {
-    title: "Understand what changed",
-    subtitle: "Inline Diffs",
-    description:
-      "Expand any file to see the diff. Good vibecoding means knowing what your AI wrote — Chell makes that instant, without opening another app.",
-    icon: <Eye className="h-12 w-12" />,
-    highlight: "git",
-  },
-  {
-    title: "Keep what works, toss the rest",
-    subtitle: "Granular Control",
-    description:
-      "AI gets it wrong sometimes. Right-click any change to discard it. Stay in control without breaking your flow.",
-    icon: <Undo2 className="h-12 w-12" />,
     highlight: "git",
   },
   {
@@ -90,7 +74,7 @@ const steps: Step[] = [
     title: "You're ready to vibe",
     subtitle: "Let's build",
     description:
-      "Open a project and start coding with AI. See every change, stay in control, ship faster — all from one place.",
+      "Open a project and start coding with AI. See every change, stay in control, ship faster.",
     icon: <Check className="h-12 w-12" />,
   },
 ];
@@ -400,8 +384,8 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
             transition={{ duration: 0.3 }}
           >
             <MockGitPanel
-              showDiff={currentStep === 2 || currentStep === 3}
-              showRevert={currentStep === 3}
+              showDiff={currentStep === 1}
+              showRevert={currentStep === 1}
             />
           </motion.div>
 

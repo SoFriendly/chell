@@ -30,6 +30,35 @@ export default {
       });
     }
 
+    // Handle chell-latest.* - redirect to the latest release files
+    const latestFileMatch = key.match(/^chell-latest\.(dmg|AppImage|deb|msi|exe)$/);
+    if (latestFileMatch) {
+      try {
+        const latestJson = await env.BUCKET.get("latest.json");
+        if (latestJson) {
+          const latest = await latestJson.json<{ version: string }>();
+          const version = latest.version;
+          const ext = latestFileMatch[1];
+
+          // Map extension to actual filename pattern
+          const fileMap: Record<string, string> = {
+            dmg: `v${version}/Chell_${version}_aarch64.dmg`,
+            AppImage: `v${version}/Chell_${version}_amd64.AppImage`,
+            deb: `v${version}/Chell_${version}_amd64.deb`,
+            msi: `v${version}/Chell_${version}_x64-setup.msi`,
+            exe: `v${version}/Chell_${version}_x64-setup.exe`,
+          };
+
+          const targetKey = fileMap[ext];
+          if (targetKey) {
+            return Response.redirect(`${url.origin}/${targetKey}`, 302);
+          }
+        }
+      } catch {
+        return new Response("Could not determine latest version", { status: 500 });
+      }
+    }
+
     try {
       const object = await env.BUCKET.get(key);
 

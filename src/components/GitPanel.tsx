@@ -72,8 +72,6 @@ import { useSettingsStore } from "@/stores/settingsStore";
 import { cn, formatTimestamp } from "@/lib/utils";
 import type { FileDiff, DiffHunk } from "@/types";
 
-// Groq API key for AI commit messages
-const GROQ_API_KEY = "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";
 
 interface GitPanelProps {
   projectPath: string;
@@ -102,7 +100,7 @@ interface FileTreeNode {
 
 export default function GitPanel({ projectPath, projectName, onRefresh, onFileDragStart, onFileDragEnd }: GitPanelProps) {
   const { diffs, branches, loading, status, history } = useGitStore();
-  const { autoCommitMessage } = useSettingsStore();
+  const { autoCommitMessage, groqApiKey } = useSettingsStore();
   const [commitSubject, setCommitSubject] = useState("");
   const [commitDescription, setCommitDescription] = useState("");
   const [isCommitting, setIsCommitting] = useState(false);
@@ -284,11 +282,19 @@ export default function GitPanel({ projectPath, projectName, onRefresh, onFileDr
   const generateCommitMessage = async () => {
     if (diffs.length === 0) return;
 
+    if (!groqApiKey) {
+      toast.error("Please set your Groq API key in Settings to generate AI commit messages.");
+      // Fallback to a simple message
+      const fileNames = diffs.map(d => d.path.split('/').pop()).join(', ');
+      setCommitSubject(`Update ${fileNames}`);
+      return;
+    }
+
     setIsGenerating(true);
     try {
       const suggestion = await invoke<CommitSuggestion>("generate_commit_message", {
         diffs,
-        apiKey: GROQ_API_KEY,
+        apiKey: groqApiKey,
       });
       setCommitSubject(suggestion.subject);
       setCommitDescription(suggestion.description);
@@ -1151,7 +1157,7 @@ export default function GitPanel({ projectPath, projectName, onRefresh, onFileDr
                         <div className="flex items-center gap-2 min-w-0">
                           <GitCommit className="h-3 w-3 shrink-0 text-muted-foreground" />
                           <span className="font-mono text-[10px] text-primary shrink-0">{commit.shortId}</span>
-                          <span className="text-xs truncate min-w-0">{commit.message.split('\n')[0]}</span>
+                          <span className="text-xs break-words min-w-0">{commit.message.split('\n')[0]}</span>
                         </div>
                         <div className="ml-5 flex items-center gap-2 text-[10px] text-muted-foreground min-w-0">
                           <span className="truncate min-w-0">{commit.author}</span>
