@@ -196,26 +196,25 @@ impl GitService {
 
     pub fn commit(repo_path: &str, message: &str) -> Result<(), String> {
         let repo = Repository::open(repo_path).map_err(|e| e.to_string())?;
-        let workdir = repo.workdir().ok_or("No working directory")?.to_path_buf();
 
-        // Add all changes to index, skipping directories
-        // Use "." to match everything from repo root
+        // Get all changed/untracked files from status
+        let mut status_opts = StatusOptions::new();
+        status_opts.include_untracked(true);
+        status_opts.recurse_untracked_dirs(true);
+        let statuses = repo.statuses(Some(&mut status_opts)).map_err(|e| e.to_string())?;
+
+        // Add each file individually to the index
         let mut index = repo.index().map_err(|e| e.to_string())?;
-        index
-            .add_all(
-                ["."].iter(),
-                git2::IndexAddOption::DEFAULT,
-                Some(&mut |path: &std::path::Path, _matched_spec: &[u8]| {
-                    // Skip directories - only add files
-                    let full_path = workdir.join(path);
-                    if full_path.is_dir() {
-                        1 // Skip this entry
-                    } else {
-                        0 // Add this entry
-                    }
-                }),
-            )
-            .map_err(|e| e.to_string())?;
+        for entry in statuses.iter() {
+            if let Some(path) = entry.path() {
+                let status = entry.status();
+                if status.is_wt_new() || status.is_wt_modified() || status.is_wt_renamed() || status.is_wt_typechange() {
+                    index.add_path(std::path::Path::new(path)).map_err(|e| e.to_string())?;
+                } else if status.is_wt_deleted() {
+                    index.remove_path(std::path::Path::new(path)).map_err(|e| e.to_string())?;
+                }
+            }
+        }
         index.write().map_err(|e| e.to_string())?;
 
         let tree_id = index.write_tree().map_err(|e| e.to_string())?;
