@@ -1,0 +1,45 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    /* Tokyo Night Theme */
+    --background: 228 18% 12%;
+    --foreground: 225 27% 88%;
+    --card: 228 18% 14%;
+    --card-foreground: 225 27% 88%;
+    --popover: 228 18% 14%;
+    --popover-foreground: 225 27% 88%;
+    --primary: 252 87% 67%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 228 18% 18%;
+    --secondary-foreground: 225 27% 88%;
+    --muted: 228 18% 20%;
+    --muted-foreground: 225 15% 55%;
+    --accent: 228 18% 20%;
+    --accent-foreground: 225 27% 88%;
+    --destructive: 353 80% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 228 18% 22%;
+    --input: 228 18% 22%;
+    --ring: 252 87% 67%;
+    --radius: 0.375rem;
+
+    /* Additional Tokyo Night colors */
+    --tokyo-green: 143 73% 63%;
+    --tokyo-cyan: 187 47% 55%;
+    --tokyo-blue: 215 82% 65%;
+    --tokyo-magenta: 302 50% 65%;
+    --tokyo-red: 353 80% 60%;
+    --tokyo-orange: 35 92% 67%;
+    --tokyo-yellow: 41 88% 70%;
+  }
+
+  * {
+    border-color: hsl(var(--border));
+  }
+
+  body {
+    background-color: hsl(var(--background));
+    color: hsl(var(--foreground));
+  }
+}

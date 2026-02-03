@@ -324,8 +324,9 @@ export default function GitPanel({ projectPath, projectName, onRefresh, onFileDr
       setCommitDescription("");
       onRefresh();
     } catch (error) {
-      toast.error("Failed to commit");
-      console.error(error);
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      toast.error(errorMsg || "Failed to commit");
+      console.error("Commit failed:", error);
     } finally {
       setIsCommitting(false);
     }
@@ -347,8 +348,9 @@ export default function GitPanel({ projectPath, projectName, onRefresh, onFileDr
       toast.success("Commit undone");
       onRefresh();
     } catch (error) {
-      toast.error("Failed to undo commit");
-      console.error(error);
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      toast.error(errorMsg || "Failed to undo commit");
+      console.error("Undo commit failed:", error);
     } finally {
       setIsUndoing(false);
     }
@@ -825,18 +827,28 @@ export default function GitPanel({ projectPath, projectName, onRefresh, onFileDr
         <div key={node.path}>
           {node.isDir ? (
             <>
-              <div
-                className="flex items-center gap-1.5 py-1 px-1 rounded hover:bg-muted/50 cursor-pointer"
-                onClick={() => onToggleDir(node.path)}
-              >
-                {expandedDirs.has(node.path) ? (
-                  <ChevronDown className="h-3 w-3 text-muted-foreground shrink-0" />
-                ) : (
-                  <ChevronRight className="h-3 w-3 text-muted-foreground shrink-0" />
-                )}
-                <Folder className="h-3.5 w-3.5 text-primary shrink-0" />
-                <span className="text-xs truncate">{node.name}</span>
-              </div>
+              <ContextMenu>
+                <ContextMenuTrigger asChild>
+                  <div
+                    className="flex items-center gap-1.5 py-1 px-1 rounded hover:bg-muted/50 cursor-pointer"
+                    onClick={() => onToggleDir(node.path)}
+                  >
+                    {expandedDirs.has(node.path) ? (
+                      <ChevronDown className="h-3 w-3 text-muted-foreground shrink-0" />
+                    ) : (
+                      <ChevronRight className="h-3 w-3 text-muted-foreground shrink-0" />
+                    )}
+                    <Folder className="h-3.5 w-3.5 text-primary shrink-0" />
+                    <span className="text-xs truncate">{node.name}</span>
+                  </div>
+                </ContextMenuTrigger>
+                <ContextMenuContent>
+                  <ContextMenuItem onClick={() => handleRevealInFileManager(node.path)}>
+                    <FolderOpen className="mr-2 h-4 w-4" />
+                    {getRevealLabel()}
+                  </ContextMenuItem>
+                </ContextMenuContent>
+              </ContextMenu>
               {expandedDirs.has(node.path) && node.children && (
                 <FileTreeView
                   nodes={node.children}

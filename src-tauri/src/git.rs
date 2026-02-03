@@ -99,6 +99,8 @@ impl GitService {
 
         let mut opts = DiffOptions::new();
         opts.include_untracked(true);
+        opts.recurse_untracked_dirs(true);
+        opts.show_untracked_content(true);
 
         let diff = repo
             .diff_tree_to_workdir_with_index(head.as_ref(), Some(&mut opts))
@@ -106,6 +108,7 @@ impl GitService {
 
         // Use RefCell to allow interior mutability
         let diffs: RefCell<HashMap<String, FileDiff>> = RefCell::new(HashMap::new());
+        let workdir = repo.workdir().map(|p| p.to_path_buf());
 
         diff.foreach(
             &mut |delta, _| {
@@ -115,6 +118,14 @@ impl GitService {
                     .or_else(|| delta.old_file().path())
                     .map(|p| p.to_string_lossy().to_string())
                     .unwrap_or_default();
+
+                // Skip directories - only show files
+                if let Some(ref wd) = workdir {
+                    let full_path = wd.join(&path);
+                    if full_path.is_dir() {
+                        return true; // Skip this entry
+                    }
+                }
 
                 let status = match delta.status() {
                     git2::Delta::Added | git2::Delta::Untracked => "added",
@@ -194,11 +205,24 @@ impl GitService {
 
     pub fn commit(repo_path: &str, message: &str) -> Result<(), String> {
         let repo = Repository::open(repo_path).map_err(|e| e.to_string())?;
+        let workdir = repo.workdir().ok_or("No working directory")?.to_path_buf();
 
-        // Add all changes to index
+        // Add all changes to index, skipping directories
         let mut index = repo.index().map_err(|e| e.to_string())?;
         index
-            .add_all(["*"].iter(), git2::IndexAddOption::DEFAULT, None)
+            .add_all(
+                ["*"].iter(),
+                git2::IndexAddOption::DEFAULT,
+                Some(&mut |path: &std::path::Path, _matched_spec: &[u8]| {
+                    // Skip directories - only add files
+                    let full_path = workdir.join(path);
+                    if full_path.is_dir() {
+                        1 // Skip this entry
+                    } else {
+                        0 // Add this entry
+                    }
+                }),
+            )
             .map_err(|e| e.to_string())?;
         index.write().map_err(|e| e.to_string())?;
 
