@@ -1,8 +1,6 @@
 import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
-import { check } from "@tauri-apps/plugin-updater";
-import { relaunch } from "@tauri-apps/plugin-process";
 import {
   Settings,
   Palette,
@@ -27,6 +25,7 @@ import {
 } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useSettingsStore } from "@/stores/settingsStore";
+import { useUpdateStore } from "@/stores/updateStore";
 import { cn } from "@/lib/utils";
 import { CustomThemeEditor } from "@/components/CustomThemeEditor";
 import { RemotePortalSettings } from "@/components/RemotePortalSettings";
@@ -140,8 +139,8 @@ export default function SettingsSheet({ open, onOpenChange }: SettingsSheetProps
     "codex": assistantArgs["codex"] || "",
     "opencode": assistantArgs["opencode"] || "",
   });
-  const [isCheckingUpdate, setIsCheckingUpdate] = useState(false);
-  const [updateStatus, setUpdateStatus] = useState<string | null>(null);
+
+  const { isChecking: isCheckingUpdate, checkForUpdates, updateAvailable } = useUpdateStore();
 
   // Update local state when store changes
   useEffect(() => {
@@ -226,37 +225,16 @@ export default function SettingsSheet({ open, onOpenChange }: SettingsSheetProps
     toast.success("Install command copied to clipboard");
   };
 
-  const checkForUpdates = async () => {
-    setIsCheckingUpdate(true);
-    setUpdateStatus(null);
+  const handleCheckForUpdates = async () => {
     try {
-      const update = await check();
-      if (update) {
-        setUpdateStatus(`Version ${update.version} available`);
-        toast.success(`Update available: v${update.version}`, {
-          action: {
-            label: "Install",
-            onClick: async () => {
-              try {
-                await update.downloadAndInstall();
-                toast.success("Update installed! Restarting...");
-                await relaunch();
-              } catch (e) {
-                toast.error("Failed to install update");
-              }
-            },
-          },
-        });
-      } else {
-        setUpdateStatus("You're on the latest version");
+      await checkForUpdates();
+      // If no update available, show a toast (the dialog will show automatically if update found)
+      if (!useUpdateStore.getState().updateAvailable) {
         toast.success("You're on the latest version");
       }
     } catch (error) {
       console.error("Failed to check for updates:", error);
-      setUpdateStatus("Failed to check for updates");
       toast.error("Failed to check for updates");
-    } finally {
-      setIsCheckingUpdate(false);
     }
   };
 
@@ -683,14 +661,16 @@ export default function SettingsSheet({ open, onOpenChange }: SettingsSheetProps
                     <div className="mt-6 flex items-center justify-between">
                       <div>
                         <p className="text-sm font-medium">Updates</p>
-                        {updateStatus && (
-                          <p className="text-xs text-muted-foreground">{updateStatus}</p>
+                        {updateAvailable && (
+                          <p className="text-xs text-muted-foreground">
+                            Version {updateAvailable.version} available
+                          </p>
                         )}
                       </div>
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={checkForUpdates}
+                        onClick={handleCheckForUpdates}
                         disabled={isCheckingUpdate}
                       >
                         {isCheckingUpdate ? (

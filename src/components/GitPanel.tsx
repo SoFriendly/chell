@@ -1296,6 +1296,14 @@ export default function GitPanel({ projectPath, projectName, onRefresh, onFileDr
                       </div>
                     </ContextMenuTrigger>
                     <ContextMenuContent>
+                      <ContextMenuItem onClick={() => {
+                        navigator.clipboard.writeText(commit.id);
+                        toast.success("SHA copied to clipboard");
+                      }}>
+                        <Copy className="mr-2 h-4 w-4" />
+                        Copy SHA
+                      </ContextMenuItem>
+                      <ContextMenuSeparator />
                       <ContextMenuItem onClick={() => handleRevertCommit(commit.id)}>
                         <RotateCcw className="mr-2 h-4 w-4" />
                         Revert this commit

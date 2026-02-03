@@ -1,6 +1,4 @@
-import { useEffect, useState } from "react";
-import { check } from "@tauri-apps/plugin-updater";
-import { relaunch } from "@tauri-apps/plugin-process";
+import { useEffect } from "react";
 import { toast } from "sonner";
 import { Download, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -12,93 +10,44 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-
-interface UpdateInfo {
-  version: string;
-  body?: string;
-}
+import { useUpdateStore } from "@/stores/updateStore";
 
 export default function UpdateChecker() {
-  const [updateAvailable, setUpdateAvailable] = useState<UpdateInfo | null>(null);
-  const [isDownloading, setIsDownloading] = useState(false);
-  const [downloadProgress, setDownloadProgress] = useState(0);
-  const [isInstalling, setIsInstalling] = useState(false);
+  const {
+    updateAvailable,
+    isDownloading,
+    isInstalling,
+    downloadProgress,
+    checkForUpdates,
+    downloadAndInstall,
+    dismiss,
+  } = useUpdateStore();
 
   useEffect(() => {
     // Check for updates on mount (with a small delay to not block startup)
-    const timer = setTimeout(checkForUpdates, 3000);
+    const timer = setTimeout(() => {
+      checkForUpdates().catch(() => {
+        // Silently fail - update check is not critical
+      });
+    }, 3000);
     return () => clearTimeout(timer);
-  }, []);
-
-  const checkForUpdates = async () => {
-    try {
-      const update = await check();
-      if (update) {
-        setUpdateAvailable({
-          version: update.version,
-          body: update.body,
-        });
-      }
-    } catch (error) {
-      // Silently fail - update check is not critical
-      console.error("Failed to check for updates:", error);
-    }
-  };
+  }, [checkForUpdates]);
 
   const handleDownloadAndInstall = async () => {
-    if (!updateAvailable) return;
-
-    setIsDownloading(true);
     try {
-      const update = await check();
-      if (!update) return;
-
-      let contentLength = 0;
-      let downloaded = 0;
-
-      // Download the update
-      await update.downloadAndInstall((event) => {
-        switch (event.event) {
-          case "Started":
-            contentLength = event.data.contentLength ?? 0;
-            downloaded = 0;
-            setDownloadProgress(0);
-            break;
-          case "Progress":
-            downloaded += event.data.chunkLength;
-            const progress = contentLength > 0
-              ? Math.round((downloaded / contentLength) * 100)
-              : 0;
-            setDownloadProgress(progress);
-            break;
-          case "Finished":
-            setDownloadProgress(100);
-            setIsDownloading(false);
-            setIsInstalling(true);
-            break;
-        }
-      });
-
-      // Relaunch the app to apply the update
+      await downloadAndInstall();
       toast.success("Update installed! Restarting...");
-      await relaunch();
     } catch (error) {
       console.error("Failed to download/install update:", error);
       const errorMessage = error instanceof Error ? error.message : String(error);
       toast.error(`Failed to install update: ${errorMessage}`);
-      setIsDownloading(false);
-      setIsInstalling(false);
     }
-  };
-
-  const handleDismiss = () => {
-    setUpdateAvailable(null);
   };
 
   if (!updateAvailable) return null;
 
   return (
-    <Dialog open={!!updateAvailable} onOpenChange={(open) => !open && handleDismiss()}>
+    <Dialog open={!!updateAvailable} onOpenChange={(open) => !open && dismiss()}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
@@ -140,7 +89,7 @@ export default function UpdateChecker() {
         )}
 
         <DialogFooter className="gap-2 sm:gap-0">
-          <Button variant="outline" onClick={handleDismiss} disabled={isDownloading || isInstalling}>
+          <Button variant="outline" onClick={dismiss} disabled={isDownloading || isInstalling}>
             Later
           </Button>
           <Button

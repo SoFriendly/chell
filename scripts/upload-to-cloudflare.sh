@@ -21,6 +21,34 @@ fi
 VERSION=$(grep '"version"' src-tauri/tauri.conf.json | head -1 | sed 's/.*"version": "\(.*\)".*/\1/')
 echo "Uploading version: $VERSION"
 
+# Extract changelog for this version from CHANGELOG.md
+extract_changelog() {
+  local version=$1
+  local changelog_file="CHANGELOG.md"
+
+  if [ ! -f "$changelog_file" ]; then
+    echo "Update to version ${version}"
+    return
+  fi
+
+  # Extract content between ## [version] and the next ## [
+  awk -v ver="$version" '
+    /^## \[/ {
+      if (found) exit
+      if ($0 ~ "\\[" ver "\\]") found=1
+      next
+    }
+    found && /^[^#]/ { print }
+  ' "$changelog_file" | sed '/^$/d' | sed 's/^- /• /'
+}
+
+CHANGELOG_NOTES=$(extract_changelog "$VERSION")
+if [ -z "$CHANGELOG_NOTES" ]; then
+  CHANGELOG_NOTES="Update to version ${VERSION}"
+fi
+echo "Changelog notes:"
+echo "$CHANGELOG_NOTES"
+
 # R2 endpoint
 R2_ENDPOINT="https://${CLOUDFLARE_ACCOUNT_ID}.r2.cloudflarestorage.com"
 
@@ -100,10 +128,13 @@ WIN_SIG=""
 PUB_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 LATEST_JSON="src-tauri/target/release/bundle/latest.json"
 
+# Escape changelog notes for JSON (convert newlines to \n)
+CHANGELOG_JSON=$(echo "$CHANGELOG_NOTES" | awk '{printf "%s\\n", $0}' | sed 's/\\n$//')
+
 cat > "$LATEST_JSON" << EOF
 {
   "version": "${VERSION}",
-  "notes": "Update to version ${VERSION}",
+  "notes": "${CHANGELOG_JSON}",
   "pub_date": "${PUB_DATE}",
   "platforms": {
     "darwin-aarch64": {

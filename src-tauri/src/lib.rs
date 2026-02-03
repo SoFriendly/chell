@@ -270,7 +270,13 @@ fn spawn_terminal(
 
     cmd.cwd(&cwd);
 
-    // Set UTF-8 locale for proper Unicode rendering
+    // Inherit all environment variables from the parent process
+    // This ensures keychain-injected secrets and user-configured vars are available
+    for (key, value) in std::env::vars() {
+        cmd.env(key, value);
+    }
+
+    // Set UTF-8 locale for proper Unicode rendering (overrides if already set)
     cmd.env("LANG", "en_US.UTF-8");
     cmd.env("LC_ALL", "en_US.UTF-8");
     cmd.env("TERM", "xterm-256color");

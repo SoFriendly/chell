@@ -1,0 +1,41 @@
+#!/bin/bash
+
+# Post-commit hook: Auto-tag version bumps
+# Install with: cp scripts/hooks/post-commit .git/hooks/post-commit && chmod +x .git/hooks/post-commit
+# Or: ln -sf ../../scripts/hooks/post-commit .git/hooks/post-commit
+
+# Only run on main branch
+BRANCH=$(git branch --show-current)
+if [ "$BRANCH" != "main" ]; then
+  exit 0
+fi
+
+# Check if tauri.conf.json was changed in this commit
+if ! git diff-tree --no-commit-id --name-only -r HEAD | grep -q "src-tauri/tauri.conf.json"; then
+  exit 0
+fi
+
+# Get the version from tauri.conf.json
+VERSION=$(grep '"version"' src-tauri/tauri.conf.json | head -1 | sed 's/.*"version": "\(.*\)".*/\1/')
+
+if [ -z "$VERSION" ]; then
+  exit 0
+fi
+
+TAG="v$VERSION"
+
+# Check if tag already exists
+if git rev-parse "$TAG" >/dev/null 2>&1; then
+  exit 0
+fi
+
+# Check if commit message indicates a version bump
+COMMIT_MSG=$(git log -1 --pretty=%B)
+if echo "$COMMIT_MSG" | grep -qiE "(bump|release|version).*$VERSION|$VERSION"; then
+  echo ""
+  echo "Version bump detected: $VERSION"
+  echo "Creating tag: $TAG"
+  git tag -a "$TAG" -m "Release $TAG"
+  echo "Tag created. Push with: git push origin $TAG"
+  echo ""
+fi
