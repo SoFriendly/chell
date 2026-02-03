@@ -686,6 +686,43 @@ fn edit_file_line(file_path: String, line_number: usize, new_content: String) ->
 }
 
 #[tauri::command]
+fn save_clipboard_image(base64: String, mime: String) -> Result<String, String> {
+    use std::fs;
+    use std::path::PathBuf;
+
+    let base64_data = match base64.find(',') {
+        Some(idx) => &base64[idx + 1..],
+        None => base64.as_str(),
+    };
+
+    let bytes = BASE64
+        .decode(base64_data.as_bytes())
+        .map_err(|e| e.to_string())?;
+
+    let extension = match mime.as_str() {
+        "image/png" => "png",
+        "image/jpeg" | "image/jpg" => "jpg",
+        "image/gif" => "gif",
+        "image/webp" => "webp",
+        "image/bmp" => "bmp",
+        "image/svg+xml" => "svg",
+        _ => "png",
+    };
+
+    let mut dir = std::env::temp_dir();
+    dir.push("chell");
+    fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+
+    let filename = format!("clipboard-{}.{}", Uuid::new_v4(), extension);
+    let mut path = PathBuf::from(&dir);
+    path.push(filename);
+
+    fs::write(&path, bytes).map_err(|e| e.to_string())?;
+
+    Ok(path.to_string_lossy().to_string())
+}
+
+#[tauri::command]
 fn init_repo(path: String) -> Result<(), String> {
     GitService::init_repo(&path)
 }
@@ -1732,6 +1769,7 @@ pub fn run() {
             get_file_tree,
             delete_file,
             rename_file,
+            save_clipboard_image,
             // Assistants
             check_installed_assistants,
             install_assistant,

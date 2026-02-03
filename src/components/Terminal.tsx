@@ -429,12 +429,85 @@ export default function Terminal({ id, command = "", args, cwd, onTerminalReady,
       invoke("write_terminal", { id: terminalId, data }).catch(console.error);
     });
 
-    // Handle paste events
+    const arrayBufferToBase64 = (buffer: ArrayBuffer) => {
+      const bytes = new Uint8Array(buffer);
+      const chunkSize = 0x8000;
+      let binary = "";
+      for (let i = 0; i < bytes.length; i += chunkSize) {
+        binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
+      }
+      return btoa(binary);
+    };
+
+    const formatPathForShell = (path: string) => {
+      const escaped = path.replace(/"/g, '\\"');
+      return `"${escaped}" `;
+    };
+
+    const writePathToTerminal = (path: string) => {
+      invoke("write_terminal", { id: terminalId, data: formatPathForShell(path) }).catch(console.error);
+    };
+
+    const saveImageBlobToTemp = async (blob: Blob) => {
+      const buffer = await blob.arrayBuffer();
+      const base64 = arrayBufferToBase64(buffer);
+      const mime = blob.type || "image/png";
+      const savedPath = await invoke<string>("save_clipboard_image", { base64, mime });
+      writePathToTerminal(savedPath);
+    };
+
     const handlePaste = async (e: ClipboardEvent) => {
       e.preventDefault();
-      const text = e.clipboardData?.getData('text');
+
+      const clipboardData = e.clipboardData;
+      const text = clipboardData?.getData("text");
       if (text) {
         invoke("write_terminal", { id: terminalId, data: text }).catch(console.error);
+        return;
+      }
+
+      const items = Array.from(clipboardData?.items ?? []);
+      for (const item of items) {
+        if (item.kind !== "file") continue;
+        const file = item.getAsFile();
+        if (!file) continue;
+        const fileWithPath = file as File & { path?: string };
+        if (fileWithPath.path) {
+          writePathToTerminal(fileWithPath.path);
+          return;
+        }
+        if (item.type.startsWith("image/")) {
+          await saveImageBlobToTemp(file);
+          return;
+        }
+      }
+
+      const files = Array.from(clipboardData?.files ?? []);
+      for (const file of files) {
+        const fileWithPath = file as File & { path?: string };
+        if (fileWithPath.path) {
+          writePathToTerminal(fileWithPath.path);
+          return;
+        }
+        if (file.type.startsWith("image/")) {
+          await saveImageBlobToTemp(file);
+          return;
+        }
+      }
+
+      if (navigator.clipboard?.read) {
+        try {
+          const navItems = await navigator.clipboard.read();
+          for (const item of navItems) {
+            const imageType = item.types.find((type) => type.startsWith("image/"));
+            if (!imageType) continue;
+            const blob = await item.getType(imageType);
+            await saveImageBlobToTemp(blob);
+            return;
+          }
+        } catch (error) {
+          console.debug("[Terminal] Clipboard read failed:", error);
+        }
       }
     };
     containerRef.current?.addEventListener('paste', handlePaste);
