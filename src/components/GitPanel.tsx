@@ -30,6 +30,7 @@ import {
   EyeOff,
   ExternalLink,
   SquareTerminal,
+  Eye,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -81,6 +82,7 @@ interface GitPanelProps {
   onRefresh: () => void;
   onFileDragStart?: (filePath: string) => void;
   onFileDragEnd?: () => void;
+  onOpenMarkdown?: (filePath: string) => void;
 }
 
 interface CommitSuggestion {
@@ -100,7 +102,7 @@ interface FileTreeNode {
   children?: FileTreeNode[];
 }
 
-export default function GitPanel({ projectPath, projectName, onRefresh, onFileDragStart, onFileDragEnd }: GitPanelProps) {
+export default function GitPanel({ projectPath, projectName, onRefresh, onFileDragStart, onFileDragEnd, onOpenMarkdown }: GitPanelProps) {
   const { diffs, branches, loading, status, history } = useGitStore();
   const { autoCommitMessage, groqApiKey, preferredEditor } = useSettingsStore();
   const [commitSubject, setCommitSubject] = useState("");
@@ -770,6 +772,12 @@ export default function GitPanel({ projectPath, projectName, onRefresh, onFileDr
               <ExternalLink className="mr-2 h-4 w-4" />
               Open
             </ContextMenuItem>
+            {diff.path.endsWith('.md') && onOpenMarkdown && (
+              <ContextMenuItem onClick={() => onOpenMarkdown(`${projectPath}/${diff.path}`)}>
+                <Eye className="mr-2 h-4 w-4" />
+                Preview
+              </ContextMenuItem>
+            )}
             <ContextMenuItem onClick={() => handleRevealInFileManager(diff.path)}>
               <FolderOpen className="mr-2 h-4 w-4" />
               {getRevealLabel()}
@@ -958,6 +966,10 @@ export default function GitPanel({ projectPath, projectName, onRefresh, onFileDr
                     <FolderOpen className="mr-2 h-4 w-4" />
                     {getRevealLabel()}
                   </ContextMenuItem>
+                  <ContextMenuItem onClick={() => handleCopyPath(node.path)}>
+                    <Copy className="mr-2 h-4 w-4" />
+                    Copy Path
+                  </ContextMenuItem>
                 </ContextMenuContent>
               </ContextMenu>
               {expandedDirs.has(node.path) && node.children && (
@@ -1006,6 +1018,12 @@ export default function GitPanel({ projectPath, projectName, onRefresh, onFileDr
                   <ExternalLink className="mr-2 h-4 w-4" />
                   Open
                 </ContextMenuItem>
+                {node.name.endsWith('.md') && onOpenMarkdown && (
+                  <ContextMenuItem onClick={() => onOpenMarkdown(`${projectPath}/${node.path}`)}>
+                    <Eye className="mr-2 h-4 w-4" />
+                    Preview
+                  </ContextMenuItem>
+                )}
                 <ContextMenuItem onClick={() => handleRevealInFileManager(node.path)}>
                   <FolderOpen className="mr-2 h-4 w-4" />
                   {getRevealLabel()}

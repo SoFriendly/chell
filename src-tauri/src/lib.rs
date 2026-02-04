@@ -523,6 +523,21 @@ fn write_terminal(id: String, data: String, state: tauri::State<Arc<AppState>>) 
 }
 
 #[tauri::command]
+fn write_terminal_bytes(id: String, data: Vec<u8>, state: tauri::State<Arc<AppState>>) -> Result<(), String> {
+    let mut terminals = state.terminals.lock();
+    if let Some(terminal) = terminals.get_mut(&id) {
+        terminal
+            .writer
+            .write_all(&data)
+            .map_err(|e| e.to_string())?;
+        terminal.writer.flush().map_err(|e| e.to_string())?;
+        Ok(())
+    } else {
+        Err(format!("Terminal not found: {}", id))
+    }
+}
+
+#[tauri::command]
 fn resize_terminal(
     id: String,
     cols: u16,
@@ -1700,6 +1715,18 @@ fn detect_project_context(path: &std::path::Path) -> ProjectContext {
 }
 
 #[tauri::command]
+fn read_text_file(path: String) -> Result<String, String> {
+    std::fs::read_to_string(&path)
+        .map_err(|e| format!("Failed to read file: {}", e))
+}
+
+#[tauri::command]
+fn write_text_file(path: String, content: String) -> Result<(), String> {
+    std::fs::write(&path, &content)
+        .map_err(|e| format!("Failed to write file: {}", e))
+}
+
+#[tauri::command]
 fn scan_project_context(cwd: String, _force_refresh: Option<bool>) -> Result<ProjectContext, String> {
     use std::path::Path;
 
@@ -1719,6 +1746,18 @@ async fn ai_shell_command(
         return Err("No API key provided. Set your Groq API key in Settings.".to_string());
     }
 
+    // Detect the user's default shell
+    let default_shell = std::env::var("SHELL").unwrap_or_else(|_| {
+        #[cfg(target_os = "macos")]
+        { "/bin/zsh".to_string() }
+        #[cfg(target_os = "linux")]
+        { "/bin/bash".to_string() }
+        #[cfg(target_os = "windows")]
+        { "powershell.exe".to_string() }
+    });
+    // Extract shell name from path (e.g., "/bin/zsh" -> "zsh")
+    let shell_name = default_shell.rsplit('/').next().unwrap_or(&default_shell);
+
     // Include config snippets if available
     let config_info = context.config_snippet.clone()
         .map(|s| format!("\n{}", s))
@@ -1729,16 +1768,17 @@ async fn ai_shell_command(
         .unwrap_or_default();
 
     let prompt = format!(
-        r#"You are a terminal command assistant. Analyze the project structure and config files to understand what kind of project this is, then return the appropriate shell command.
+        r#"You are a terminal command assistant. The user's shell is {shell_name}. Analyze the project structure and config files to understand what kind of project this is, then return the appropriate shell command for {shell_name}.
 {}
 {}
 
 User request: "{}"
 
-Consider the full project structure (folders like src-tauri/, mobile/, etc.) and all config files to determine the correct command. Respond with ONLY the shell command. No explanation."#,
+Consider the full project structure (folders like src-tauri/, mobile/, etc.) and all config files to determine the correct command. Respond with ONLY the shell command compatible with {shell_name}. No explanation."#,
         folder_info,
         config_info,
-        request
+        request,
+        shell_name = shell_name
     );
 
     println!("[SmartShell] Prompt:\n{}", prompt);
@@ -1817,6 +1857,7 @@ pub fn run() {
             // Terminal
             spawn_terminal,
             write_terminal,
+            write_terminal_bytes,
             resize_terminal,
             kill_terminal,
             list_terminals,
@@ -1862,6 +1903,8 @@ pub fn run() {
             delete_file,
             rename_file,
             save_clipboard_image,
+            read_text_file,
+            write_text_file,
             // Assistants
             check_installed_assistants,
             install_assistant,

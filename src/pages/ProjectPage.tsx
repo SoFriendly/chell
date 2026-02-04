@@ -3,7 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
-import { getCurrentWindow } from "@tauri-apps/api/window";
+import { getCurrentWindow, LogicalSize } from "@tauri-apps/api/window";
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import {
   Settings,
@@ -17,7 +17,13 @@ import {
   ChevronDown,
   Search,
   Sparkles,
+  FileText,
+  Pencil,
+  Save,
+  Eye,
 } from "lucide-react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { ChellIcon } from "@/components/icons/ChellIcon";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -88,6 +94,9 @@ export default function ProjectPage() {
   const [showGitPanel, setShowGitPanel] = useState(true);
   const [showAssistantPanel, setShowAssistantPanel] = useState(true);
   const [showShellPanel, setShowShellPanel] = useState(true);
+  const [showMarkdownPanel, setShowMarkdownPanel] = useState(false);
+  const [markdownFile, setMarkdownFile] = useState<{ path: string; content: string } | null>(null);
+  const [markdownEditMode, setMarkdownEditMode] = useState(false);
   const [shellCwd, setShellCwd] = useState<string>("");
   const [shellDirs, setShellDirs] = useState<string[]>([]);
   const [showHistorySearch, setShowHistorySearch] = useState(false);
@@ -100,7 +109,7 @@ export default function ProjectPage() {
   const tabRefs = useRef<Map<string, HTMLDivElement>>(new Map());
 
   // Count visible panels - must always have at least one
-  const visiblePanelCount = [showGitPanel, showAssistantPanel, showShellPanel].filter(Boolean).length;
+  const visiblePanelCount = [showGitPanel, showAssistantPanel, showShellPanel, showMarkdownPanel].filter(Boolean).length;
 
   // Toggle handlers
   const toggleGitPanel = () => {
@@ -130,6 +139,59 @@ export default function ProjectPage() {
     setShowShellPanel(!showShellPanel);
   };
 
+  // Markdown panel handlers
+  const handleOpenMarkdownInPanel = async (filePath: string) => {
+    try {
+      const content = await invoke<string>("read_text_file", { path: filePath });
+      setMarkdownFile({ path: filePath, content });
+
+      // Expand window to accommodate the panel if not already showing
+      if (!showMarkdownPanel) {
+        const window = getCurrentWindow();
+        const size = await window.innerSize();
+        const panelWidth = savedMarkdownWidth.current + 5; // +5 for resize handle
+        await window.setSize(new LogicalSize(size.width + panelWidth, size.height));
+      }
+
+      setShowMarkdownPanel(true);
+      setMarkdownPanelWidth(savedMarkdownWidth.current);
+      setMarkdownEditMode(false);
+    } catch (err) {
+      toast.error(`Failed to open file: ${err}`);
+    }
+  };
+
+  const handleSaveMarkdown = async () => {
+    if (!markdownFile) return;
+    try {
+      await invoke("write_text_file", {
+        path: markdownFile.path,
+        content: markdownFile.content
+      });
+      toast.success("File saved");
+      setMarkdownEditMode(false);
+    } catch (err) {
+      toast.error(`Failed to save: ${err}`);
+    }
+  };
+
+  const handleCloseMarkdownPanel = async () => {
+    // Save width and close panel first
+    savedMarkdownWidth.current = markdownPanelWidth;
+    setMarkdownFile(null);
+    setShowMarkdownPanel(false);
+
+    // Then shrink window (don't block on this)
+    try {
+      const window = getCurrentWindow();
+      const size = await window.innerSize();
+      const panelWidth = markdownPanelWidth + 5; // +5 for resize handle
+      await window.setSize(new LogicalSize(size.width - panelWidth, size.height));
+    } catch (err) {
+      console.error("Failed to resize window:", err);
+    }
+  };
+
   // Open new window for another project
   const openNewWindow = async () => {
     try {
@@ -155,20 +217,24 @@ export default function ProjectPage() {
   };
 
   // Resize handle drag handler
-  const handleResizeStart = (e: React.MouseEvent, panel: 'git' | 'shell') => {
+  const handleResizeStart = (e: React.MouseEvent, panel: 'git' | 'shell' | 'markdown') => {
     e.preventDefault();
     const startX = e.clientX;
     const startGitWidth = gitPanelWidth;
     const startShellWidth = shellPanelWidth;
+    const startMarkdownWidth = markdownPanelWidth;
 
     const handleMouseMove = (e: MouseEvent) => {
       const delta = e.clientX - startX;
       if (panel === 'git') {
         const newWidth = Math.max(200, Math.min(500, startGitWidth + delta));
         setGitPanelWidth(newWidth);
-      } else {
+      } else if (panel === 'shell') {
         const newWidth = Math.max(200, Math.min(600, startShellWidth - delta));
         setShellPanelWidth(newWidth);
+      } else if (panel === 'markdown') {
+        const newWidth = Math.max(300, Math.min(800, startMarkdownWidth - delta));
+        setMarkdownPanelWidth(newWidth);
       }
     };
 
@@ -254,8 +320,10 @@ export default function ProjectPage() {
   // Panel widths in pixels (null means use flex)
   const [gitPanelWidth, setGitPanelWidth] = useState(280);
   const [shellPanelWidth, setShellPanelWidth] = useState(400);
+  const [markdownPanelWidth, setMarkdownPanelWidth] = useState(400);
   const savedGitWidth = useRef(280);
   const savedShellWidth = useRef(400);
+  const savedMarkdownWidth = useRef(400);
 
   // Trigger terminal resize when panel visibility changes
   useEffect(() => {
@@ -967,6 +1035,7 @@ export default function ProjectPage() {
             onRefresh={refreshGitData}
             onFileDragStart={handleFileDragStart}
             onFileDragEnd={handleFileDragEnd}
+            onOpenMarkdown={handleOpenMarkdownInPanel}
           />
         </div>
         {/* Resize handle for git panel */}
@@ -1120,9 +1189,12 @@ export default function ProjectPage() {
 
           {/* Empty state when no tabs */}
           {terminalTabs.length === 0 && (
-            <div className="flex flex-1 flex-col items-center justify-center gap-3" style={{ backgroundColor: terminalBg }}>
-              <TerminalIcon className="h-8 w-8 text-muted-foreground" />
-              <p className="text-sm text-muted-foreground">Create a new assistant tab to start coding...</p>
+            <div className="flex flex-1 flex-col items-center justify-center gap-4" style={{ backgroundColor: terminalBg }}>
+              <Bot className="h-12 w-12 text-muted-foreground/50" />
+              <div className="flex flex-col items-center gap-1">
+                <p className="text-sm font-medium text-muted-foreground">No assistants open</p>
+                <p className="text-xs text-muted-foreground/70">Press + to start a new conversation</p>
+              </div>
             </div>
           )}
           </div>
@@ -1262,6 +1334,99 @@ export default function ProjectPage() {
                 </Button>
               </div>
               )}
+          </div>
+        </div>
+
+        {/* Resize handle for markdown panel */}
+        {showMarkdownPanel && (
+          <div
+            className="w-1 bg-border hover:bg-primary/50 cursor-col-resize shrink-0"
+            onMouseDown={(e) => handleResizeStart(e, 'markdown')}
+          />
+        )}
+
+        {/* Right-most panel - Markdown Editor */}
+        <div
+          className={cn(
+            "h-full flex flex-col overflow-hidden shrink-0",
+            !showMarkdownPanel && "hidden"
+          )}
+          style={{ width: markdownPanelWidth }}
+        >
+          {/* Header */}
+          <div className="flex h-10 items-center justify-between px-2 border-b border-border">
+            <div className="flex items-center gap-2 min-w-0 flex-1">
+              <FileText className="h-4 w-4 shrink-0 text-primary" />
+              <span className="text-xs truncate">
+                {markdownFile?.path.split('/').pop() || 'No file'}
+              </span>
+            </div>
+            <div className="flex items-center gap-1">
+              {markdownFile && (
+                <>
+                  <Tooltip delayDuration={0}>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className={cn("h-6 w-6", markdownEditMode && "text-primary hover:text-primary")}
+                        onClick={() => setMarkdownEditMode(!markdownEditMode)}
+                      >
+                        {markdownEditMode ? <Eye className="h-3 w-3" /> : <Pencil className="h-3 w-3" />}
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>{markdownEditMode ? "Preview" : "Edit"}</TooltipContent>
+                  </Tooltip>
+                  {markdownEditMode && (
+                    <Tooltip delayDuration={0}>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6"
+                          onClick={handleSaveMarkdown}
+                        >
+                          <Save className="h-3 w-3" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>Save</TooltipContent>
+                    </Tooltip>
+                  )}
+                </>
+              )}
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6"
+                onClick={handleCloseMarkdownPanel}
+              >
+                <X className="h-3 w-3" />
+              </Button>
+            </div>
+          </div>
+
+          {/* Content */}
+          <div className="flex-1 overflow-auto">
+            {markdownFile ? (
+              markdownEditMode ? (
+                <textarea
+                  value={markdownFile.content}
+                  onChange={(e) => setMarkdownFile({ ...markdownFile, content: e.target.value })}
+                  className="w-full h-full p-4 bg-background text-foreground font-mono text-sm resize-none focus:outline-none"
+                  spellCheck={false}
+                />
+              ) : (
+                <article className="prose prose-sm max-w-none p-4">
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                    {markdownFile.content}
+                  </ReactMarkdown>
+                </article>
+              )
+            ) : (
+              <div className="flex h-full items-center justify-center text-muted-foreground text-sm">
+                No file open
+              </div>
+            )}
           </div>
         </div>
       </div>

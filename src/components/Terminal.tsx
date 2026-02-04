@@ -100,11 +100,17 @@ export default function Terminal({ id, command = "", args, cwd, onTerminalReady,
   const containerRef = useRef<HTMLDivElement>(null);
   const terminalRef = useRef<XTerm | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
+  const terminalIdRef = useRef<string | null>(null);
   const [isContainerReady, setIsContainerReady] = useState(false);
   const [terminalId, setTerminalId] = useState<string | null>(id || null);
   const [initialDimensions, setInitialDimensions] = useState<{ cols: number; rows: number } | null>(null);
   const theme = useSettingsStore((state) => state.theme);
   const hasSpawnedRef = useRef(false);
+
+  // Keep ref in sync with terminalId state for use in key handler
+  useEffect(() => {
+    terminalIdRef.current = terminalId;
+  }, [terminalId]);
 
 
   // Phase 1: Wait for container to have stable dimensions
@@ -251,6 +257,15 @@ export default function Terminal({ id, command = "", args, cwd, onTerminalReady,
       const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
 
       if (event.type === 'keydown') {
+        // Handle Shift+Enter: insert newline without submitting
+        // We prevent default Enter behavior and send a newline character
+        if (event.shiftKey && event.key === 'Enter') {
+          event.preventDefault();
+          event.stopPropagation();
+          terminal.input('\n');
+          return false;
+        }
+
         // Handle Ctrl+C on Windows/Linux - copy if text selected, otherwise send SIGINT
         if (!isMac && event.ctrlKey && event.key === 'c') {
           const selection = terminal.getSelection();

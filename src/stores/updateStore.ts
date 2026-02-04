@@ -34,10 +34,21 @@ export const useUpdateStore = create<UpdateState>((set, get) => ({
     try {
       const update = await check();
       if (update) {
+        let body = update.body;
+        // Fetch notes from latest.json as fallback if body is missing
+        if (!body) {
+          try {
+            const response = await fetch('https://releases.chell.app/latest.json');
+            const data = await response.json();
+            body = data.notes;
+          } catch (e) {
+            console.error('Failed to fetch release notes:', e);
+          }
+        }
         set({
           updateAvailable: {
             version: update.version,
-            body: update.body,
+            body,
           },
           updateRef: update,
         });

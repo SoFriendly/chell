@@ -31,15 +31,29 @@ extract_changelog() {
     return
   fi
 
-  # Extract content between ## [version] and the next ## [
-  awk -v ver="$version" '
+  # First try exact version match, then fall back to most recent entry
+  local notes=$(awk -v ver="$version" '
     /^## \[/ {
       if (found) exit
       if ($0 ~ "\\[" ver "\\]") found=1
       next
     }
     found && /^[^#]/ { print }
-  ' "$changelog_file" | sed '/^$/d' | sed 's/^- /• /'
+  ' "$changelog_file" | sed '/^$/d' | sed 's/^- /• /')
+
+  # If no exact match, get the most recent changelog entry
+  if [ -z "$notes" ]; then
+    notes=$(awk '
+      /^## \[/ {
+        if (found) exit
+        found=1
+        next
+      }
+      found && /^[^#]/ { print }
+    ' "$changelog_file" | sed '/^$/d' | sed 's/^- /• /')
+  fi
+
+  echo "$notes"
 }
 
 CHANGELOG_NOTES=$(extract_changelog "$VERSION")
