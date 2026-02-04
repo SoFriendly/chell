@@ -1,4 +1,4 @@
-package com.chellportal
+package com.chell.portal
 
 import android.app.Application
 import android.content.res.Configuration
