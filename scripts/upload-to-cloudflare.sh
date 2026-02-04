@@ -142,8 +142,8 @@ WIN_SIG=""
 PUB_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 LATEST_JSON="src-tauri/target/release/bundle/latest.json"
 
-# Escape changelog notes for JSON (convert newlines to \n)
-CHANGELOG_JSON=$(echo "$CHANGELOG_NOTES" | awk '{printf "%s\\n", $0}' | sed 's/\\n$//')
+# Escape changelog notes for JSON (escape quotes and convert newlines to \n)
+CHANGELOG_JSON=$(echo "$CHANGELOG_NOTES" | sed 's/"/\\"/g' | awk '{printf "%s\\n", $0}' | sed 's/\\n$//')
 
 cat > "$LATEST_JSON" << EOF
 {

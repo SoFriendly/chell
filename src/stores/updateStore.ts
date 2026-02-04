@@ -54,7 +54,13 @@ export const useUpdateStore = create<UpdateState>((set, get) => ({
         });
       }
     } catch (error) {
+      // Log detailed error info for debugging
       console.error('Failed to check for updates:', error);
+      if (error instanceof Error) {
+        console.error('Error name:', error.name);
+        console.error('Error message:', error.message);
+        console.error('Error stack:', error.stack);
+      }
       throw error;
     } finally {
       set({ isChecking: false });

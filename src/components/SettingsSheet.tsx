@@ -234,7 +234,13 @@ export default function SettingsSheet({ open, onOpenChange }: SettingsSheetProps
       }
     } catch (error) {
       console.error("Failed to check for updates:", error);
-      toast.error("Failed to check for updates");
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      // Check for common dev mode errors
+      if (errorMessage.includes("signature") || errorMessage.includes("Could not fetch") || errorMessage.includes("TAURI_ENV")) {
+        toast.error("Updates only work in release builds");
+      } else {
+        toast.error(`Failed to check for updates: ${errorMessage}`);
+      }
     }
   };
 
