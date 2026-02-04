@@ -108,9 +108,10 @@
     @apply border-border;
   }
 
-  /* Prevent white flash - start with dark background */
   html {
-    background-color: #121212;
+    @apply bg-background;
+    min-height: 100vh;
+    min-width: 100vw;
   }
 
   body {
@@ -118,6 +119,14 @@
     font-feature-settings: "rlig" 1, "calt" 1;
     overflow: hidden;
     animation: fadeIn 0.2s ease-out;
+    min-height: 100vh;
+    min-width: 100vw;
+  }
+
+  #root {
+    @apply bg-background;
+    min-height: 100vh;
+    min-width: 100vw;
   }
 
   @keyframes fadeIn {
@@ -288,4 +297,22 @@
   --tw-prose-pre-bg: hsl(var(--muted));
   --tw-prose-th-borders: hsl(var(--border));
   --tw-prose-td-borders: hsl(var(--border));
+}
+
+/* Monaco editor find widget - ensure it appears above window chrome */
+.monaco-editor .find-widget {
+  z-index: 100 !important;
+}
+
+.monaco-editor .find-widget .monaco-inputbox .input {
+  background-color: hsl(var(--background)) !important;
+  color: hsl(var(--foreground)) !important;
+}
+
+.monaco-editor .find-widget .button {
+  background-color: transparent !important;
+}
+
+.monaco-editor .find-widget .button:hover {
+  background-color: hsl(var(--muted)) !important;
 }

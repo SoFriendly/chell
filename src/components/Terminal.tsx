@@ -19,6 +19,7 @@ interface TerminalProps {
   args?: string[];  // Args to pass to command (handles paths with spaces)
   cwd: string;
   onTerminalReady?: (terminalId: string) => void;  // Called when terminal is spawned
+  onCwdChange?: (newCwd: string) => void;  // Called when shell reports directory change via OSC 7
   visible?: boolean;  // Trigger resize when visibility changes
   autoFocusOnWindowFocus?: boolean;  // Auto-focus when app window gains focus
 }
@@ -96,7 +97,7 @@ const TERMINAL_THEMES: Record<string, ITheme> = {
   },
 };
 
-export default function Terminal({ id, command = "", args, cwd, onTerminalReady, visible = true, autoFocusOnWindowFocus = false }: TerminalProps) {
+export default function Terminal({ id, command = "", args, cwd, onTerminalReady, onCwdChange, visible = true, autoFocusOnWindowFocus = false }: TerminalProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const terminalRef = useRef<XTerm | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
@@ -111,6 +112,29 @@ export default function Terminal({ id, command = "", args, cwd, onTerminalReady,
   useEffect(() => {
     terminalIdRef.current = terminalId;
   }, [terminalId]);
+
+  // Keep ref in sync with onCwdChange callback
+  const onCwdChangeRef = useRef(onCwdChange);
+  useEffect(() => {
+    onCwdChangeRef.current = onCwdChange;
+  }, [onCwdChange]);
+
+  // Extract path from OSC 7 sequence: ESC ] 7 ; file://hostname/path BEL (or ST)
+  // Returns the path if found, null otherwise
+  const extractOsc7Path = (data: string): string | null => {
+    // Match OSC 7 sequence: \x1b]7;file://hostname/path followed by \x07 (BEL) or \x1b\\ (ST)
+    const osc7Regex = /\x1b\]7;file:\/\/[^/]*([^\x07\x1b]+)(?:\x07|\x1b\\)/;
+    const match = data.match(osc7Regex);
+    if (match && match[1]) {
+      // URL decode the path (handles spaces encoded as %20, etc)
+      try {
+        return decodeURIComponent(match[1]);
+      } catch {
+        return match[1];
+      }
+    }
+    return null;
+  };
 
 
   // Phase 1: Wait for container to have stable dimensions
@@ -549,6 +573,15 @@ export default function Terminal({ id, command = "", args, cwd, onTerminalReady,
       for (; i < len; i++) {
         bytes[i] = binaryString.charCodeAt(i);
       }
+
+      // Check for OSC 7 (working directory) sequence and notify parent
+      if (onCwdChangeRef.current) {
+        const newCwd = extractOsc7Path(binaryString);
+        if (newCwd) {
+          onCwdChangeRef.current(newCwd);
+        }
+      }
+
       terminal.write(bytes);
     });
 
@@ -583,6 +616,21 @@ export default function Terminal({ id, command = "", args, cwd, onTerminalReady,
     }
 
     const container = containerRef.current;
+
+    // Prevent drag events from causing canvas blackout
+    const preventDragOver = (e: DragEvent) => {
+      e.preventDefault();
+    };
+    // Force terminal refresh after any drag operation ends
+    const handleDragEnd = () => {
+      setTimeout(() => {
+        terminal.refresh(0, terminal.rows - 1);
+      }, 0);
+    };
+    container?.addEventListener('dragover', preventDragOver, true);
+    container?.addEventListener('dragenter', preventDragOver, true);
+    document.addEventListener('dragend', handleDragEnd);
+
     return () => {
       try {
         if (fitDebounceTimer) clearTimeout(fitDebounceTimer);
@@ -593,6 +641,9 @@ export default function Terminal({ id, command = "", args, cwd, onTerminalReady,
         resizeObserver.disconnect();
         intersectionObserver.disconnect();
         container?.removeEventListener('paste', handlePaste);
+        container?.removeEventListener('dragover', preventDragOver, true);
+        container?.removeEventListener('dragenter', preventDragOver, true);
+        document.removeEventListener('dragend', handleDragEnd);
       } catch (e) {
         console.error("Error cleaning up terminal:", e);
       }
@@ -645,15 +696,34 @@ export default function Terminal({ id, command = "", args, cwd, onTerminalReady,
   // Get background color from current theme
   const bgColor = TERMINAL_THEMES[theme]?.background || TERMINAL_THEMES.dark.background;
 
+  // Prevent drag events from causing canvas to black out
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+  };
+
+  // Handle file path drops from GitPanel (using custom mouse-based drag)
+  const handleMouseUp = () => {
+    const draggedPath = (window as unknown as { __draggedFilePath?: string }).__draggedFilePath;
+    if (draggedPath && terminalId) {
+      invoke("write_terminal", { id: terminalId, data: draggedPath + " " });
+      // Clear so it doesn't get written again
+      (window as unknown as { __draggedFilePath?: string }).__draggedFilePath = undefined;
+    }
+  };
+
   return (
     <div
       className="h-full w-full p-1"
-      style={{ backgroundColor: bgColor }}
+      style={{ backgroundColor: bgColor, transform: "translateZ(0)" }}
       onClick={handleClick}
+      onMouseUp={handleMouseUp}
+      onDragOver={handleDragOver}
+      onDragEnter={handleDragOver}
     >
       <div
         ref={containerRef}
         className="h-full w-full"
+        style={{ transform: "translateZ(0)" }}
       />
     </div>
   );

@@ -23,14 +23,13 @@
         "title": "Chell",
         "width": 1200,
         "height": 800,
-        "minWidth": 800,
+        "minWidth": 600,
         "minHeight": 600,
         "resizable": true,
         "fullscreen": false,
         "titleBarStyle": "Overlay",
         "hiddenTitle": true,
-        "visible": false,
-        "backgroundColor": "#121212"
+        "visible": false
       }
     ],
     "security": {

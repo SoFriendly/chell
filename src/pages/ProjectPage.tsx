@@ -24,6 +24,8 @@ import {
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import Editor from "@monaco-editor/react";
+import type { editor } from "monaco-editor";
 import { ChellIcon } from "@/components/icons/ChellIcon";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -52,6 +54,139 @@ import { useGitStore } from "@/stores/gitStore";
 import { useSettingsStore } from "@/stores/settingsStore";
 import { cn } from "@/lib/utils";
 import type { Project, GitStatus, FileDiff, Branch, Commit } from "@/types";
+
+// Map file extensions to Monaco language IDs
+const getMonacoLanguage = (filePath: string): string => {
+  const ext = filePath.split('.').pop()?.toLowerCase() || '';
+  const filename = filePath.split('/').pop()?.toLowerCase() || '';
+
+  const languageMap: Record<string, string> = {
+    // JavaScript/TypeScript
+    js: 'javascript', jsx: 'javascript', mjs: 'javascript', cjs: 'javascript',
+    ts: 'typescript', tsx: 'typescript', mts: 'typescript', cts: 'typescript',
+    // Web
+    html: 'html', htm: 'html', css: 'css', scss: 'scss', sass: 'scss', less: 'less',
+    // Data/Config
+    json: 'json', yaml: 'yaml', yml: 'yaml', toml: 'ini', xml: 'xml', csv: 'plaintext',
+    // Shell
+    sh: 'shell', bash: 'shell', zsh: 'shell', fish: 'shell', ps1: 'powershell',
+    // Languages
+    py: 'python', rb: 'ruby', go: 'go', rs: 'rust', java: 'java', kt: 'kotlin',
+    scala: 'scala', c: 'c', cpp: 'cpp', h: 'c', hpp: 'cpp', cs: 'csharp',
+    swift: 'swift', m: 'objective-c', mm: 'objective-c',
+    php: 'php', pl: 'perl', r: 'r', lua: 'lua', zig: 'zig', v: 'v',
+    // Database/Query
+    sql: 'sql', graphql: 'graphql', gql: 'graphql', prisma: 'prisma',
+    // Markup
+    md: 'markdown', markdown: 'markdown', mdx: 'markdown',
+    // Other
+    dockerfile: 'dockerfile', makefile: 'makefile',
+    env: 'ini', gitignore: 'ini', dockerignore: 'ini', editorconfig: 'ini',
+  };
+
+  // Check for special filenames first
+  if (filename === 'dockerfile') return 'dockerfile';
+  if (filename === 'makefile') return 'makefile';
+  if (filename.startsWith('.env')) return 'ini';
+
+  return languageMap[ext] || 'plaintext';
+};
+
+// Define custom Monaco themes matching app themes
+const defineMonacoThemes = (monaco: Parameters<NonNullable<Parameters<typeof Editor>[0]['beforeMount']>>[0]) => {
+  // Dark theme (matches app dark theme)
+  monaco.editor.defineTheme('chell-dark', {
+    base: 'vs-dark',
+    inherit: true,
+    rules: [
+      { token: 'comment', foreground: '6272a4', fontStyle: 'italic' },
+      { token: 'keyword', foreground: 'ff79c6' },
+      { token: 'string', foreground: 'f1fa8c' },
+      { token: 'number', foreground: 'bd93f9' },
+      { token: 'type', foreground: '8be9fd' },
+      { token: 'function', foreground: '50fa7b' },
+      { token: 'variable', foreground: 'f8f8f2' },
+      { token: 'constant', foreground: 'bd93f9' },
+      { token: 'operator', foreground: 'ff79c6' },
+    ],
+    colors: {
+      'editor.background': '#0d0d0d',
+      'editor.foreground': '#e0e0e0',
+      'editor.lineHighlightBackground': '#1a1a1a',
+      'editor.selectionBackground': '#FF6B0040',
+      'editorCursor.foreground': '#FF6B00',
+      'editorLineNumber.foreground': '#6272a4',
+      'editorLineNumber.activeForeground': '#f8f8f2',
+      'editor.findMatchBackground': '#FF6B0060',
+      'editor.findMatchHighlightBackground': '#FF6B0030',
+    },
+  });
+
+  // Tokyo Night theme
+  monaco.editor.defineTheme('chell-tokyo', {
+    base: 'vs-dark',
+    inherit: true,
+    rules: [
+      { token: 'comment', foreground: '565f89', fontStyle: 'italic' },
+      { token: 'keyword', foreground: 'bb9af7' },
+      { token: 'string', foreground: '9ece6a' },
+      { token: 'number', foreground: 'ff9e64' },
+      { token: 'type', foreground: '7dcfff' },
+      { token: 'function', foreground: '7aa2f7' },
+      { token: 'variable', foreground: 'c0caf5' },
+      { token: 'constant', foreground: 'ff9e64' },
+      { token: 'operator', foreground: '89ddff' },
+    ],
+    colors: {
+      'editor.background': '#1a1b26',
+      'editor.foreground': '#c0caf5',
+      'editor.lineHighlightBackground': '#24283b',
+      'editor.selectionBackground': '#7aa2f740',
+      'editorCursor.foreground': '#7aa2f7',
+      'editorLineNumber.foreground': '#414868',
+      'editorLineNumber.activeForeground': '#c0caf5',
+      'editor.findMatchBackground': '#7aa2f760',
+      'editor.findMatchHighlightBackground': '#7aa2f730',
+    },
+  });
+
+  // Light theme
+  monaco.editor.defineTheme('chell-light', {
+    base: 'vs',
+    inherit: true,
+    rules: [
+      { token: 'comment', foreground: 'a0a1a7', fontStyle: 'italic' },
+      { token: 'keyword', foreground: 'a626a4' },
+      { token: 'string', foreground: '50a14f' },
+      { token: 'number', foreground: 'c18401' },
+      { token: 'type', foreground: '0184bc' },
+      { token: 'function', foreground: '4078f2' },
+      { token: 'variable', foreground: '383a42' },
+      { token: 'constant', foreground: 'c18401' },
+      { token: 'operator', foreground: 'a626a4' },
+    ],
+    colors: {
+      'editor.background': '#fafafa',
+      'editor.foreground': '#383a42',
+      'editor.lineHighlightBackground': '#f0f0f0',
+      'editor.selectionBackground': '#526eff30',
+      'editorCursor.foreground': '#526eff',
+      'editorLineNumber.foreground': '#a0a1a7',
+      'editorLineNumber.activeForeground': '#383a42',
+      'editor.findMatchBackground': '#526eff40',
+      'editor.findMatchHighlightBackground': '#526eff20',
+    },
+  });
+};
+
+// Map app theme to Monaco theme name
+const getMonacoTheme = (appTheme: string): string => {
+  switch (appTheme) {
+    case 'tokyo': return 'chell-tokyo';
+    case 'light': return 'chell-light';
+    default: return 'chell-dark';
+  }
+};
 
 interface TerminalTab {
   id: string;
@@ -82,6 +217,13 @@ export default function ProjectPage() {
     light: "#fafafa",
   };
   const terminalBg = terminalBgColors[theme] || terminalBgColors.dark;
+
+  // Set webview background color to match theme (prevents white flash on resize)
+  useEffect(() => {
+    const bgColor = terminalBgColors[theme] || terminalBgColors.dark;
+    getCurrentWebview().setBackgroundColor(bgColor).catch(() => {});
+  }, [theme]);
+
   const [currentProject, setCurrentProject] = useState<Project | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [terminalTabs, setTerminalTabs] = useState<TerminalTab[]>([]);
@@ -175,6 +317,17 @@ export default function ProjectPage() {
     }
   };
 
+  const handleEditorMount = (editor: editor.IStandaloneCodeEditor) => {
+    editorRef.current = editor;
+  };
+
+  const handleEditorFind = () => {
+    if (editorRef.current) {
+      editorRef.current.focus();
+      editorRef.current.trigger('keyboard', 'actions.find', null);
+    }
+  };
+
   const handleCloseMarkdownPanel = async () => {
     // Save width and close panel first
     savedMarkdownWidth.current = markdownPanelWidth;
@@ -221,17 +374,24 @@ export default function ProjectPage() {
     e.preventDefault();
     const startX = e.clientX;
     const startGitWidth = gitPanelWidth;
+    const startAssistantWidth = assistantPanelWidth;
     const startShellWidth = shellPanelWidth;
     const startMarkdownWidth = markdownPanelWidth;
 
     const handleMouseMove = (e: MouseEvent) => {
       const delta = e.clientX - startX;
       if (panel === 'git') {
-        const newWidth = Math.max(200, Math.min(500, startGitWidth + delta));
-        setGitPanelWidth(newWidth);
+        // Git resize: adjust git and assistant panels
+        const newGitWidth = Math.max(150, Math.min(500, startGitWidth + delta));
+        const newAssistantWidth = Math.max(200, startAssistantWidth - (newGitWidth - startGitWidth));
+        setGitPanelWidth(newGitWidth);
+        setAssistantPanelWidth(newAssistantWidth);
       } else if (panel === 'shell') {
-        const newWidth = Math.max(200, Math.min(600, startShellWidth - delta));
-        setShellPanelWidth(newWidth);
+        // Shell resize: adjust shell and assistant panels
+        const newShellWidth = Math.max(150, Math.min(600, startShellWidth - delta));
+        const newAssistantWidth = Math.max(200, startAssistantWidth + (startShellWidth - newShellWidth));
+        setShellPanelWidth(newShellWidth);
+        setAssistantPanelWidth(newAssistantWidth);
       } else if (panel === 'markdown') {
         const newWidth = Math.max(300, Math.min(800, startMarkdownWidth - delta));
         setMarkdownPanelWidth(newWidth);
@@ -252,78 +412,129 @@ export default function ProjectPage() {
   };
 
 
-  const [isDraggingFile, setIsDraggingFile] = useState(false);
-  const draggedFilePath = useRef<string | null>(null);
+  // Handle drag over to allow dropping (must prevent default)
+  const handlePanelDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "copy";
+  };
 
-  // Use document-level listeners for more reliable drop handling
+  // Handle drops on the assistant panel (main terminals)
+  const handleAssistantPanelDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    const filePath = e.dataTransfer.getData("text/plain");
+    if (!filePath) return;
+
+    const activeTab = terminalTabs.find(t => t.id === activeTabId);
+    if (activeTab?.terminalId) {
+      invoke("write_terminal", { id: activeTab.terminalId, data: filePath + " " });
+    }
+  };
+
+  // Handle drops on the shell panel (utility terminal)
+  const handleShellPanelDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    const filePath = e.dataTransfer.getData("text/plain");
+    if (!filePath) return;
+
+    if (utilityTerminalId && utilityTerminalId !== "closed") {
+      invoke("write_terminal", { id: utilityTerminalId, data: filePath + " " });
+    }
+  };
+
+  // Handle file drag and drop from OS (e.g. Finder) into terminals
   useEffect(() => {
-    const handleDrop = (e: DragEvent) => {
-      if (!isDraggingFile || !draggedFilePath.current) return;
+    const unlisten = getCurrentWebview().onDragDropEvent((event) => {
+      if (event.payload.type === "drop") {
+        const { paths, position } = event.payload;
+        if (!paths || paths.length === 0) return;
 
-      e.preventDefault();
-      const filePath = draggedFilePath.current;
+        // Escape paths for shell (wrap in quotes, escape special chars)
+        const escapedPaths = paths
+          .map(p => `"${p.replace(/"/g, '\\"')}"`)
+          .join(" ");
 
-      // Check which panel the drop occurred in
-      const assistantRect = assistantPanelRef.current?.getBoundingClientRect();
-      const shellRect = shellPanelRef.current?.getBoundingClientRect();
+        // Determine which panel was targeted based on position
+        const assistantRect = assistantPanelRef.current?.getBoundingClientRect();
+        const shellRect = shellPanelRef.current?.getBoundingClientRect();
 
-      if (assistantRect && showAssistantPanel &&
-          e.clientX >= assistantRect.left && e.clientX <= assistantRect.right &&
-          e.clientY >= assistantRect.top && e.clientY <= assistantRect.bottom) {
-        const activeTab = terminalTabs.find(t => t.id === activeTabId);
-        if (activeTab?.terminalId) {
-          invoke("write_terminal", { id: activeTab.terminalId, data: filePath + " " });
-        }
-      } else if (shellRect && showShellPanel &&
-          e.clientX >= shellRect.left && e.clientX <= shellRect.right &&
-          e.clientY >= shellRect.top && e.clientY <= shellRect.bottom) {
-        if (utilityTerminalId && utilityTerminalId !== "closed") {
-          invoke("write_terminal", { id: utilityTerminalId, data: filePath + " " });
+        if (assistantRect && position.x >= assistantRect.left && position.x <= assistantRect.right &&
+            position.y >= assistantRect.top && position.y <= assistantRect.bottom) {
+          // Dropped on assistant panel - find active tab's terminal
+          const activeTab = terminalTabs.find(t => t.id === activeTabId);
+          if (activeTab?.terminalId) {
+            invoke("write_terminal", { id: activeTab.terminalId, data: escapedPaths });
+          }
+        } else if (shellRect && position.x >= shellRect.left && position.x <= shellRect.right &&
+                   position.y >= shellRect.top && position.y <= shellRect.bottom) {
+          // Dropped on shell panel
+          if (utilityTerminalId && utilityTerminalId !== "closed") {
+            invoke("write_terminal", { id: utilityTerminalId, data: escapedPaths });
+          }
         }
       }
-
-      setIsDraggingFile(false);
-      draggedFilePath.current = null;
-    };
-
-    const handleDragOver = (e: DragEvent) => {
-      if (isDraggingFile) {
-        e.preventDefault();
-      }
-    };
-
-    document.addEventListener('drop', handleDrop);
-    document.addEventListener('dragover', handleDragOver);
+    });
 
     return () => {
-      document.removeEventListener('drop', handleDrop);
-      document.removeEventListener('dragover', handleDragOver);
+      unlisten.then(fn => fn());
     };
-  }, [isDraggingFile, terminalTabs, activeTabId, utilityTerminalId, showAssistantPanel, showShellPanel]);
-
-  const handleFileDragStart = (filePath: string) => {
-    setIsDraggingFile(true);
-    draggedFilePath.current = filePath;
-  };
-
-  const handleFileDragEnd = () => {
-    setIsDraggingFile(false);
-    draggedFilePath.current = null;
-  };
+  }, [terminalTabs, activeTabId, utilityTerminalId]);
 
   const terminalsStarted = useRef(false);
   const editInputRef = useRef<HTMLInputElement>(null);
   const assistantPanelRef = useRef<HTMLDivElement>(null);
   const shellPanelRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
 
-  // Panel widths in pixels (null means use flex)
+  // Panel widths in pixels
   const [gitPanelWidth, setGitPanelWidth] = useState(280);
+  const [assistantPanelWidth, setAssistantPanelWidth] = useState(520); // Main terminal area
   const [shellPanelWidth, setShellPanelWidth] = useState(400);
   const [markdownPanelWidth, setMarkdownPanelWidth] = useState(400);
   const savedGitWidth = useRef(280);
+  const savedAssistantWidth = useRef(520);
   const savedShellWidth = useRef(400);
   const savedMarkdownWidth = useRef(400);
+  const lastContainerWidth = useRef<number | null>(null);
+
+  // Proportionally resize all panels when window is resized
+  useEffect(() => {
+    const handleWindowResize = () => {
+      const container = containerRef.current;
+      if (!container) return;
+
+      const newWidth = container.clientWidth;
+      const oldWidth = lastContainerWidth.current;
+
+      // Initialize on first run
+      if (oldWidth === null) {
+        lastContainerWidth.current = newWidth;
+        return;
+      }
+
+      // Only adjust if width changed significantly
+      if (Math.abs(newWidth - oldWidth) > 5) {
+        const ratio = newWidth / oldWidth;
+
+        // Proportionally adjust all panel widths
+        setGitPanelWidth(prev => Math.max(150, Math.round(prev * ratio)));
+        setAssistantPanelWidth(prev => Math.max(200, Math.round(prev * ratio)));
+        setShellPanelWidth(prev => Math.max(150, Math.round(prev * ratio)));
+        setMarkdownPanelWidth(prev => Math.max(150, Math.round(prev * ratio)));
+
+        // Update saved widths too
+        savedGitWidth.current = Math.max(150, Math.round(savedGitWidth.current * ratio));
+        savedAssistantWidth.current = Math.max(200, Math.round(savedAssistantWidth.current * ratio));
+        savedShellWidth.current = Math.max(150, Math.round(savedShellWidth.current * ratio));
+        savedMarkdownWidth.current = Math.max(150, Math.round(savedMarkdownWidth.current * ratio));
+
+        lastContainerWidth.current = newWidth;
+      }
+    };
+
+    window.addEventListener('resize', handleWindowResize);
+    return () => window.removeEventListener('resize', handleWindowResize);
+  }, []);
 
   // Trigger terminal resize when panel visibility changes
   useEffect(() => {
@@ -421,43 +632,13 @@ export default function ProjectPage() {
     loadShellDirectories(newPath);
   };
 
-  // Handle file drag and drop into terminals
-  useEffect(() => {
-    const unlisten = getCurrentWebview().onDragDropEvent((event) => {
-      if (event.payload.type === "drop") {
-        const { paths, position } = event.payload;
-        if (!paths || paths.length === 0) return;
-
-        // Escape paths for shell (wrap in quotes, escape special chars)
-        const escapedPaths = paths
-          .map(p => `"${p.replace(/"/g, '\\"')}"`)
-          .join(" ");
-
-        // Determine which panel was targeted based on position
-        const assistantRect = assistantPanelRef.current?.getBoundingClientRect();
-        const shellRect = shellPanelRef.current?.getBoundingClientRect();
-
-        if (assistantRect && position.x >= assistantRect.left && position.x <= assistantRect.right &&
-            position.y >= assistantRect.top && position.y <= assistantRect.bottom) {
-          // Dropped on assistant panel - find active tab's terminal
-          const activeTab = terminalTabs.find(t => t.id === activeTabId);
-          if (activeTab?.terminalId) {
-            invoke("write_terminal", { id: activeTab.terminalId, data: escapedPaths });
-          }
-        } else if (shellRect && position.x >= shellRect.left && position.x <= shellRect.right &&
-                   position.y >= shellRect.top && position.y <= shellRect.bottom) {
-          // Dropped on shell panel
-          if (utilityTerminalId && utilityTerminalId !== "closed") {
-            invoke("write_terminal", { id: utilityTerminalId, data: escapedPaths });
-          }
-        }
-      }
-    });
-
-    return () => {
-      unlisten.then(fn => fn());
-    };
-  }, [terminalTabs, activeTabId, utilityTerminalId]);
+  // Handle cwd changes detected from shell via OSC 7 sequences
+  const handleShellCwdChange = (newCwd: string) => {
+    if (newCwd !== shellCwd) {
+      setShellCwd(newCwd);
+      loadShellDirectories(newCwd);
+    }
+  };
 
   // Focus input when editing starts
   useEffect(() => {
@@ -1026,15 +1207,13 @@ export default function ProjectPage() {
       >
         {/* Left sidebar - Git panel */}
         <div
-          className={cn("h-full flex flex-col overflow-hidden shrink-0", !showGitPanel && "hidden")}
-          style={{ width: gitPanelWidth }}
+          className={cn("h-full flex flex-col overflow-hidden", !showGitPanel && "hidden")}
+          style={{ width: gitPanelWidth, minWidth: 200 }}
         >
           <GitPanel
             projectPath={currentProject.path}
             projectName={currentProject.name}
             onRefresh={refreshGitData}
-            onFileDragStart={handleFileDragStart}
-            onFileDragEnd={handleFileDragEnd}
             onOpenMarkdown={handleOpenMarkdownInPanel}
           />
         </div>
@@ -1050,10 +1229,12 @@ export default function ProjectPage() {
         <div
           ref={assistantPanelRef}
           className={cn(
-            "flex-1 h-full overflow-hidden min-w-0",
-            !showAssistantPanel && "hidden",
-            isDraggingFile && "ring-2 ring-primary ring-inset"
+            "h-full overflow-hidden",
+            !showAssistantPanel && "hidden"
           )}
+          style={{ flex: `1 1 ${assistantPanelWidth}px`, minWidth: 200 }}
+          onDragOver={handlePanelDragOver}
+          onDrop={handleAssistantPanelDrop}
         >
           <div className="flex h-full flex-col select-none overflow-hidden">
           {/* Tab bar */}
@@ -1172,7 +1353,7 @@ export default function ProjectPage() {
               )}
             >
               <div
-                className={cn("flex-1 overflow-hidden", isDraggingFile && "pointer-events-none")}
+                className="flex-1 overflow-hidden"
                 style={{ backgroundColor: terminalBg }}
               >
                 <Terminal
@@ -1213,10 +1394,11 @@ export default function ProjectPage() {
           className={cn(
             "h-full flex flex-col overflow-hidden",
             !showShellPanel && "hidden",
-            !showAssistantPanel ? "flex-1 min-w-0" : "shrink-0",
-            isDraggingFile && "ring-2 ring-primary ring-inset"
+            !showAssistantPanel && "flex-1 min-w-0"
           )}
-          style={showAssistantPanel ? { width: shellPanelWidth } : undefined}
+          style={showAssistantPanel ? { width: shellPanelWidth, minWidth: 200 } : undefined}
+          onDragOver={handlePanelDragOver}
+          onDrop={handleShellPanelDrop}
         >
           {/* Header */}
           <div className="flex h-10 items-center justify-between px-2 border-b border-border">
@@ -1310,7 +1492,7 @@ export default function ProjectPage() {
 
           {/* Utility terminal content with AI */}
           <div
-            className={cn("flex-1 overflow-hidden", isDraggingFile && "pointer-events-none")}
+            className="flex-1 overflow-hidden"
             style={{ backgroundColor: terminalBg }}
           >
             {utilityTerminalId !== "closed" ? (
@@ -1318,6 +1500,7 @@ export default function ProjectPage() {
                 cwd={shellCwd || currentProject.path}
                 terminalId={utilityTerminalId}
                 onTerminalReady={(id) => setUtilityTerminalId(id)}
+                onCwdChange={handleShellCwdChange}
                 visible={showShellPanel}
                 showNlt={showNlt}
                 onNltVisibilityChange={setShowNlt}
@@ -1394,6 +1577,22 @@ export default function ProjectPage() {
                   )}
                 </>
               )}
+              {/* Show search button when Monaco editor is visible */}
+              {markdownFile && (markdownEditMode || !markdownFile.path.endsWith('.md')) && (
+                <Tooltip delayDuration={0}>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-6 w-6"
+                      onClick={handleEditorFind}
+                    >
+                      <Search className="h-3 w-3" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>Find (⌘F)</TooltipContent>
+                </Tooltip>
+              )}
               <Button
                 variant="ghost"
                 size="icon"
@@ -1406,21 +1605,50 @@ export default function ProjectPage() {
           </div>
 
           {/* Content */}
-          <div className="flex-1 overflow-auto">
+          <div className="flex-1 overflow-hidden">
             {markdownFile ? (
               markdownEditMode ? (
-                <textarea
+                <Editor
+                  height="100%"
+                  language={getMonacoLanguage(markdownFile.path)}
                   value={markdownFile.content}
-                  onChange={(e) => setMarkdownFile({ ...markdownFile, content: e.target.value })}
-                  className="w-full h-full p-4 bg-background text-foreground font-mono text-sm resize-none focus:outline-none"
-                  spellCheck={false}
+                  onChange={(value) => setMarkdownFile({ ...markdownFile, content: value || '' })}
+                  beforeMount={defineMonacoThemes}
+                  theme={getMonacoTheme(theme)}
+                  onMount={handleEditorMount}
+                  options={{
+                    minimap: { enabled: false },
+                    fontSize: 13,
+                    lineNumbers: 'on',
+                    wordWrap: 'on',
+                    scrollBeyondLastLine: false,
+                    automaticLayout: true,
+                  }}
                 />
-              ) : (
-                <article className="prose prose-sm max-w-none p-4">
+              ) : markdownFile.path.endsWith('.md') ? (
+                <article className="prose prose-sm max-w-none p-4 overflow-auto h-full">
                   <ReactMarkdown remarkPlugins={[remarkGfm]}>
                     {markdownFile.content}
                   </ReactMarkdown>
                 </article>
+              ) : (
+                <Editor
+                  height="100%"
+                  language={getMonacoLanguage(markdownFile.path)}
+                  value={markdownFile.content}
+                  beforeMount={defineMonacoThemes}
+                  theme={getMonacoTheme(theme)}
+                  onMount={handleEditorMount}
+                  options={{
+                    minimap: { enabled: false },
+                    fontSize: 13,
+                    lineNumbers: 'on',
+                    wordWrap: 'on',
+                    scrollBeyondLastLine: false,
+                    automaticLayout: true,
+                    readOnly: true,
+                  }}
+                />
               )
             ) : (
               <div className="flex h-full items-center justify-center text-muted-foreground text-sm">

@@ -22,7 +22,6 @@ import {
   FolderTree,
   Folder,
   File,
-  GripVertical,
   Trash2,
   Pencil,
   Copy,
@@ -30,7 +29,6 @@ import {
   EyeOff,
   ExternalLink,
   SquareTerminal,
-  Eye,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -80,8 +78,6 @@ interface GitPanelProps {
   projectPath: string;
   projectName: string;
   onRefresh: () => void;
-  onFileDragStart?: (filePath: string) => void;
-  onFileDragEnd?: () => void;
   onOpenMarkdown?: (filePath: string) => void;
 }
 
@@ -102,7 +98,30 @@ interface FileTreeNode {
   children?: FileTreeNode[];
 }
 
-export default function GitPanel({ projectPath, projectName, onRefresh, onFileDragStart, onFileDragEnd, onOpenMarkdown }: GitPanelProps) {
+// Binary file extensions that should NOT be opened in the text editor
+const binaryExtensions = [
+  // Images
+  '.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp', '.ico', '.bmp', '.tiff', '.tif', '.psd', '.ai',
+  // Video/Audio
+  '.mp4', '.mov', '.avi', '.mkv', '.webm', '.mp3', '.wav', '.ogg', '.flac', '.aac', '.m4a',
+  // Archives
+  '.zip', '.tar', '.gz', '.bz2', '.7z', '.rar', '.xz', '.dmg', '.iso',
+  // Executables/Libraries
+  '.exe', '.dll', '.so', '.dylib', '.bin', '.app', '.deb', '.rpm', '.msi',
+  // Documents (binary formats)
+  '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx', '.odt', '.ods', '.odp',
+  // Fonts
+  '.ttf', '.otf', '.woff', '.woff2', '.eot',
+  // Other binary
+  '.sqlite', '.db', '.pyc', '.class', '.o', '.a', '.wasm',
+];
+
+const isPreviewable = (path: string): boolean => {
+  const lower = path.toLowerCase();
+  return !binaryExtensions.some(ext => lower.endsWith(ext));
+};
+
+export default function GitPanel({ projectPath, projectName, onRefresh, onOpenMarkdown }: GitPanelProps) {
   const { diffs, branches, loading, status, history } = useGitStore();
   const { autoCommitMessage, groqApiKey, preferredEditor } = useSettingsStore();
   const [commitSubject, setCommitSubject] = useState("");
@@ -129,6 +148,7 @@ export default function GitPanel({ projectPath, projectName, onRefresh, onFileDr
   const [isLoadingFiles, setIsLoadingFiles] = useState(false);
   const [renamingFile, setRenamingFile] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
+  const [draggingFile, setDraggingFile] = useState<{ name: string; x: number; y: number; isDir: boolean } | null>(null);
   const lastDiffsHash = useRef<string>("");
   const hasGeneratedInitialMessage = useRef(false);
   const pendingAutoGenerate = useRef(false);
@@ -242,15 +262,40 @@ export default function GitPanel({ projectPath, projectName, onRefresh, onFileDr
     });
   };
 
-  const handleDragStart = (e: React.DragEvent, filePath: string) => {
-    const fullPath = `"${projectPath}/${filePath}"`;
-    e.dataTransfer.setData("text/plain", fullPath);
-    e.dataTransfer.effectAllowed = "copy";
-    onFileDragStart?.(fullPath);
-  };
+  // Custom drag using mouse events (bypasses Tauri's drop interception)
+  const handleFileDragStart = (e: React.MouseEvent, filePath: string, isDir = false) => {
+    // Only start drag on left mouse button
+    if (e.button !== 0) return;
 
-  const handleDragEnd = () => {
-    onFileDragEnd?.();
+    // Ignore if clicking on interactive elements
+    const target = e.target as HTMLElement;
+    if (target.closest('button, input, [role="menuitem"]')) return;
+
+    const fullPath = `"${projectPath}/${filePath}"`;
+    const fileName = filePath.split("/").pop() || filePath;
+
+    (window as unknown as { __draggedFilePath?: string }).__draggedFilePath = fullPath;
+    setDraggingFile({ name: fileName, x: e.clientX, y: e.clientY, isDir });
+    document.body.style.cursor = "grabbing";
+
+    const handleMouseMove = (moveEvent: MouseEvent) => {
+      setDraggingFile({ name: fileName, x: moveEvent.clientX, y: moveEvent.clientY, isDir });
+    };
+
+    const handleMouseUp = () => {
+      document.body.style.cursor = "";
+      setDraggingFile(null);
+      // Don't clear path immediately - let terminal clear it after writing
+      // Just clean up after a delay as fallback
+      setTimeout(() => {
+        (window as unknown as { __draggedFilePath?: string }).__draggedFilePath = undefined;
+      }, 200);
+      document.removeEventListener("mousemove", handleMouseMove);
+      document.removeEventListener("mouseup", handleMouseUp);
+    };
+
+    document.addEventListener("mousemove", handleMouseMove);
+    document.addEventListener("mouseup", handleMouseUp);
   };
 
   const handleCopyPath = (filePath: string) => {
@@ -716,17 +761,24 @@ export default function GitPanel({ projectPath, projectName, onRefresh, onFileDr
     const canExpand = isImage || hasDiff;
 
     return (
-      <div className="group">
+      <div
+        className="group cursor-grab active:cursor-grabbing"
+        onMouseDown={(e) => handleFileDragStart(e, diff.path)}
+      >
         {/* File row with context menu */}
         <ContextMenu>
           <ContextMenuTrigger asChild>
             <div
               className={cn(
-                "relative flex items-center gap-2 rounded pr-8 py-1.5 transition-colors",
-                canExpand ? "cursor-pointer" : "cursor-default",
-                isSelected ? "bg-primary/20" : canExpand ? "hover:bg-muted/50" : ""
+                "relative flex items-center gap-2 rounded pr-8 py-1.5 transition-colors cursor-grab active:cursor-grabbing",
+                isSelected ? "bg-primary/20" : "hover:bg-muted/50"
               )}
               onClick={(e) => handleFileClick(diff.path, index, e)}
+              onDoubleClick={() => {
+                if (isPreviewable(diff.path) && onOpenMarkdown) {
+                  onOpenMarkdown(`${projectPath}/${diff.path}`);
+                }
+              }}
             >
               {canExpand ? (
                 isExpanded ? (
@@ -772,10 +824,10 @@ export default function GitPanel({ projectPath, projectName, onRefresh, onFileDr
               <ExternalLink className="mr-2 h-4 w-4" />
               Open
             </ContextMenuItem>
-            {diff.path.endsWith('.md') && onOpenMarkdown && (
+            {isPreviewable(diff.path) && onOpenMarkdown && (
               <ContextMenuItem onClick={() => onOpenMarkdown(`${projectPath}/${diff.path}`)}>
-                <Eye className="mr-2 h-4 w-4" />
-                Preview
+                <FileIcon className="mr-2 h-4 w-4" />
+                Open Here
               </ContextMenuItem>
             )}
             <ContextMenuItem onClick={() => handleRevealInFileManager(diff.path)}>
@@ -930,14 +982,12 @@ export default function GitPanel({ projectPath, projectName, onRefresh, onFileDr
     nodes,
     expandedDirs,
     onToggleDir,
-    onDragStart,
     projectPath,
     depth = 0
   }: {
     nodes: FileTreeNode[];
     expandedDirs: Set<string>;
     onToggleDir: (path: string) => void;
-    onDragStart: (e: React.DragEvent, path: string) => void;
     projectPath: string;
     depth?: number;
   }) => (
@@ -946,10 +996,13 @@ export default function GitPanel({ projectPath, projectName, onRefresh, onFileDr
         <div key={node.path}>
           {node.isDir ? (
             <>
+              <div
+                onMouseDown={(e) => handleFileDragStart(e, node.path, true)}
+              >
               <ContextMenu>
                 <ContextMenuTrigger asChild>
                   <div
-                    className="flex items-center gap-1.5 py-1 px-1 rounded hover:bg-muted/50 cursor-pointer"
+                    className="flex items-center gap-1.5 py-1 px-1 rounded hover:bg-muted/50 cursor-grab active:cursor-grabbing"
                     onClick={() => onToggleDir(node.path)}
                   >
                     {expandedDirs.has(node.path) ? (
@@ -972,27 +1025,31 @@ export default function GitPanel({ projectPath, projectName, onRefresh, onFileDr
                   </ContextMenuItem>
                 </ContextMenuContent>
               </ContextMenu>
+              </div>
               {expandedDirs.has(node.path) && node.children && (
                 <FileTreeView
                   nodes={node.children}
                   expandedDirs={expandedDirs}
                   onToggleDir={onToggleDir}
-                  onDragStart={onDragStart}
                   projectPath={projectPath}
                   depth={depth + 1}
                 />
               )}
             </>
           ) : (
+            <div
+              onMouseDown={(e) => renamingFile !== node.path && handleFileDragStart(e, node.path)}
+            >
             <ContextMenu>
               <ContextMenuTrigger asChild>
                 <div
                   className="flex items-center gap-1.5 py-1 px-1 pl-5 rounded hover:bg-muted/50 cursor-grab active:cursor-grabbing"
-                  draggable={renamingFile !== node.path}
-                  onDragStart={(e) => onDragStart(e, node.path)}
-                  onDragEnd={handleDragEnd}
+                  onDoubleClick={() => {
+                    if (isPreviewable(node.path) && onOpenMarkdown) {
+                      onOpenMarkdown(`${projectPath}/${node.path}`);
+                    }
+                  }}
                 >
-                  <GripVertical className="h-3 w-3 text-muted-foreground/50 shrink-0" />
                   <File className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
                   {renamingFile === node.path ? (
                     <input
@@ -1018,10 +1075,10 @@ export default function GitPanel({ projectPath, projectName, onRefresh, onFileDr
                   <ExternalLink className="mr-2 h-4 w-4" />
                   Open
                 </ContextMenuItem>
-                {node.name.endsWith('.md') && onOpenMarkdown && (
+                {isPreviewable(node.path) && onOpenMarkdown && (
                   <ContextMenuItem onClick={() => onOpenMarkdown(`${projectPath}/${node.path}`)}>
-                    <Eye className="mr-2 h-4 w-4" />
-                    Preview
+                    <FileIcon className="mr-2 h-4 w-4" />
+                    Open Here
                   </ContextMenuItem>
                 )}
                 <ContextMenuItem onClick={() => handleRevealInFileManager(node.path)}>
@@ -1053,6 +1110,7 @@ export default function GitPanel({ projectPath, projectName, onRefresh, onFileDr
                 </ContextMenuItem>
               </ContextMenuContent>
             </ContextMenu>
+            </div>
           )}
         </div>
       ))}
@@ -1061,6 +1119,20 @@ export default function GitPanel({ projectPath, projectName, onRefresh, onFileDr
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden select-none">
+      {/* Floating drag indicator */}
+      {draggingFile && (
+        <div
+          className="fixed pointer-events-none z-50 flex items-center gap-2 px-3 py-1.5 rounded bg-primary text-primary-foreground text-sm font-medium shadow-lg"
+          style={{
+            left: draggingFile.x + 12,
+            top: draggingFile.y + 12,
+          }}
+        >
+          {draggingFile.isDir ? <Folder className="h-3.5 w-3.5" /> : <File className="h-3.5 w-3.5" />}
+          {draggingFile.name}
+        </div>
+      )}
+
       {/* Header with actions only */}
       <div className="flex h-10 items-center justify-end gap-1 px-4">
           <Tooltip>
@@ -1369,7 +1441,6 @@ export default function GitPanel({ projectPath, projectName, onRefresh, onFileDr
                   nodes={fileTree}
                   expandedDirs={expandedDirs}
                   onToggleDir={toggleDir}
-                  onDragStart={handleDragStart}
                   projectPath={projectPath}
                 />
               ) : (

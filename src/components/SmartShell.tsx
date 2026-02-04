@@ -29,6 +29,7 @@ interface SmartShellProps {
   cwd: string;
   terminalId?: string | null;
   onTerminalReady?: (id: string) => void;
+  onCwdChange?: (newCwd: string) => void;
   visible?: boolean;
   showNlt?: boolean;
   onNltVisibilityChange?: (visible: boolean) => void;
@@ -39,6 +40,7 @@ export default function SmartShell({
   cwd,
   terminalId,
   onTerminalReady,
+  onCwdChange,
   visible = true,
   showNlt = false,
   onNltVisibilityChange,
@@ -252,6 +254,7 @@ export default function SmartShell({
           command=""
           cwd={cwd}
           onTerminalReady={handleTerminalReady}
+          onCwdChange={onCwdChange}
           visible={visible}
         />
       </div>
