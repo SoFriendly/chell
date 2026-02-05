@@ -142,6 +142,7 @@ export interface Settings {
   autoFetchRemote: boolean;
   groqApiKey?: string;
   preferredEditor?: string;
+  showHiddenFiles: boolean;
   // Remote Portal settings
   portalEnabled?: boolean;
   portalRelayUrl?: string;

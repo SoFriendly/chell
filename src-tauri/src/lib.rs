@@ -703,11 +703,11 @@ fn revert_commit(repo_path: String, commit_id: String) -> Result<(), String> {
 }
 
 #[tauri::command]
-fn get_file_tree(path: String) -> Result<Vec<FileTreeNode>, String> {
+fn get_file_tree(path: String, show_hidden: bool) -> Result<Vec<FileTreeNode>, String> {
     use std::fs;
     use std::path::Path;
 
-    fn build_tree(dir_path: &Path, base_path: &Path, depth: usize) -> Result<Vec<FileTreeNode>, String> {
+    fn build_tree(dir_path: &Path, base_path: &Path, depth: usize, show_hidden: bool) -> Result<Vec<FileTreeNode>, String> {
         if depth > 10 {
             return Ok(vec![]); // Limit depth to prevent infinite recursion
         }
@@ -720,8 +720,13 @@ fn get_file_tree(path: String) -> Result<Vec<FileTreeNode>, String> {
             let path = entry.path();
             let name = entry.file_name().to_string_lossy().to_string();
 
-            // Skip hidden files/dirs and common ignore patterns
-            if name.starts_with('.') || name == "node_modules" || name == "target" || name == "__pycache__" || name == "dist" || name == "build" {
+            // Skip hidden files/dirs unless show_hidden is true
+            if !show_hidden && name.starts_with('.') {
+                continue;
+            }
+
+            // Always skip common ignore patterns
+            if name == "node_modules" || name == "target" || name == "__pycache__" || name == "dist" || name == "build" {
                 continue;
             }
 
@@ -731,7 +736,7 @@ fn get_file_tree(path: String) -> Result<Vec<FileTreeNode>, String> {
 
             let is_dir = path.is_dir();
             let children = if is_dir {
-                Some(build_tree(&path, base_path, depth + 1)?)
+                Some(build_tree(&path, base_path, depth + 1, show_hidden)?)
             } else {
                 None
             };
@@ -757,7 +762,7 @@ fn get_file_tree(path: String) -> Result<Vec<FileTreeNode>, String> {
     }
 
     let path = Path::new(&path);
-    build_tree(path, path, 0)
+    build_tree(path, path, 0, show_hidden)
 }
 
 #[tauri::command]

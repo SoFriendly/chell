@@ -294,6 +294,7 @@ export default function ProjectPage() {
   const [editingTabName, setEditingTabName] = useState("");
   const [installedAssistants, setInstalledAssistants] = useState<string[]>([]);
   const [showGitPanel, setShowGitPanel] = useState(true);
+  const [isGitRepo, setIsGitRepo] = useState(true);
   const [showAssistantPanel, setShowAssistantPanel] = useState(true);
   const [showShellPanel, setShowShellPanel] = useState(true);
   const [showMarkdownPanel, setShowMarkdownPanel] = useState(false);
@@ -995,6 +996,20 @@ export default function ProjectPage() {
   const loadGitData = async (path: string) => {
     setLoading(true);
     try {
+      // Check if this is a git repo first
+      const isRepo = await invoke<boolean>("is_git_repo", { path });
+      setIsGitRepo(isRepo);
+
+      if (!isRepo) {
+        // Clear git data if not a repo
+        setStatus(null);
+        setDiffs([]);
+        setBranches([]);
+        setHistory([]);
+        setLoading(false);
+        return;
+      }
+
       const [status, diffs, branches, history] = await Promise.all([
         invoke<GitStatus>("get_status", { repoPath: path }),
         invoke<FileDiff[]>("get_diff", { repoPath: path }),
@@ -1028,6 +1043,20 @@ export default function ProjectPage() {
         // Silently continue - fetch may fail if no remote configured
       }
       loadGitData(path);
+    }
+  }, []);
+
+  const initGitRepo = useCallback(async () => {
+    const path = currentProjectPathRef.current;
+    if (path) {
+      try {
+        await invoke("init_repo", { path });
+        toast.success("Git repository initialized");
+        loadGitData(path);
+      } catch (error) {
+        console.error("Failed to initialize git repo:", error);
+        toast.error("Failed to initialize git repository");
+      }
     }
   }, []);
 
@@ -1273,7 +1302,9 @@ export default function ProjectPage() {
           <GitPanel
             projectPath={currentProject.path}
             projectName={currentProject.name}
+            isGitRepo={isGitRepo}
             onRefresh={refreshGitData}
+            onInitRepo={initGitRepo}
             onOpenMarkdown={handleOpenMarkdownInPanel}
           />
         </div>

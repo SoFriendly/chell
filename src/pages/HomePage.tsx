@@ -77,15 +77,10 @@ export default function HomePage() {
       const selected = await open({
         directory: true,
         multiple: false,
-        title: "Select Git Repository",
+        title: "Select Folder",
       });
 
       if (selected && typeof selected === "string") {
-        const isRepo = await invoke<boolean>("is_git_repo", { path: selected });
-        if (!isRepo) {
-          toast.error("Selected folder is not a git repository");
-          return;
-        }
         const name = selected.split("/").pop() || "Unknown";
         const project: Project = {
           id: crypto.randomUUID(),
@@ -387,9 +382,9 @@ export default function HomePage() {
                     <FolderOpen className="h-5 w-5 text-muted-foreground group-hover:text-primary" />
                   </div>
                   <div className="flex-1">
-                    <p className="text-sm font-medium">Open existing repository</p>
+                    <p className="text-sm font-medium">Open existing folder</p>
                     <p className="text-xs text-muted-foreground">
-                      Browse to a local git repository
+                      Browse to a local project folder
                     </p>
                   </div>
                   <ArrowRight className="h-4 w-4 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />

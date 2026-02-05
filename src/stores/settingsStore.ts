@@ -20,6 +20,7 @@ interface SettingsState extends Settings {
   setHasSeenOnboarding: (seen: boolean) => void;
   setGroqApiKey: (key: string | undefined) => void;
   setPreferredEditor: (editor: string | undefined) => void;
+  setShowHiddenFiles: (enabled: boolean) => void;
   // Custom theme actions
   setCustomTheme: (theme: CustomThemeColors | undefined) => void;
   setCustomThemeColor: (colorKey: keyof CustomThemeColors['colors'], value: string) => void;
@@ -68,6 +69,7 @@ export const useSettingsStore = create<SettingsState>()(
       hasSeenOnboarding: false,
       groqApiKey: undefined,
       preferredEditor: undefined,
+      showHiddenFiles: false,
 
       setTheme: (theme) => {
         const customTheme = get().customTheme;
@@ -108,6 +110,8 @@ export const useSettingsStore = create<SettingsState>()(
       setGroqApiKey: (key) => set({ groqApiKey: key }),
 
       setPreferredEditor: (editor) => set({ preferredEditor: editor }),
+
+      setShowHiddenFiles: (enabled) => set({ showHiddenFiles: enabled }),
 
       setCustomTheme: (customTheme) => {
         set({ customTheme });

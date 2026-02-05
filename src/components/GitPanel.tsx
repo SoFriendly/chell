@@ -77,7 +77,9 @@ import type { FileDiff, DiffHunk } from "@/types";
 interface GitPanelProps {
   projectPath: string;
   projectName: string;
+  isGitRepo: boolean;
   onRefresh: () => void;
+  onInitRepo: () => void;
   onOpenMarkdown?: (filePath: string) => void;
 }
 
@@ -121,9 +123,9 @@ const isPreviewable = (path: string): boolean => {
   return !binaryExtensions.some(ext => lower.endsWith(ext));
 };
 
-export default function GitPanel({ projectPath, projectName, onRefresh, onOpenMarkdown }: GitPanelProps) {
+export default function GitPanel({ projectPath, projectName, isGitRepo, onRefresh, onInitRepo, onOpenMarkdown }: GitPanelProps) {
   const { diffs, branches, loading, status, history } = useGitStore();
-  const { autoCommitMessage, groqApiKey, preferredEditor } = useSettingsStore();
+  const { autoCommitMessage, groqApiKey, preferredEditor, showHiddenFiles } = useSettingsStore();
   const [commitSubject, setCommitSubject] = useState("");
   const [commitDescription, setCommitDescription] = useState("");
   const [isCommitting, setIsCommitting] = useState(false);
@@ -230,6 +232,13 @@ export default function GitPanel({ projectPath, projectName, onRefresh, onOpenMa
     }
   }, [filesToCommit, autoCommitMessage]);
 
+  // Default to files view when not a git repo
+  useEffect(() => {
+    if (!isGitRepo) {
+      setViewMode("files");
+    }
+  }, [isGitRepo]);
+
   // Load file tree when switching to files view
   useEffect(() => {
     if (viewMode === "files" && fileTree.length === 0) {
@@ -237,10 +246,17 @@ export default function GitPanel({ projectPath, projectName, onRefresh, onOpenMa
     }
   }, [viewMode]);
 
+  // Reload file tree when showHiddenFiles setting changes
+  useEffect(() => {
+    if (viewMode === "files") {
+      loadFileTree();
+    }
+  }, [showHiddenFiles]);
+
   const loadFileTree = async () => {
     setIsLoadingFiles(true);
     try {
-      const tree = await invoke<FileTreeNode[]>("get_file_tree", { path: projectPath });
+      const tree = await invoke<FileTreeNode[]>("get_file_tree", { path: projectPath, showHidden: showHiddenFiles });
       setFileTree(tree);
     } catch (error) {
       console.error("Failed to load file tree:", error);
@@ -273,23 +289,38 @@ export default function GitPanel({ projectPath, projectName, onRefresh, onOpenMa
 
     const fullPath = `"${projectPath}/${filePath}"`;
     const fileName = filePath.split("/").pop() || filePath;
-
-    (window as unknown as { __draggedFilePath?: string }).__draggedFilePath = fullPath;
-    setDraggingFile({ name: fileName, x: e.clientX, y: e.clientY, isDir });
-    document.body.style.cursor = "grabbing";
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const DRAG_THRESHOLD = 5; // pixels before drag starts
+    let isDragging = false;
 
     const handleMouseMove = (moveEvent: MouseEvent) => {
-      setDraggingFile({ name: fileName, x: moveEvent.clientX, y: moveEvent.clientY, isDir });
+      // Only start drag after moving past threshold (allows double-click to work)
+      if (!isDragging) {
+        const deltaX = Math.abs(moveEvent.clientX - startX);
+        const deltaY = Math.abs(moveEvent.clientY - startY);
+        if (deltaX > DRAG_THRESHOLD || deltaY > DRAG_THRESHOLD) {
+          isDragging = true;
+          (window as unknown as { __draggedFilePath?: string }).__draggedFilePath = fullPath;
+          document.body.style.cursor = "grabbing";
+        }
+      }
+
+      if (isDragging) {
+        setDraggingFile({ name: fileName, x: moveEvent.clientX, y: moveEvent.clientY, isDir });
+      }
     };
 
     const handleMouseUp = () => {
-      document.body.style.cursor = "";
-      setDraggingFile(null);
-      // Don't clear path immediately - let terminal clear it after writing
-      // Just clean up after a delay as fallback
-      setTimeout(() => {
-        (window as unknown as { __draggedFilePath?: string }).__draggedFilePath = undefined;
-      }, 200);
+      if (isDragging) {
+        document.body.style.cursor = "";
+        setDraggingFile(null);
+        // Don't clear path immediately - let terminal clear it after writing
+        // Just clean up after a delay as fallback
+        setTimeout(() => {
+          (window as unknown as { __draggedFilePath?: string }).__draggedFilePath = undefined;
+        }, 200);
+      }
       document.removeEventListener("mousemove", handleMouseMove);
       document.removeEventListener("mouseup", handleMouseUp);
     };
@@ -1352,11 +1383,42 @@ export default function GitPanel({ projectPath, projectName, onRefresh, onOpenMa
                 </div>
               )}
 
-              {/* No changes message */}
+              {/* No changes message or not a git repo */}
               {diffs.length === 0 && (
-                <div className="flex flex-col items-center justify-center py-8 text-center">
-                  <GitCommit className="mb-2 h-8 w-8 text-muted-foreground" />
-                  <p className="text-sm text-muted-foreground">No changes</p>
+                <div className="flex h-full flex-col items-center justify-center p-6">
+                  <div className="flex flex-col items-center text-center max-w-[200px]">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-muted/50 mb-4">
+                      <GitCommit className="h-6 w-6 text-muted-foreground" />
+                    </div>
+                    {isGitRepo ? (
+                      <>
+                        <p className="text-sm font-medium text-muted-foreground mb-1">
+                          No changes
+                        </p>
+                        <p className="text-xs text-muted-foreground/70">
+                          Your working directory is clean
+                        </p>
+                      </>
+                    ) : (
+                      <>
+                        <p className="text-sm font-medium text-muted-foreground mb-1">
+                          No git repo detected
+                        </p>
+                        <p className="text-xs text-muted-foreground/70 mb-4">
+                          Initialize a repository to track changes
+                        </p>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={onInitRepo}
+                          className="gap-2"
+                        >
+                          <GitBranch className="h-3.5 w-3.5" />
+                          Initialize Git Repo
+                        </Button>
+                      </>
+                    )}
+                  </div>
                 </div>
               )}
             </>
@@ -1407,9 +1469,40 @@ export default function GitPanel({ projectPath, projectName, onRefresh, onOpenMa
                   </ContextMenu>
                 ))
               ) : (
-                <div className="flex flex-col items-center justify-center py-8 text-center">
-                  <History className="mb-2 h-8 w-8 text-muted-foreground" />
-                  <p className="text-sm text-muted-foreground">No commit history</p>
+                <div className="flex h-full flex-col items-center justify-center p-6">
+                  <div className="flex flex-col items-center text-center max-w-[200px]">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-muted/50 mb-4">
+                      <History className="h-6 w-6 text-muted-foreground" />
+                    </div>
+                    {isGitRepo ? (
+                      <>
+                        <p className="text-sm font-medium text-muted-foreground mb-1">
+                          No commit history
+                        </p>
+                        <p className="text-xs text-muted-foreground/70">
+                          Make your first commit to start tracking
+                        </p>
+                      </>
+                    ) : (
+                      <>
+                        <p className="text-sm font-medium text-muted-foreground mb-1">
+                          No git repo detected
+                        </p>
+                        <p className="text-xs text-muted-foreground/70 mb-4">
+                          Initialize a repository to track changes
+                        </p>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={onInitRepo}
+                          className="gap-2"
+                        >
+                          <GitBranch className="h-3.5 w-3.5" />
+                          Initialize Git Repo
+                        </Button>
+                      </>
+                    )}
+                  </div>
                 </div>
               )}
             </div>
@@ -1454,74 +1547,86 @@ export default function GitPanel({ projectPath, projectName, onRefresh, onOpenMa
         </div>
       </ScrollArea>
 
-      {/* Commit section - fixed at bottom */}
-      <div className="border-t border-border p-4 space-y-3">
-        {/* Subject line */}
-        <div className="relative">
-          <Input
-            placeholder="Summary (required)"
-            value={commitSubject}
-            onChange={(e) => setCommitSubject(e.target.value)}
-            className={cn("bg-muted/50 text-sm", isGenerating && "pr-8")}
+      {/* Commit section - fixed at bottom (only show when git repo) */}
+      {isGitRepo ? (
+        <div className="border-t border-border p-4 space-y-3">
+          {/* Subject line */}
+          <div className="relative">
+            <Input
+              placeholder="Summary (required)"
+              value={commitSubject}
+              onChange={(e) => setCommitSubject(e.target.value)}
+              className={cn("bg-muted/50 text-sm", isGenerating && "pr-8")}
+              disabled={isGenerating}
+            />
+            {isGenerating && (
+              <Loader2 className="absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-primary" />
+            )}
+          </div>
+
+          {/* Description */}
+          <Textarea
+            placeholder="Description (optional)"
+            value={commitDescription}
+            onChange={(e) => setCommitDescription(e.target.value)}
+            className="bg-muted/50 text-sm min-h-[60px] resize-none"
             disabled={isGenerating}
           />
-          {isGenerating && (
-            <Loader2 className="absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-primary" />
+
+          {/* Regenerate button */}
+          {diffs.length > 0 && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="w-full text-xs text-muted-foreground hover:text-foreground"
+              onClick={generateCommitMessage}
+              disabled={isGenerating}
+            >
+              <Sparkles className="mr-1.5 h-3 w-3" />
+              {isGenerating ? "Generating..." : "Regenerate with AI"}
+            </Button>
+          )}
+
+          {/* Commit or Undo Commit button */}
+          {status && status.ahead > 0 && filesToCommit.size === 0 && history.length > 1 ? (
+            <Button
+              className="w-full bg-muted hover:bg-muted/80 text-foreground font-medium"
+              onClick={handleUndoCommit}
+              disabled={isUndoing}
+            >
+              <Undo2 className="mr-1.5 h-4 w-4" />
+              <span className="truncate">
+                {isUndoing ? "Undoing..." : "Undo Commit"}
+              </span>
+            </Button>
+          ) : (
+            <Button
+              className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-medium"
+              onClick={handleCommit}
+              disabled={isCommitting || !commitSubject.trim() || filesToCommit.size === 0}
+            >
+              <span className="truncate">
+                {isCommitting
+                  ? "Committing..."
+                  : filesToCommit.size === diffs.length
+                    ? `Commit to ${currentBranch?.name || "main"}`
+                    : `Commit ${filesToCommit.size} file${filesToCommit.size !== 1 ? 's' : ''} to ${currentBranch?.name || "main"}`
+                }
+              </span>
+            </Button>
           )}
         </div>
-
-        {/* Description */}
-        <Textarea
-          placeholder="Description (optional)"
-          value={commitDescription}
-          onChange={(e) => setCommitDescription(e.target.value)}
-          className="bg-muted/50 text-sm min-h-[60px] resize-none"
-          disabled={isGenerating}
-        />
-
-        {/* Regenerate button */}
-        {diffs.length > 0 && (
+      ) : (
+        <div className="border-t border-border p-4">
           <Button
-            variant="ghost"
-            size="sm"
-            className="w-full text-xs text-muted-foreground hover:text-foreground"
-            onClick={generateCommitMessage}
-            disabled={isGenerating}
+            className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-medium gap-2"
+            onClick={onInitRepo}
           >
-            <Sparkles className="mr-1.5 h-3 w-3" />
-            {isGenerating ? "Generating..." : "Regenerate with AI"}
+            <GitBranch className="h-4 w-4" />
+            Initialize Git Repository
           </Button>
-        )}
-
-        {/* Commit or Undo Commit button */}
-        {status && status.ahead > 0 && filesToCommit.size === 0 && history.length > 1 ? (
-          <Button
-            className="w-full bg-muted hover:bg-muted/80 text-foreground font-medium"
-            onClick={handleUndoCommit}
-            disabled={isUndoing}
-          >
-            <Undo2 className="mr-1.5 h-4 w-4" />
-            <span className="truncate">
-              {isUndoing ? "Undoing..." : "Undo Commit"}
-            </span>
-          </Button>
-        ) : (
-          <Button
-            className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-medium"
-            onClick={handleCommit}
-            disabled={isCommitting || !commitSubject.trim() || filesToCommit.size === 0}
-          >
-            <span className="truncate">
-              {isCommitting
-                ? "Committing..."
-                : filesToCommit.size === diffs.length
-                  ? `Commit to ${currentBranch?.name || "main"}`
-                  : `Commit ${filesToCommit.size} file${filesToCommit.size !== 1 ? 's' : ''} to ${currentBranch?.name || "main"}`
-              }
-            </span>
-          </Button>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* Create branch dialog */}
       <Dialog open={showBranchDialog} onOpenChange={setShowBranchDialog}>

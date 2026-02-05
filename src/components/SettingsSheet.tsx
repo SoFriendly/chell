@@ -127,6 +127,8 @@ export default function SettingsSheet({ open, onOpenChange }: SettingsSheetProps
     setGroqApiKey,
     preferredEditor,
     setPreferredEditor,
+    showHiddenFiles,
+    setShowHiddenFiles,
   } = useSettingsStore();
 
   const [activeTab, setActiveTab] = useState<SettingsTab>("general");
@@ -341,6 +343,20 @@ export default function SettingsSheet({ open, onOpenChange }: SettingsSheetProps
                           onChange={(e) => setPreferredEditor(e.target.value || undefined)}
                           placeholder="nvim"
                           className="w-32 h-9 bg-muted/50 font-mono text-sm"
+                        />
+                      </div>
+
+                      {/* Show Hidden Files */}
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm font-medium">Show Hidden Files</p>
+                          <p className="text-xs text-muted-foreground">
+                            Display dotfiles and hidden folders in the file tree.
+                          </p>
+                        </div>
+                        <Switch
+                          checked={showHiddenFiles}
+                          onCheckedChange={setShowHiddenFiles}
                         />
                       </div>
                     </div>
