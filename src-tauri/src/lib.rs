@@ -137,11 +137,18 @@ struct GitWatcher {
     _stop_tx: std::sync::mpsc::Sender<()>,
 }
 
+// File system watcher state - watches project files for changes
+struct FileWatcher {
+    _debouncer: notify_debouncer_mini::Debouncer<notify::RecommendedWatcher>,
+    _stop_tx: std::sync::mpsc::Sender<()>,
+}
+
 struct AppState {
     terminals: Mutex<HashMap<String, TerminalState>>,
     database: Mutex<Database>,
     portal_enabled: Mutex<bool>,
     git_watchers: Mutex<HashMap<String, GitWatcher>>,
+    file_watchers: Mutex<HashMap<String, FileWatcher>>,
     portal: Mutex<Option<Portal>>,
 }
 
@@ -982,6 +989,120 @@ fn unwatch_repo(
     state: tauri::State<Arc<AppState>>,
 ) -> Result<(), String> {
     state.git_watchers.lock().remove(&repo_path);
+    Ok(())
+}
+
+// File system watcher commands - watches project files for changes (Issue #8)
+#[tauri::command]
+fn watch_project_files(
+    project_path: String,
+    app_handle: tauri::AppHandle,
+    state: tauri::State<Arc<AppState>>,
+) -> Result<(), String> {
+    use notify::RecursiveMode;
+    use std::path::Path;
+    use std::sync::mpsc;
+
+    // Check if already watching this project
+    {
+        let watchers = state.file_watchers.lock();
+        if watchers.contains_key(&project_path) {
+            return Ok(()); // Already watching
+        }
+    }
+
+    let project_dir = Path::new(&project_path);
+    if !project_dir.exists() || !project_dir.is_dir() {
+        return Err("Project path does not exist or is not a directory".to_string());
+    }
+
+    // Create channels for communication
+    let (event_tx, event_rx) = mpsc::channel::<()>();
+    let (stop_tx, stop_rx) = mpsc::channel::<()>();
+
+    // Spawn a thread to handle events and emit to frontend
+    let project_path_for_thread = project_path.clone();
+    let app_handle_clone = app_handle.clone();
+    thread::spawn(move || {
+        loop {
+            // Check for stop signal (non-blocking)
+            if stop_rx.try_recv().is_ok() {
+                break;
+            }
+
+            // Wait for events with timeout so we can check stop signal
+            match event_rx.recv_timeout(Duration::from_millis(100)) {
+                Ok(()) => {
+                    // Emit event to frontend
+                    if let Err(e) = app_handle_clone.emit("fs-files-changed", &project_path_for_thread) {
+                        println!("Failed to emit fs-files-changed: {:?}", e);
+                    }
+                }
+                Err(mpsc::RecvTimeoutError::Timeout) => continue,
+                Err(mpsc::RecvTimeoutError::Disconnected) => break,
+            }
+        }
+    });
+
+    // Directories to ignore when watching
+    let ignore_dirs: std::collections::HashSet<&str> = [
+        "node_modules", "target", "__pycache__", "dist", "build", ".git"
+    ].iter().cloned().collect();
+
+    // Create a debounced watcher with 500ms delay to batch rapid changes
+    let event_tx_clone = event_tx.clone();
+    let ignore_dirs_clone = ignore_dirs.clone();
+    let mut debouncer = new_debouncer(
+        Duration::from_millis(500),
+        move |result: Result<Vec<notify_debouncer_mini::DebouncedEvent>, notify::Error>| {
+            match result {
+                Ok(events) => {
+                    // Filter out events in ignored directories
+                    let has_relevant_changes = events.iter().any(|e| {
+                        if !matches!(e.kind, DebouncedEventKind::Any) {
+                            return false;
+                        }
+                        // Check if path contains any ignored directory
+                        let path_str = e.path.to_string_lossy();
+                        !ignore_dirs_clone.iter().any(|dir| {
+                            path_str.contains(&format!("/{}/", dir)) ||
+                            path_str.contains(&format!("\\{}\\", dir)) ||
+                            path_str.ends_with(&format!("/{}", dir)) ||
+                            path_str.ends_with(&format!("\\{}", dir))
+                        })
+                    });
+
+                    if has_relevant_changes {
+                        let _ = event_tx_clone.send(());
+                    }
+                }
+                Err(e) => {
+                    println!("File watcher error: {:?}", e);
+                }
+            }
+        },
+    ).map_err(|e| e.to_string())?;
+
+    // Watch the project directory recursively
+    debouncer.watcher().watch(project_dir, RecursiveMode::Recursive)
+        .map_err(|e| e.to_string())?;
+
+    // Store the watcher
+    let file_watcher = FileWatcher {
+        _debouncer: debouncer,
+        _stop_tx: stop_tx,
+    };
+    state.file_watchers.lock().insert(project_path, file_watcher);
+
+    Ok(())
+}
+
+#[tauri::command]
+fn unwatch_project_files(
+    project_path: String,
+    state: tauri::State<Arc<AppState>>,
+) -> Result<(), String> {
+    state.file_watchers.lock().remove(&project_path);
     Ok(())
 }
 
@@ -2017,6 +2138,7 @@ pub fn run() {
         database: Mutex::new(db),
         portal_enabled: Mutex::new(portal_was_enabled),
         git_watchers: Mutex::new(HashMap::new()),
+        file_watchers: Mutex::new(HashMap::new()),
         portal: Mutex::new(None),
     });
     let state_for_window_event = state.clone();
@@ -2082,6 +2204,8 @@ pub fn run() {
             save_clipboard_image,
             read_text_file,
             write_text_file,
+            watch_project_files,
+            unwatch_project_files,
             // Assistants
             check_installed_assistants,
             install_assistant,

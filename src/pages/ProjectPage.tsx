@@ -1306,6 +1306,7 @@ export default function ProjectPage() {
             onRefresh={refreshGitData}
             onInitRepo={initGitRepo}
             onOpenMarkdown={handleOpenMarkdownInPanel}
+            shellCwd={shellCwd}
           />
         </div>
         {/* Resize handle for git panel */}

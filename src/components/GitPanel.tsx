@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import {
   GitCommit,
@@ -81,6 +82,7 @@ interface GitPanelProps {
   onRefresh: () => void;
   onInitRepo: () => Promise<void>;
   onOpenMarkdown?: (filePath: string) => void;
+  shellCwd?: string; // Current working directory from terminal (Issue #7)
 }
 
 interface CommitSuggestion {
@@ -123,9 +125,11 @@ const isPreviewable = (path: string): boolean => {
   return !binaryExtensions.some(ext => lower.endsWith(ext));
 };
 
-export default function GitPanel({ projectPath, projectName, isGitRepo, onRefresh, onInitRepo, onOpenMarkdown }: GitPanelProps) {
+export default function GitPanel({ projectPath, projectName, isGitRepo, onRefresh, onInitRepo, onOpenMarkdown, shellCwd }: GitPanelProps) {
   const { diffs, branches, loading, status, history } = useGitStore();
   const { autoCommitMessage, groqApiKey, preferredEditor, showHiddenFiles } = useSettingsStore();
+  // Track the current root path for the file tree (can be changed by cd command)
+  const [fileTreeRoot, setFileTreeRoot] = useState(projectPath);
   const [commitSubject, setCommitSubject] = useState("");
   const [commitDescription, setCommitDescription] = useState("");
   const [isCommitting, setIsCommitting] = useState(false);
@@ -254,10 +258,54 @@ export default function GitPanel({ projectPath, projectName, isGitRepo, onRefres
     }
   }, [showHiddenFiles]);
 
+  // Watch for file system changes and auto-refresh file tree (Issue #8)
+  useEffect(() => {
+    if (!fileTreeRoot) return;
+
+    // Start watching the current file tree root
+    invoke("watch_project_files", { projectPath: fileTreeRoot }).catch((err) => {
+      console.error("Failed to start file watcher:", err);
+    });
+
+    // Listen for file change events
+    const unlisten = listen<string>("fs-files-changed", (event) => {
+      if (event.payload === fileTreeRoot && viewMode === "files") {
+        loadFileTree();
+      }
+    });
+
+    return () => {
+      // Stop watching and remove listener on cleanup
+      invoke("unwatch_project_files", { projectPath: fileTreeRoot }).catch(() => {});
+      unlisten.then((fn) => fn());
+    };
+  }, [fileTreeRoot, viewMode]);
+
+  // Update file tree root when shell cwd changes (Issue #7)
+  useEffect(() => {
+    if (shellCwd && shellCwd !== fileTreeRoot) {
+      setFileTreeRoot(shellCwd);
+      // Clear expanded dirs when changing root
+      setExpandedDirs(new Set());
+    }
+  }, [shellCwd]);
+
+  // Reset file tree root when project path changes
+  useEffect(() => {
+    setFileTreeRoot(projectPath);
+  }, [projectPath]);
+
+  // Reload file tree when fileTreeRoot changes (due to cd or project change)
+  useEffect(() => {
+    if (viewMode === "files") {
+      loadFileTree();
+    }
+  }, [fileTreeRoot]);
+
   const loadFileTree = async () => {
     setIsLoadingFiles(true);
     try {
-      const tree = await invoke<FileTreeNode[]>("get_file_tree", { path: projectPath, showHidden: showHiddenFiles });
+      const tree = await invoke<FileTreeNode[]>("get_file_tree", { path: fileTreeRoot, showHidden: showHiddenFiles });
       setFileTree(tree);
     } catch (error) {
       console.error("Failed to load file tree:", error);
