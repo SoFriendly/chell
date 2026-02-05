@@ -2,9 +2,29 @@
 
 All notable changes to Chell will be documented in this file.
 
+## [0.1.67]
+
+### Bug Fixes
+- Fix opening `.chell` workspace files not loading folders for existing projects
+- Fix added folders not persisting to backend database (lost on reload)
+- Fix workspace folder updates from `.chell` files not saving to backend on both Home and Project pages
+- Fix "Add Folder to Workspace" button missing for single-folder projects in file tree
+- Fix dock icon click reopening a closed project instead of navigating to home screen
+- Fix new windows expanding with recent projects list instead of constraining to window size
+
+### UI Improvements
+- Add "Add Folder to Workspace" button at bottom of multi-folder file tree
+- Show ellipsis menu (with Refresh and Add Folder) for single-folder projects in file tree header
+- Only show Rename Workspace and Save Workspace options in ellipsis menu for multi-folder workspaces
+- Make sidebar + and folder icon buttons consistent between Home and Project pages
+  - + button opens home screen (new window on Home, navigates home on Project page)
+  - Folder icon opens `.chell` workspace file on both pages
+- Hide scrollbar on recent projects list
+- Reduce glow effect on active sidebar icon
+
 ## [0.1.66]
 
-- Fixed built-in editor missing the save button for non-md files 
+- Fixed built-in editor missing the save button for non-md files
 
 ### Multi-Folder Workspace Support
 - Add support for projects containing multiple folders

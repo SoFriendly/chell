@@ -110,8 +110,9 @@
 
   html {
     @apply bg-background;
-    min-height: 100vh;
-    min-width: 100vw;
+    height: 100vh;
+    width: 100vw;
+    overflow: hidden;
   }
 
   body {
@@ -119,14 +120,15 @@
     font-feature-settings: "rlig" 1, "calt" 1;
     overflow: hidden;
     animation: fadeIn 0.2s ease-out;
-    min-height: 100vh;
-    min-width: 100vw;
+    height: 100vh;
+    width: 100vw;
   }
 
   #root {
     @apply bg-background;
-    min-height: 100vh;
-    min-width: 100vw;
+    height: 100vh;
+    width: 100vw;
+    overflow: hidden;
   }
 
   /* Subtle noise texture overlay for depth */
@@ -474,7 +476,7 @@
 .dark .bg-primary\/20,
 .tokyo .bg-primary\/20,
 .custom .bg-primary\/20 {
-  box-shadow: 0 0 12px hsl(var(--primary) / 0.2);
+  box-shadow: 0 0 4px hsl(var(--primary) / 0.1);
 }
 
 /* Selection highlight with glow */

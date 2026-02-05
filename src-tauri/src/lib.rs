@@ -2399,6 +2399,7 @@ pub fn run() {
             if let tauri::RunEvent::Reopen { has_visible_windows, .. } = _event {
                 if !has_visible_windows {
                     if let Some(window) = _app_handle.get_webview_window("main") {
+                        let _ = window.emit("navigate-home", ());
                         let _ = window.show();
                         let _ = window.set_focus();
                     }

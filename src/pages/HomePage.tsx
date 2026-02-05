@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { open } from "@tauri-apps/plugin-dialog";
 import {
   FolderGit2,
@@ -75,6 +76,31 @@ export default function HomePage() {
     }
   }, [showCreateDialog, defaultClonePath]);
 
+  const handleNewWindow = async () => {
+    try {
+      const webview = new WebviewWindow(`chell-${Date.now()}`, {
+        url: "/",
+        title: "Chell",
+        width: 1200,
+        height: 800,
+        minWidth: 600,
+        minHeight: 600,
+        center: true,
+        titleBarStyle: "overlay",
+        hiddenTitle: true,
+        visible: false,
+        backgroundColor: "#121212",
+      });
+      webview.once("tauri://error", (e) => {
+        console.error("Failed to create window:", e);
+        toast.error("Failed to open new window");
+      });
+    } catch (error) {
+      console.error("Error creating window:", error);
+      toast.error("Failed to open new window");
+    }
+  };
+
   const handleOpenProject = async () => {
     try {
       const selected = await open({
@@ -131,6 +157,7 @@ export default function HomePage() {
             lastOpened: new Date().toISOString(),
           };
           updateProject(existingProject.id, updatedProject);
+          await invoke("add_project", { project: updatedProject });
           navigate(`/project/${existingProject.id}`);
           toast.success(`Opened project: ${projectData.name}`);
         } else {
@@ -347,13 +374,13 @@ export default function HomePage() {
           <Tooltip delayDuration={0}>
             <TooltipTrigger asChild>
               <button
-                onClick={handleOpenProject}
+                onClick={handleNewWindow}
                 className="flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
               >
                 <Plus className="h-5 w-5" />
               </button>
             </TooltipTrigger>
-            <TooltipContent side="right">Open Folder</TooltipContent>
+            <TooltipContent side="right">New Window</TooltipContent>
           </Tooltip>
 
           <Tooltip delayDuration={0}>
@@ -514,7 +541,7 @@ export default function HomePage() {
                     </>
                   )}
                 </div>
-                <div className="flex-1 overflow-y-auto space-y-1">
+                <div className="flex-1 overflow-y-auto scrollbar-none space-y-1">
                   {sortedProjects.length === 0 && projectSearch ? (
                     <p className="text-sm text-muted-foreground text-center py-4">No projects match "{projectSearch}"</p>
                   ) : sortedProjects.map((project) => (

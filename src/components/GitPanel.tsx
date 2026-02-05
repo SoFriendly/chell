@@ -1754,8 +1754,8 @@ export default function GitPanel({ projectPath, projectName, isGitRepo, onRefres
                     Project Files
                   </h3>
                 )}
-                {folders && folders.length > 1 ? (
-                  /* Multi-folder: ellipsis menu with all options */
+                {folders && folders.length > 0 ? (
+                  /* Ellipsis menu with all options */
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <Button variant="ghost" size="icon" className="h-5 w-5">
@@ -1780,18 +1780,22 @@ export default function GitPanel({ projectPath, projectName, isGitRepo, onRefres
                           Add Folder
                         </DropdownMenuItem>
                       )}
-                      <DropdownMenuItem onClick={() => {
-                        setEditedWorkspaceName(workspaceName || "My Workspace");
-                        setIsEditingWorkspaceName(true);
-                      }}>
-                        <Pencil className="mr-2 h-3.5 w-3.5" />
-                        Rename Workspace
-                      </DropdownMenuItem>
-                      {onSaveWorkspace && (
-                        <DropdownMenuItem onClick={onSaveWorkspace}>
-                          <Save className="mr-2 h-3.5 w-3.5" />
-                          Save Workspace
-                        </DropdownMenuItem>
+                      {folders && folders.length > 1 && (
+                        <>
+                          <DropdownMenuItem onClick={() => {
+                            setEditedWorkspaceName(workspaceName || "My Workspace");
+                            setIsEditingWorkspaceName(true);
+                          }}>
+                            <Pencil className="mr-2 h-3.5 w-3.5" />
+                            Rename Workspace
+                          </DropdownMenuItem>
+                          {onSaveWorkspace && (
+                            <DropdownMenuItem onClick={onSaveWorkspace}>
+                              <Save className="mr-2 h-3.5 w-3.5" />
+                              Save Workspace
+                            </DropdownMenuItem>
+                          )}
+                        </>
                       )}
                     </DropdownMenuContent>
                   </DropdownMenu>
@@ -1854,6 +1858,18 @@ export default function GitPanel({ projectPath, projectName, isGitRepo, onRefres
                       )}
                     </div>
                   ))}
+                  {/* Add folder button at bottom of multi-folder tree */}
+                  {onAddFolder && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="w-full justify-start gap-2 text-muted-foreground hover:text-foreground mt-2"
+                      onClick={onAddFolder}
+                    >
+                      <Plus className="h-3.5 w-3.5" />
+                      Add Folder to Workspace
+                    </Button>
+                  )}
                 </div>
               ) : fileTree.length > 0 ? (
                 /* Single folder view (backward compat) */

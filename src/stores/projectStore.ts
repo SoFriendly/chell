@@ -52,10 +52,10 @@ export const useProjectStore = create<ProjectState>()(
         // Check if project already exists (by path)
         const exists = state.projects.some(p => p.path === migratedProject.path);
         if (exists) {
-          // Update lastOpened instead
+          // Update existing project with all new data (name, folders, lastOpened)
           return {
             projects: state.projects.map(p =>
-              p.path === migratedProject.path ? { ...p, lastOpened: migratedProject.lastOpened } : p
+              p.path === migratedProject.path ? { ...p, ...migratedProject } : p
             ),
           };
         }
