@@ -2,6 +2,29 @@
 
 All notable changes to Chell will be documented in this file.
 
+## [0.1.66]
+
+- Fixed built-in editor missing the save button for non-md files 
+
+### Multi-Folder Workspace Support
+- Add support for projects containing multiple folders
+  - File tree shows all folders as collapsible root-level items
+  - Git panel includes folder dropdown to switch between repositories
+  - Save workspaces as `.chell` project files for easy sharing and reopening
+  - Load `.chell` workspace files from Home screen or Project page
+- Add workspace management features
+  - Ellipsis menu with Refresh, Add Folder to Workspace, Rename Workspace, and Save Workspace options
+  - Rename workspaces inline in the Git panel header
+- Terminal pane improvements for multi-folder workspaces
+  - Assistant and Shell panels show folder picker before starting in multi-folder projects
+  - Inline folder selection UI (not covering dialogs)
+  - Shell directory dropdown hidden until shell starts
+
+### Home Screen Improvements
+- Make recent projects list scrollable instead of expanding page height
+- Add search/filter for recent projects
+- Add "Open Workspace" button to load `.chell` project files
+
 ## [0.1.65]
 
 - Support opening non-git folders

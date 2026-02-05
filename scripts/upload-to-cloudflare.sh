@@ -32,14 +32,15 @@ extract_changelog() {
   fi
 
   # First try exact version match, then fall back to most recent entry
+  # Allow ### sub-headings but stop at next ## version header
   local notes=$(awk -v ver="$version" '
     /^## \[/ {
       if (found) exit
       if ($0 ~ "\\[" ver "\\]") found=1
       next
     }
-    found && /^[^#]/ { print }
-  ' "$changelog_file" | sed '/^$/d' | sed 's/^- /• /')
+    found && !/^## / { print }
+  ' "$changelog_file" | sed '/^$/d' | sed 's/^- /• /' | sed 's/^  - /  ◦ /' | sed 's/^### \(.*\)/\n\1:/')
 
   # If no exact match, get the most recent changelog entry
   if [ -z "$notes" ]; then
@@ -49,8 +50,8 @@ extract_changelog() {
         found=1
         next
       }
-      found && /^[^#]/ { print }
-    ' "$changelog_file" | sed '/^$/d' | sed 's/^- /• /')
+      found && !/^## / { print }
+    ' "$changelog_file" | sed '/^$/d' | sed 's/^- /• /' | sed 's/^  - /  ◦ /' | sed 's/^### \(.*\)/\n\1:/')
   fi
 
   echo "$notes"
