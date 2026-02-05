@@ -151,6 +151,7 @@ export default function GitPanel({ projectPath, projectName, isGitRepo, onRefres
   const [renamingFile, setRenamingFile] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
   const [draggingFile, setDraggingFile] = useState<{ name: string; x: number; y: number; isDir: boolean } | null>(null);
+  const [isInitializing, setIsInitializing] = useState(false);
   const lastDiffsHash = useRef<string>("");
   const hasGeneratedInitialMessage = useRef(false);
   const pendingAutoGenerate = useRef(false);
@@ -276,6 +277,15 @@ export default function GitPanel({ projectPath, projectName, isGitRepo, onRefres
       }
       return next;
     });
+  };
+
+  const handleInitRepo = async () => {
+    setIsInitializing(true);
+    try {
+      await onInitRepo();
+    } finally {
+      setIsInitializing(false);
+    }
   };
 
   // Custom drag using mouse events (bypasses Tauri's drop interception)
@@ -1410,11 +1420,16 @@ export default function GitPanel({ projectPath, projectName, isGitRepo, onRefres
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={onInitRepo}
+                          onClick={handleInitRepo}
+                          disabled={isInitializing}
                           className="gap-2"
                         >
-                          <GitBranch className="h-3.5 w-3.5" />
-                          Initialize Git Repo
+                          {isInitializing ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <GitBranch className="h-3.5 w-3.5" />
+                          )}
+                          {isInitializing ? "Initializing..." : "Initialize Git Repo"}
                         </Button>
                       </>
                     )}
@@ -1494,11 +1509,16 @@ export default function GitPanel({ projectPath, projectName, isGitRepo, onRefres
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={onInitRepo}
+                          onClick={handleInitRepo}
+                          disabled={isInitializing}
                           className="gap-2"
                         >
-                          <GitBranch className="h-3.5 w-3.5" />
-                          Initialize Git Repo
+                          {isInitializing ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <GitBranch className="h-3.5 w-3.5" />
+                          )}
+                          {isInitializing ? "Initializing..." : "Initialize Git Repo"}
                         </Button>
                       </>
                     )}
@@ -1620,10 +1640,15 @@ export default function GitPanel({ projectPath, projectName, isGitRepo, onRefres
         <div className="border-t border-border p-4">
           <Button
             className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-medium gap-2"
-            onClick={onInitRepo}
+            onClick={handleInitRepo}
+            disabled={isInitializing}
           >
-            <GitBranch className="h-4 w-4" />
-            Initialize Git Repository
+            {isInitializing ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <GitBranch className="h-4 w-4" />
+            )}
+            {isInitializing ? "Initializing..." : "Initialize Git Repository"}
           </Button>
         </div>
       )}
