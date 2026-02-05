@@ -2,6 +2,17 @@
 
 All notable changes to Chell will be documented in this file.
 
+## [0.1.65]
+
+- Support opening non-git folders
+  - Changed "Open existing repository" to "Open existing folder"
+  - Folders without git repos now open with Initialize Git Repo option
+  - Git panel defaults to file tree view when not a git repo
+  - Empty states show "No git repo detected" with Initialize button
+  - Loading state on Initialize buttons while git repo is being created
+- Add "Show Hidden Files" setting to display dotfiles in file tree
+- Fix double-click to open files in editor (drag threshold prevents interference)
+
 ## [0.1.64]
 
 - Move portal WebSocket connection to Rust backend
