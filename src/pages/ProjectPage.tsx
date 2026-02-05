@@ -57,7 +57,7 @@ import Terminal from "@/components/Terminal";
 import SmartShell from "@/components/SmartShell";
 import GitPanel from "@/components/GitPanel";
 import SettingsSheet from "@/components/SettingsSheet";
-import { useProjectStore } from "@/stores/projectStore";
+import { useProjectStore, ensureFolders } from "@/stores/projectStore";
 import { useGitStore } from "@/stores/gitStore";
 import { useSettingsStore } from "@/stores/settingsStore";
 import { cn } from "@/lib/utils";
@@ -721,11 +721,12 @@ export default function ProjectPage() {
         path: selected,
       };
 
+      const baseProject = ensureFolders(currentProject);
       addFolderToProject(currentProject.id, newFolder);
       // Update local state to reflect the change
       const updatedProject = {
-        ...currentProject,
-        folders: [...(currentProject.folders || []), newFolder],
+        ...baseProject,
+        folders: [...baseProject.folders!, newFolder],
       };
       setCurrentProject(updatedProject);
       // Persist to backend database
@@ -1075,9 +1076,14 @@ export default function ProjectPage() {
     try {
       const project = await invoke<Project | null>("get_project", { id: projectId });
       if (project) {
-        setCurrentProject(project);
-        openTab(project);
-        loadGitData(project.path);
+        const migrated = ensureFolders(project);
+        setCurrentProject(migrated);
+        openTab(migrated);
+        loadGitData(migrated.path);
+        // Write back migrated data if folders were missing
+        if (!project.folders || project.folders.length === 0) {
+          await invoke("add_project", { project: migrated });
+        }
       } else {
         toast.error("Project not found");
         navigate("/");

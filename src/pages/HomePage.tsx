@@ -36,7 +36,7 @@ import {
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { useProjectStore } from "@/stores/projectStore";
+import { useProjectStore, ensureFolders } from "@/stores/projectStore";
 import { useSettingsStore } from "@/stores/settingsStore";
 import { cn } from "@/lib/utils";
 import type { Project, ProjectFileData } from "@/types";
@@ -111,12 +111,12 @@ export default function HomePage() {
 
       if (selected && typeof selected === "string") {
         const name = selected.split("/").pop() || "Unknown";
-        const project: Project = {
+        const project: Project = ensureFolders({
           id: crypto.randomUUID(),
           name,
           path: selected,
           lastOpened: new Date().toISOString(),
-        };
+        });
         addProject(project);
         await invoke("add_project", { project });
         navigate(`/project/${project.id}`);
@@ -231,12 +231,12 @@ export default function HomePage() {
         path: clonePath,
       });
       const name = clonePath.split("/").pop() || "Cloned Repo";
-      const project: Project = {
+      const project: Project = ensureFolders({
         id: crypto.randomUUID(),
         name,
         path: result,
         lastOpened: new Date().toISOString(),
-      };
+      });
       addProject(project);
       await invoke("add_project", { project });
       toast.success("Repository cloned successfully");
@@ -260,12 +260,12 @@ export default function HomePage() {
     try {
       const fullPath = `${newRepoPath}/${newRepoName}`;
       await invoke("init_repo", { path: fullPath });
-      const project: Project = {
+      const project: Project = ensureFolders({
         id: crypto.randomUUID(),
         name: newRepoName,
         path: fullPath,
         lastOpened: new Date().toISOString(),
-      };
+      });
       addProject(project);
       await invoke("add_project", { project });
       toast.success("Repository created successfully");

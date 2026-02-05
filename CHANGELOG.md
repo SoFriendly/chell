@@ -2,6 +2,14 @@
 
 All notable changes to Chell will be documented in this file.
 
+## [0.1.68]
+
+### Bug Fixes
+- Fix workspace folder state not updating after adding a folder to a single-folder project
+  - Projects created from Home page now always include a `folders` array
+  - Projects loaded from backend are migrated with `ensureFolders` so workspace UI activates correctly
+  - Adding a folder no longer drops the original folder when `folders` was undefined
+
 ## [0.1.67]
 
 ### Bug Fixes
