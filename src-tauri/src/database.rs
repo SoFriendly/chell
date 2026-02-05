@@ -1,6 +1,67 @@
 use crate::Project;
 use rusqlite::{Connection, params};
+use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LinkedDevice {
+    pub id: String,
+    pub name: String,
+    pub device_type: String,
+    pub paired_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PortalConfig {
+    pub is_enabled: bool,
+    pub relay_url: String,
+    pub device_id: String,
+    pub device_name: String,
+    pub pairing_code: String,
+    pub pairing_passphrase: String,
+    pub linked_devices: Vec<LinkedDevice>,
+}
+
+impl Default for PortalConfig {
+    fn default() -> Self {
+        Self {
+            is_enabled: false,
+            relay_url: "wss://relay.chell.app".to_string(),
+            device_id: uuid::Uuid::new_v4().to_string().replace("-", "")[..32].to_string(),
+            device_name: get_device_name(),
+            pairing_code: generate_pairing_code(),
+            pairing_passphrase: generate_passphrase(),
+            linked_devices: Vec::new(),
+        }
+    }
+}
+
+fn get_device_name() -> String {
+    hostname::get()
+        .map(|h| h.to_string_lossy().to_string())
+        .unwrap_or_else(|_| "Desktop".to_string())
+}
+
+fn generate_pairing_code() -> String {
+    use rand::Rng;
+    let mut rng = rand::thread_rng();
+    format!("{:06}", rng.gen_range(0..1000000))
+}
+
+fn generate_passphrase() -> String {
+    use rand::seq::SliceRandom;
+    const WORDS: &[&str] = &[
+        "apple", "banana", "cherry", "dolphin", "eagle", "forest",
+        "garden", "harbor", "island", "jungle", "kitten", "lemon",
+        "mountain", "nectar", "ocean", "palace", "quartz", "river",
+        "sunset", "temple", "umbrella", "valley", "willow", "yellow",
+    ];
+    let mut rng = rand::thread_rng();
+    (0..6)
+        .map(|_| *WORDS.choose(&mut rng).unwrap())
+        .collect::<Vec<_>>()
+        .join("-")
+}
 
 pub struct Database {
     conn: Connection,
@@ -16,6 +77,15 @@ impl Database {
                 name TEXT NOT NULL,
                 path TEXT NOT NULL,
                 last_opened TEXT NOT NULL
+            )",
+            [],
+        )
+        .map_err(|e| e.to_string())?;
+
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS portal_config (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL
             )",
             [],
         )
@@ -86,5 +156,35 @@ impl Database {
         }
 
         Ok(projects)
+    }
+
+    pub fn get_portal_config(&self) -> Result<PortalConfig, String> {
+        let mut stmt = self
+            .conn
+            .prepare("SELECT value FROM portal_config WHERE key = 'config'")
+            .map_err(|e| e.to_string())?;
+
+        let mut rows = stmt.query([]).map_err(|e| e.to_string())?;
+
+        if let Some(row) = rows.next().map_err(|e| e.to_string())? {
+            let value: String = row.get(0).map_err(|e| e.to_string())?;
+            serde_json::from_str(&value).map_err(|e| e.to_string())
+        } else {
+            // Return default config if none exists
+            let config = PortalConfig::default();
+            self.set_portal_config(&config)?;
+            Ok(config)
+        }
+    }
+
+    pub fn set_portal_config(&self, config: &PortalConfig) -> Result<(), String> {
+        let value = serde_json::to_string(config).map_err(|e| e.to_string())?;
+        self.conn
+            .execute(
+                "INSERT OR REPLACE INTO portal_config (key, value) VALUES ('config', ?1)",
+                params![value],
+            )
+            .map_err(|e| e.to_string())?;
+        Ok(())
     }
 }

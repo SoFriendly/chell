@@ -20,9 +20,11 @@ use uuid::Uuid;
 
 mod database;
 mod git;
+mod portal;
 
 use database::Database;
 use git::GitService;
+use portal::Portal;
 
 // Types for IPC
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -137,6 +139,7 @@ struct AppState {
     database: Mutex<Database>,
     portal_enabled: Mutex<bool>,
     git_watchers: Mutex<HashMap<String, GitWatcher>>,
+    portal: Mutex<Option<Portal>>,
 }
 
 // Debug command to print to terminal
@@ -1443,10 +1446,155 @@ struct CommitSuggestion {
     description: String,
 }
 
-// Portal mode setting command
+// Portal commands
 #[tauri::command]
 fn set_portal_enabled(enabled: bool, state: tauri::State<Arc<AppState>>) {
     *state.portal_enabled.lock() = enabled;
+}
+
+#[tauri::command]
+fn get_portal_config(state: tauri::State<Arc<AppState>>) -> Result<database::PortalConfig, String> {
+    let db = state.database.lock();
+    db.get_portal_config()
+}
+
+#[tauri::command]
+fn set_portal_config(config: database::PortalConfig, state: tauri::State<Arc<AppState>>) -> Result<(), String> {
+    let db = state.database.lock();
+    db.set_portal_config(&config)
+}
+
+#[tauri::command]
+fn portal_enable(app: tauri::AppHandle, state: tauri::State<Arc<AppState>>) -> Result<(), String> {
+    let mut config = {
+        let db = state.database.lock();
+        db.get_portal_config()?
+    };
+
+    config.is_enabled = true;
+
+    // Save config
+    {
+        let db = state.database.lock();
+        db.set_portal_config(&config)?;
+    }
+
+    *state.portal_enabled.lock() = true;
+
+    // Start portal connection
+    let portal = Portal::new(app, config);
+    let state_arc: Arc<AppState> = (*state).clone();
+    portal.connect(state_arc);
+    *state.portal.lock() = Some(portal);
+
+    log::info!("[Portal] Portal enabled and connected");
+    Ok(())
+}
+
+#[tauri::command]
+fn portal_disable(state: tauri::State<Arc<AppState>>) -> Result<(), String> {
+    // Update config
+    let mut config = {
+        let db = state.database.lock();
+        db.get_portal_config()?
+    };
+
+    config.is_enabled = false;
+
+    {
+        let db = state.database.lock();
+        db.set_portal_config(&config)?;
+    }
+
+    *state.portal_enabled.lock() = false;
+
+    // Disconnect portal
+    if let Some(portal) = state.portal.lock().take() {
+        portal.disconnect();
+    }
+
+    log::info!("[Portal] Portal disabled");
+    Ok(())
+}
+
+#[tauri::command]
+fn portal_regenerate_pairing(app: tauri::AppHandle, state: tauri::State<Arc<AppState>>) -> Result<database::PortalConfig, String> {
+    use rand::Rng;
+    use rand::seq::SliceRandom;
+
+    let mut config = {
+        let db = state.database.lock();
+        db.get_portal_config()?
+    };
+
+    // Generate new pairing code
+    let mut rng = rand::thread_rng();
+    config.pairing_code = format!("{:06}", rng.gen_range(0..1000000));
+
+    // Generate new passphrase
+    const WORDS: &[&str] = &[
+        "apple", "banana", "cherry", "dolphin", "eagle", "forest",
+        "garden", "harbor", "island", "jungle", "kitten", "lemon",
+        "mountain", "nectar", "ocean", "palace", "quartz", "river",
+        "sunset", "temple", "umbrella", "valley", "willow", "yellow",
+    ];
+    config.pairing_passphrase = (0..6)
+        .map(|_| *WORDS.choose(&mut rng).unwrap())
+        .collect::<Vec<_>>()
+        .join("-");
+
+    // Clear linked devices since passphrase changed
+    config.linked_devices.clear();
+
+    // Save config
+    {
+        let db = state.database.lock();
+        db.set_portal_config(&config)?;
+    }
+
+    // If connected, reconnect with new credentials
+    if config.is_enabled {
+        // Disconnect existing
+        if let Some(portal) = state.portal.lock().take() {
+            portal.disconnect();
+        }
+
+        // Reconnect
+        let portal = Portal::new(app, config.clone());
+        let state_arc: Arc<AppState> = (*state).clone();
+        portal.connect(state_arc);
+        *state.portal.lock() = Some(portal);
+    }
+
+    Ok(config)
+}
+
+#[tauri::command]
+fn portal_get_status(state: tauri::State<Arc<AppState>>) -> Result<serde_json::Value, String> {
+    let is_connected = state.portal.lock().as_ref().map(|p| p.is_connected()).unwrap_or(false);
+    let config = {
+        let db = state.database.lock();
+        db.get_portal_config()?
+    };
+
+    Ok(serde_json::json!({
+        "isEnabled": config.is_enabled,
+        "isConnected": is_connected,
+        "deviceId": config.device_id,
+        "deviceName": config.device_name,
+        "pairingCode": config.pairing_code,
+        "linkedDevices": config.linked_devices,
+    }))
+}
+
+#[tauri::command]
+fn portal_send_message(message: serde_json::Value, state: tauri::State<Arc<AppState>>) -> Result<(), String> {
+    if let Some(portal) = state.portal.lock().as_ref() {
+        portal.send_message(&message);
+        Ok(())
+    } else {
+        Err("Portal not connected".to_string())
+    }
 }
 
 // AI Shell types
@@ -1837,13 +1985,19 @@ pub fn run() {
     let db = Database::new(data_dir.join("chell.db"))
         .expect("Failed to initialize database");
 
+    // Load portal config from database
+    let portal_config = db.get_portal_config().unwrap_or_default();
+    let portal_was_enabled = portal_config.is_enabled;
+
     let state = Arc::new(AppState {
         terminals: Mutex::new(HashMap::new()),
         database: Mutex::new(db),
-        portal_enabled: Mutex::new(false),
+        portal_enabled: Mutex::new(portal_was_enabled),
         git_watchers: Mutex::new(HashMap::new()),
+        portal: Mutex::new(None),
     });
     let state_for_window_event = state.clone();
+    let state_for_portal = state.clone();
 
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
@@ -1915,13 +2069,33 @@ pub fn run() {
             ai_shell_command,
             // Portal
             set_portal_enabled,
+            get_portal_config,
+            set_portal_config,
+            portal_enable,
+            portal_disable,
+            portal_regenerate_pairing,
+            portal_get_status,
+            portal_send_message,
         ])
-        .setup(|app| {
+        .setup(move |app| {
             // Warm up the PTY system early to avoid first-spawn delays
             // This initializes the native PTY interface before any terminal is created
             std::thread::spawn(|| {
                 let _ = native_pty_system();
             });
+
+            // Initialize portal connection if it was enabled
+            if portal_was_enabled {
+                log::info!("[Portal] Starting portal connection (was enabled on last run)");
+                let portal = Portal::new(app.handle().clone(), portal_config);
+                let state_clone = state_for_portal.clone();
+
+                // Connect first (this spawns internal task), then store
+                portal.connect(state_clone);
+
+                // Store the portal
+                *state_for_portal.portal.lock() = Some(portal);
+            }
 
             // Create system tray icon
             let new_window_item = MenuItemBuilder::with_id("new_window", "New Window").build(app)?;

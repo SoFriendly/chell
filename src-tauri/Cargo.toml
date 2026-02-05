@@ -32,7 +32,12 @@ log = "0.4"
 env_logger = "0.11"
 which = "6"
 reqwest = { version = "0.13", features = ["json"] }
+tokio-tungstenite = { version = "0.26", features = ["native-tls"] }
+futures-util = "0.3"
 base64 = "0.22"
 notify = "6"
 notify-debouncer-mini = "0.4"
+rand = "0.8"
+hostname = "0.4"
+chrono = "0.4"
 
