@@ -91,16 +91,55 @@ impl Database {
         )
         .map_err(|e| e.to_string())?;
 
+        // Clean up duplicate projects (keep the most recently opened one for each path)
+        conn.execute(
+            "DELETE FROM projects WHERE id NOT IN (
+                SELECT id FROM (
+                    SELECT id, ROW_NUMBER() OVER (PARTITION BY path ORDER BY last_opened DESC) as rn
+                    FROM projects
+                ) WHERE rn = 1
+            )",
+            [],
+        )
+        .ok(); // Ignore errors if table is empty or query fails
+
+        // Create unique index on path if it doesn't exist
+        conn.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_projects_path ON projects(path)",
+            [],
+        )
+        .ok(); // Ignore if already exists
+
         Ok(Self { conn })
     }
 
     pub fn add_project(&self, project: &Project) -> Result<(), String> {
-        self.conn
-            .execute(
-                "INSERT OR REPLACE INTO projects (id, name, path, last_opened) VALUES (?1, ?2, ?3, ?4)",
-                params![project.id, project.name, project.path, project.last_opened],
+        // Check if project with same path already exists
+        let existing_id: Option<String> = self.conn
+            .query_row(
+                "SELECT id FROM projects WHERE path = ?1",
+                params![project.path],
+                |row| row.get(0),
             )
-            .map_err(|e| e.to_string())?;
+            .ok();
+
+        if let Some(existing) = existing_id {
+            // Update existing project by path
+            self.conn
+                .execute(
+                    "UPDATE projects SET name = ?1, last_opened = ?2 WHERE id = ?3",
+                    params![project.name, project.last_opened, existing],
+                )
+                .map_err(|e| e.to_string())?;
+        } else {
+            // Insert new project
+            self.conn
+                .execute(
+                    "INSERT INTO projects (id, name, path, last_opened) VALUES (?1, ?2, ?3, ?4)",
+                    params![project.id, project.name, project.path, project.last_opened],
+                )
+                .map_err(|e| e.to_string())?;
+        }
         Ok(())
     }
 

@@ -334,6 +334,21 @@ async fn handle_message(
                 })
                 .collect();
 
+            // Get terminals from state
+            let terminals: Vec<TerminalInfo> = state
+                .terminals
+                .lock()
+                .iter()
+                .map(|(id, t)| TerminalInfo {
+                    id: id.clone(),
+                    title: t.title.clone(),
+                    cwd: t.cwd.clone(),
+                    terminal_type: t.terminal_type.clone(),
+                })
+                .collect();
+
+            log::info!("[Portal] Sending status with {} projects and {} terminals", projects.len(), terminals.len());
+
             let status_update = json!({
                 "type": "status_update",
                 "id": uuid::Uuid::new_v4().to_string(),
@@ -341,7 +356,7 @@ async fn handle_message(
                 "connectionStatus": "connected",
                 "projects": projects,
                 "activeProjectId": null,
-                "terminals": [],
+                "terminals": terminals,
                 "theme": "tokyo",
             });
 

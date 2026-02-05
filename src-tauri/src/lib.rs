@@ -115,6 +115,7 @@ struct TerminalState {
     writer: Box<dyn Write + Send>,
     title: String,  // Command/title for display
     cwd: String,    // Working directory
+    terminal_type: String,  // "shell" or "assistant"
     output_buffer: Arc<Mutex<Vec<u8>>>,  // Buffer for recent output (for mobile attach)
 }
 
@@ -126,6 +127,8 @@ pub struct TerminalInfo {
     pub id: String,
     pub title: String,
     pub cwd: String,
+    #[serde(rename = "type")]
+    pub terminal_type: String,
 }
 
 // Git watcher state - holds the debouncer and stop signal
@@ -497,11 +500,25 @@ fn spawn_terminal(
         shell.split_whitespace().next().unwrap_or("Shell").to_string()
     };
 
+    // Determine terminal type based on command
+    let assistant_commands = ["claude", "aider", "gemini", "codex", "opencode"];
+    let terminal_type = if shell.is_empty() {
+        "shell".to_string()
+    } else {
+        let cmd = shell.split_whitespace().next().unwrap_or("");
+        if assistant_commands.contains(&cmd) {
+            "assistant".to_string()
+        } else {
+            "shell".to_string()
+        }
+    };
+
     let terminal_state = TerminalState {
         pty_pair,
         writer,
         title,
         cwd: cwd.clone(),
+        terminal_type,
         output_buffer,
     };
 
@@ -576,11 +593,12 @@ fn list_terminals(state: tauri::State<Arc<AppState>>) -> Vec<TerminalInfo> {
     terminals
         .iter()
         .map(|(id, t)| {
-            println!("[list_terminals] Terminal: {} title={} cwd={}", id, t.title, t.cwd);
+            println!("[list_terminals] Terminal: {} title={} cwd={} type={}", id, t.title, t.cwd, t.terminal_type);
             TerminalInfo {
                 id: id.clone(),
                 title: t.title.clone(),
                 cwd: t.cwd.clone(),
+                terminal_type: t.terminal_type.clone(),
             }
         })
         .collect()
