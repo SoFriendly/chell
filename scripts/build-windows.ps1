@@ -86,7 +86,7 @@ Write-Host ""
 Write-Host "Building Chell for Windows..."
 
 # Build the app
-pnpm tauri build
+npm run tauri -- build
 
 Write-Host ""
 Write-Host "Build complete!"
