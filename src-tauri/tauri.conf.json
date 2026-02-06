@@ -55,6 +55,8 @@
       "providerShortName": "2H66PPM438",
       "entitlements": "Chell.entitlements",
       "exceptionDomain": null
+    },
+    "windows": {
     }
   }
 }
