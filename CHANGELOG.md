@@ -2,6 +2,13 @@
 
 All notable changes to Chell will be documented in this file.
 
+## [0.1.69]
+
+- Add "Add to .gitignore" context menu item in the Git panel file tree
+- Fix editor panel making window gigantic on HiDPI/Retina laptop screens
+  - Window auto-sizing was using physical pixels instead of logical pixels when opening or closing the editor panel
+  - Now correctly accounts for display scale factor so the window expands by the intended panel width
+
 ## [0.1.68]
 
 ### Bug Fixes

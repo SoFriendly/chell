@@ -364,9 +364,12 @@ export default function ProjectPage() {
       // Expand window to accommodate the panel if not already showing
       if (!showMarkdownPanel) {
         const window = getCurrentWindow();
-        const size = await window.innerSize();
+        const scaleFactor = await window.scaleFactor();
+        const physicalSize = await window.innerSize();
+        const logicalWidth = physicalSize.width / scaleFactor;
+        const logicalHeight = physicalSize.height / scaleFactor;
         const panelWidth = savedMarkdownWidth.current + 5; // +5 for resize handle
-        await window.setSize(new LogicalSize(size.width + panelWidth, size.height));
+        await window.setSize(new LogicalSize(logicalWidth + panelWidth, logicalHeight));
       }
 
       setShowMarkdownPanel(true);
@@ -416,9 +419,12 @@ export default function ProjectPage() {
     // Then shrink window (don't block on this)
     try {
       const window = getCurrentWindow();
-      const size = await window.innerSize();
+      const scaleFactor = await window.scaleFactor();
+      const physicalSize = await window.innerSize();
+      const logicalWidth = physicalSize.width / scaleFactor;
+      const logicalHeight = physicalSize.height / scaleFactor;
       const panelWidth = markdownPanelWidth + 5; // +5 for resize handle
-      await window.setSize(new LogicalSize(size.width - panelWidth, size.height));
+      await window.setSize(new LogicalSize(logicalWidth - panelWidth, logicalHeight));
     } catch (err) {
       console.error("Failed to resize window:", err);
     }
