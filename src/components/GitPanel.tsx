@@ -1207,6 +1207,11 @@ export default function GitPanel({ projectPath, projectName, isGitRepo, onRefres
                     <Copy className="mr-2 h-4 w-4" />
                     Copy Path
                   </ContextMenuItem>
+                  <ContextMenuSeparator />
+                  <ContextMenuItem onClick={() => handleAddToGitignore(node.path)}>
+                    <EyeOff className="mr-2 h-4 w-4" />
+                    Add to .gitignore
+                  </ContextMenuItem>
                 </ContextMenuContent>
               </ContextMenu>
               </div>
@@ -1283,6 +1288,10 @@ export default function GitPanel({ projectPath, projectName, isGitRepo, onRefres
                 <ContextMenuItem onClick={() => handleStartRename(node.path, node.name)}>
                   <Pencil className="mr-2 h-4 w-4" />
                   Rename
+                </ContextMenuItem>
+                <ContextMenuItem onClick={() => handleAddToGitignore(node.path)}>
+                  <EyeOff className="mr-2 h-4 w-4" />
+                  Add to .gitignore
                 </ContextMenuItem>
                 <ContextMenuSeparator />
                 <ContextMenuItem
