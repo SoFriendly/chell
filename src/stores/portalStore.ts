@@ -257,6 +257,17 @@ async function handleCommand(message: Record<string, unknown>) {
   try {
     const result = await invoke(command, finalParams);
     console.log("[Portal] Command succeeded:", command);
+
+    // Auto-register mobile-spawned terminals for output forwarding
+    if (command === "spawn_terminal" && typeof result === "string") {
+      try {
+        await invoke("portal_register_mobile_terminal", { terminalId: result });
+        console.log("[Portal] Auto-registered mobile terminal for output forwarding:", result);
+      } catch (err) {
+        console.error("[Portal] Failed to register mobile terminal:", err);
+      }
+    }
+
     await sendMessage({
       type: "command_response",
       id: crypto.randomUUID(),

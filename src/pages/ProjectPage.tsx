@@ -265,6 +265,7 @@ interface TerminalTab {
   command: string;  // Command to run (empty for shell)
   terminalId: string | null;  // Set by Terminal component after spawning
   cwd?: string;  // Working directory for this terminal - empty means needs selection (Issue #6)
+  isAssistant?: boolean;  // Whether this tab runs an assistant (affects how the command is spawned)
 }
 
 interface AssistantOption {
@@ -926,12 +927,14 @@ export default function ProjectPage() {
 
       // Don't spawn terminal here - let Terminal component do it with correct dimensions
       const tabId = `tab-${Date.now()}`;
+      const isAssistantTab = command !== "";  // Non-empty command means it's an assistant
       const newTab: TerminalTab = {
         id: tabId,
         name,
         command,  // Store command, Terminal will spawn with correct dimensions
         terminalId: null,  // Will be set by Terminal component
         cwd,  // Working directory for this terminal
+        isAssistant: isAssistantTab,
       };
 
       setTerminalTabs(prev => [...prev, newTab]);
@@ -1698,6 +1701,7 @@ export default function ProjectPage() {
                     onTerminalReady={(terminalId) => handleTerminalReady(tab.id, terminalId)}
                     visible={showAssistantPanel && activeTabId === tab.id}
                     autoFocusOnWindowFocus
+                    isAssistant={tab.isAssistant}
                   />
                 ) : (
                   /* Folder selector for multi-folder projects (Issue #6) */

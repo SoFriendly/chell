@@ -327,6 +327,11 @@ fn spawn_terminal(
         let command = &shell;
         let resolved_command = if command.contains('/') || command.contains('\\') {
             Some(command.to_string())
+        } else if is_assistant.unwrap_or(false) {
+            // Always run assistants through the user's login shell so that
+            // version managers (nvm, pyenv, etc.) are properly initialized
+            // and updates to the assistant binary are picked up correctly
+            None
         } else {
             find_command_path(command).map(|p| p.to_string_lossy().to_string())
         };
@@ -385,6 +390,11 @@ fn spawn_terminal(
         let command = parts[0];
         let resolved_command = if command.contains('/') || command.contains('\\') {
             Some(command.to_string())
+        } else if is_assistant.unwrap_or(false) {
+            // Always run assistants through the user's login shell so that
+            // version managers (nvm, pyenv, etc.) are properly initialized
+            // and updates to the assistant binary are picked up correctly
+            None
         } else {
             // Try to find the full path for this command
             find_command_path(command).map(|p| p.to_string_lossy().to_string())
@@ -2142,6 +2152,38 @@ fn portal_send_message(message: serde_json::Value, state: tauri::State<Arc<AppSt
     }
 }
 
+#[tauri::command]
+fn portal_register_mobile_terminal(terminal_id: String, state: tauri::State<Arc<AppState>>) -> Result<(), String> {
+    if let Some(portal) = state.portal.lock().as_ref() {
+        portal.add_mobile_terminal(terminal_id.clone());
+
+        // Send any buffered output immediately
+        let buffer_data = state
+            .terminals
+            .lock()
+            .get(&terminal_id)
+            .map(|t| {
+                let buffer = t.output_buffer.lock();
+                String::from_utf8_lossy(&buffer).to_string()
+            })
+            .unwrap_or_default();
+
+        if !buffer_data.is_empty() {
+            let msg = serde_json::json!({
+                "type": "terminal_output",
+                "id": uuid::Uuid::new_v4().to_string(),
+                "terminalId": terminal_id,
+                "data": buffer_data,
+            });
+            portal.send_message(&msg);
+        }
+
+        Ok(())
+    } else {
+        Err("Portal not connected".to_string())
+    }
+}
+
 // AI Shell types
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProjectContext {
@@ -2646,6 +2688,7 @@ pub fn run() {
             portal_regenerate_pairing,
             portal_get_status,
             portal_send_message,
+            portal_register_mobile_terminal,
         ])
         .setup(move |app| {
             // Warm up the PTY system early to avoid first-spawn delays
