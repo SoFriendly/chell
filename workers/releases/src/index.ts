@@ -36,11 +36,29 @@ export default {
       try {
         const latestJson = await env.BUCKET.get("latest.json");
         if (latestJson) {
-          const latest = await latestJson.json<{ version: string }>();
-          const version = latest.version;
+          const latest = await latestJson.json<{
+            version: string;
+            platforms: Record<string, { url: string; signature: string }>;
+          }>();
           const ext = latestFileMatch[1];
 
-          // Map extension to actual filename pattern
+          // Map extension to platform key
+          const platformMap: Record<string, string> = {
+            dmg: "darwin-aarch64",
+            AppImage: "linux-x86_64",
+            msi: "windows-x86_64",
+            exe: "windows-x86_64",
+          };
+
+          const platformKey = platformMap[ext];
+          const platform = platformKey ? latest.platforms?.[platformKey] : null;
+
+          if (platform?.url) {
+            return Response.redirect(platform.url, 302);
+          }
+
+          // Fallback: construct URL from version
+          const version = latest.version;
           const fileMap: Record<string, string> = {
             dmg: `v${version}/Chell_${version}_aarch64.dmg`,
             AppImage: `v${version}/Chell_${version}_amd64.AppImage`,

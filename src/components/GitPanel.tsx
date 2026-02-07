@@ -2604,7 +2604,7 @@ export default function GitPanel({ projectPath, projectName, isGitRepo, onRefres
           <AlertDialogHeader>
             <AlertDialogTitle>Discard changes?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will discard all changes to <span className="font-mono">{fileToDiscard}</span>. This cannot be undone.
+              This will discard all changes to <span className="font-mono break-all">{fileToDiscard}</span>. This cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -2630,7 +2630,7 @@ export default function GitPanel({ projectPath, projectName, isGitRepo, onRefres
           <AlertDialogHeader>
             <AlertDialogTitle>Discard this change?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will discard the selected change in <span className="font-mono">{hunkToDiscard?.filePath}</span>. This cannot be undone.
+              This will discard the selected change in <span className="font-mono break-all">{hunkToDiscard?.filePath}</span>. This cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
