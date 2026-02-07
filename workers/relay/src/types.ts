@@ -13,6 +13,7 @@ export type MessageType =
   | "device_list"
   | "portal_list"
   | "mobile_connection_update"
+  | "attach_terminal_response"
   | "error"
   | "ping"
   | "pong";

@@ -32,6 +32,7 @@ import {
   SquareTerminal,
   MoreHorizontal,
   Save,
+  Search,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -83,7 +84,7 @@ interface GitPanelProps {
   isGitRepo: boolean;
   onRefresh: () => void;
   onInitRepo: () => Promise<void>;
-  onOpenMarkdown?: (filePath: string) => void;
+  onOpenMarkdown?: (filePath: string, lineNumber?: number) => void;
   shellCwd?: string; // Current working directory from terminal (Issue #7)
   folders?: ProjectFolder[]; // All folders in the project (Issue #6)
   onAddFolder?: () => void; // Callback to add a new folder
@@ -107,6 +108,25 @@ interface FileTreeNode {
   path: string;
   isDir: boolean;
   children?: FileTreeNode[];
+}
+
+interface ContentMatch {
+  path: string;
+  lineNumber: number;
+  line: string;
+  absolutePath: string;
+}
+
+interface ContentSearchResult {
+  matches: ContentMatch[];
+  truncated: boolean;
+}
+
+interface FileNameMatch {
+  name: string;
+  path: string;
+  isDir: boolean;
+  basePath: string;
 }
 
 // Binary file extensions that should NOT be opened in the text editor
@@ -175,6 +195,15 @@ export default function GitPanel({ projectPath, projectName, isGitRepo, onRefres
   const [renameValue, setRenameValue] = useState("");
   const [draggingFile, setDraggingFile] = useState<{ name: string; x: number; y: number; isDir: boolean } | null>(null);
   const [isInitializing, setIsInitializing] = useState(false);
+  // File tree search state
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [fileNameMatches, setFileNameMatches] = useState<FileNameMatch[]>([]);
+  const [contentSearchResults, setContentSearchResults] = useState<ContentMatch[]>([]);
+  const [isSearchingContent, setIsSearchingContent] = useState(false);
+  const [contentSearchTruncated, setContentSearchTruncated] = useState(false);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const contentSearchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastDiffsHash = useRef<string>("");
   const hasGeneratedInitialMessage = useRef(false);
   const pendingAutoGenerate = useRef(false);
@@ -421,6 +450,167 @@ export default function GitPanel({ projectPath, projectName, isGitRepo, onRefres
       return next;
     });
   };
+
+  // File tree search logic
+  const collectFileNameMatches = (query: string): FileNameMatch[] => {
+    const queryLower = query.toLowerCase();
+    const results: FileNameMatch[] = [];
+
+    const walkTree = (nodes: FileTreeNode[], basePath: string) => {
+      for (const node of nodes) {
+        if (node.name.toLowerCase().includes(queryLower)) {
+          results.push({
+            name: node.name,
+            path: node.path,
+            isDir: node.isDir,
+            basePath,
+          });
+        }
+        if (node.children) {
+          walkTree(node.children, basePath);
+        }
+      }
+    };
+
+    if (folders && folders.length > 0) {
+      for (const folder of folders) {
+        const tree = fileTrees[folder.id];
+        if (tree) {
+          walkTree(tree, folder.path);
+        }
+      }
+    } else {
+      walkTree(fileTree, fileTreeRoot);
+    }
+
+    return results;
+  };
+
+  const triggerContentSearch = async (query: string) => {
+    if (query.length < 2) {
+      setContentSearchResults([]);
+      setContentSearchTruncated(false);
+      setIsSearchingContent(false);
+      return;
+    }
+
+    setIsSearchingContent(true);
+    try {
+      const folderPaths = folders && folders.length > 0
+        ? folders.map(f => f.path)
+        : [fileTreeRoot];
+
+      let allMatches: ContentMatch[] = [];
+      let anyTruncated = false;
+
+      for (const folderPath of folderPaths) {
+        const remaining = 100 - allMatches.length;
+        if (remaining <= 0) {
+          anyTruncated = true;
+          break;
+        }
+        const result = await invoke<ContentSearchResult>("search_file_contents", {
+          path: folderPath,
+          query,
+          showHidden: showHiddenFiles,
+          maxResults: remaining,
+        });
+        allMatches = allMatches.concat(result.matches);
+        if (result.truncated) anyTruncated = true;
+      }
+
+      setContentSearchResults(allMatches.slice(0, 100));
+      setContentSearchTruncated(anyTruncated || allMatches.length > 100);
+    } catch (error) {
+      console.error("Content search failed:", error);
+    } finally {
+      setIsSearchingContent(false);
+    }
+  };
+
+  const handleSearchChange = (value: string) => {
+    setSearchQuery(value);
+
+    // Immediate file name search
+    if (value.trim()) {
+      setFileNameMatches(collectFileNameMatches(value.trim()));
+    } else {
+      setFileNameMatches([]);
+    }
+
+    // Debounced content search
+    if (contentSearchTimeoutRef.current) {
+      clearTimeout(contentSearchTimeoutRef.current);
+    }
+    if (value.trim().length >= 2) {
+      setIsSearchingContent(true);
+      contentSearchTimeoutRef.current = setTimeout(() => {
+        triggerContentSearch(value.trim());
+      }, 300);
+    } else {
+      setContentSearchResults([]);
+      setContentSearchTruncated(false);
+      setIsSearchingContent(false);
+    }
+  };
+
+  const handleCloseSearch = () => {
+    setIsSearchOpen(false);
+    setSearchQuery("");
+    setFileNameMatches([]);
+    setContentSearchResults([]);
+    setContentSearchTruncated(false);
+    setIsSearchingContent(false);
+    if (contentSearchTimeoutRef.current) {
+      clearTimeout(contentSearchTimeoutRef.current);
+    }
+  };
+
+  const handleSearchResultClick = (match: FileNameMatch) => {
+    if (match.isDir) {
+      // Expand to this directory in the tree and close search
+      setExpandedDirs(prev => {
+        const next = new Set(prev);
+        // Expand all parent dirs
+        const parts = match.path.split("/");
+        let current = "";
+        for (const part of parts) {
+          current = current ? `${current}/${part}` : part;
+          next.add(current);
+        }
+        return next;
+      });
+      handleCloseSearch();
+    } else {
+      // Open the file
+      const absolutePath = `${match.basePath}/${match.path}`;
+      if (isPreviewable(match.path) && onOpenMarkdown) {
+        onOpenMarkdown(absolutePath);
+      }
+    }
+  };
+
+  const handleContentMatchClick = (match: ContentMatch) => {
+    if (isPreviewable(match.path) && onOpenMarkdown) {
+      onOpenMarkdown(match.absolutePath, match.lineNumber);
+    }
+  };
+
+  // Cleanup search timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (contentSearchTimeoutRef.current) {
+        clearTimeout(contentSearchTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  // Reset search state when switching away from files view
+  useEffect(() => {
+    if (viewMode !== "files") {
+      handleCloseSearch();
+    }
+  }, [viewMode]);
 
   const handleInitRepo = async () => {
     setIsInitializing(true);
@@ -1763,65 +1953,165 @@ export default function GitPanel({ projectPath, projectName, isGitRepo, onRefres
                     Project Files
                   </h3>
                 )}
-                {folders && folders.length > 0 ? (
-                  /* Ellipsis menu with all options */
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="icon" className="h-5 w-5">
-                        <MoreHorizontal className="h-3.5 w-3.5 text-muted-foreground" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuItem onClick={() => {
-                        if (folders && folders.length > 0) {
-                          loadAllFolderTrees();
-                        } else {
-                          loadFileTree();
-                        }
-                      }}>
-                        <RefreshCw className="mr-2 h-3.5 w-3.5" />
-                        Refresh
-                      </DropdownMenuItem>
-                      <DropdownMenuSeparator />
-                      {onAddFolder && (
-                        <DropdownMenuItem onClick={onAddFolder}>
-                          <Plus className="mr-2 h-3.5 w-3.5" />
-                          Add Folder
-                        </DropdownMenuItem>
-                      )}
-                      {folders && folders.length > 1 && (
-                        <>
-                          <DropdownMenuItem onClick={() => {
-                            setEditedWorkspaceName(workspaceName || "My Workspace");
-                            setIsEditingWorkspaceName(true);
-                          }}>
-                            <Pencil className="mr-2 h-3.5 w-3.5" />
-                            Rename Workspace
-                          </DropdownMenuItem>
-                          {onSaveWorkspace && (
-                            <DropdownMenuItem onClick={onSaveWorkspace}>
-                              <Save className="mr-2 h-3.5 w-3.5" />
-                              Save Workspace
-                            </DropdownMenuItem>
-                          )}
-                        </>
-                      )}
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                ) : (
-                  /* Single folder: just refresh button */
+                <div className="flex items-center gap-0.5">
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="h-5 w-5"
-                    onClick={() => loadFileTree()}
-                    disabled={isLoadingFiles}
+                    className={cn("h-5 w-5", isSearchOpen && "text-primary")}
+                    onClick={() => {
+                      if (isSearchOpen) {
+                        handleCloseSearch();
+                      } else {
+                        setIsSearchOpen(true);
+                        setTimeout(() => searchInputRef.current?.focus(), 50);
+                      }
+                    }}
                   >
-                    <RefreshCw className={cn("h-3 w-3", isLoadingFiles && "animate-spin")} />
+                    <Search className="h-3 w-3 text-muted-foreground" />
                   </Button>
-                )}
+                  {folders && folders.length > 0 ? (
+                    /* Ellipsis menu with all options */
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="icon" className="h-5 w-5">
+                          <MoreHorizontal className="h-3.5 w-3.5 text-muted-foreground" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={() => {
+                          if (folders && folders.length > 0) {
+                            loadAllFolderTrees();
+                          } else {
+                            loadFileTree();
+                          }
+                        }}>
+                          <RefreshCw className="mr-2 h-3.5 w-3.5" />
+                          Refresh
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        {onAddFolder && (
+                          <DropdownMenuItem onClick={onAddFolder}>
+                            <Plus className="mr-2 h-3.5 w-3.5" />
+                            Add Folder
+                          </DropdownMenuItem>
+                        )}
+                        {folders && folders.length > 1 && (
+                          <>
+                            <DropdownMenuItem onClick={() => {
+                              setEditedWorkspaceName(workspaceName || "My Workspace");
+                              setIsEditingWorkspaceName(true);
+                            }}>
+                              <Pencil className="mr-2 h-3.5 w-3.5" />
+                              Rename Workspace
+                            </DropdownMenuItem>
+                            {onSaveWorkspace && (
+                              <DropdownMenuItem onClick={onSaveWorkspace}>
+                                <Save className="mr-2 h-3.5 w-3.5" />
+                                Save Workspace
+                              </DropdownMenuItem>
+                            )}
+                          </>
+                        )}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  ) : (
+                    /* Single folder: just refresh button */
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-5 w-5"
+                      onClick={() => loadFileTree()}
+                      disabled={isLoadingFiles}
+                    >
+                      <RefreshCw className={cn("h-3 w-3", isLoadingFiles && "animate-spin")} />
+                    </Button>
+                  )}
+                </div>
               </div>
-              {isLoadingFiles ? (
+              {/* Search input panel */}
+              {isSearchOpen && (
+                <div className="relative mb-2">
+                  <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground" />
+                  <input
+                    ref={searchInputRef}
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => handleSearchChange(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Escape") handleCloseSearch();
+                    }}
+                    placeholder="Search files and content..."
+                    className="w-full text-xs bg-muted border border-border rounded pl-7 pr-7 py-1.5 outline-none focus:ring-1 focus:ring-primary"
+                  />
+                  {isSearchingContent && (
+                    <Loader2 className="absolute right-2 top-1/2 -translate-y-1/2 h-3 w-3 animate-spin text-muted-foreground" />
+                  )}
+                </div>
+              )}
+              {/* Search results (replaces file tree when query is active) */}
+              {isSearchOpen && searchQuery.trim() ? (
+                <div className="space-y-3">
+                  {/* File Name matches */}
+                  {fileNameMatches.length > 0 && (
+                    <div>
+                      <h4 className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground mb-1">
+                        File Names ({fileNameMatches.length})
+                      </h4>
+                      <div className="space-y-0.5">
+                        {fileNameMatches.map((match, i) => (
+                          <div
+                            key={`fn-${i}`}
+                            className="flex items-center gap-1.5 py-1 px-1 rounded hover:bg-muted/50 cursor-pointer"
+                            onClick={() => handleSearchResultClick(match)}
+                          >
+                            {match.isDir ? (
+                              <Folder className="h-3.5 w-3.5 text-primary shrink-0" />
+                            ) : (
+                              <File className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                            )}
+                            <span className="text-xs font-medium truncate">{match.name}</span>
+                            <span className="text-[10px] text-muted-foreground truncate ml-auto">{match.path}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {/* Content matches */}
+                  {contentSearchResults.length > 0 && (
+                    <div>
+                      <h4 className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground mb-1">
+                        Content Matches ({contentSearchResults.length}{contentSearchTruncated ? "+" : ""})
+                      </h4>
+                      <div className="space-y-0.5">
+                        {contentSearchResults.map((match, i) => (
+                          <div
+                            key={`cm-${i}`}
+                            className="flex flex-col gap-0.5 py-1 px-1 rounded hover:bg-muted/50 cursor-pointer"
+                            onClick={() => handleContentMatchClick(match)}
+                          >
+                            <div className="flex items-center gap-1.5">
+                              <File className="h-3 w-3 text-muted-foreground shrink-0" />
+                              <span className="text-[11px] text-muted-foreground truncate">
+                                {match.path}:{match.lineNumber}
+                              </span>
+                            </div>
+                            <span className="text-[11px] font-mono text-foreground/80 truncate pl-[18px]">
+                              {match.line.trim()}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {/* Empty state */}
+                  {fileNameMatches.length === 0 && contentSearchResults.length === 0 && !isSearchingContent && (
+                    <div className="flex flex-col items-center justify-center py-8 text-center">
+                      <Search className="mb-2 h-6 w-6 text-muted-foreground" />
+                      <p className="text-sm text-muted-foreground">No results found</p>
+                    </div>
+                  )}
+                </div>
+              ) : isLoadingFiles ? (
                 <div className="flex items-center justify-center py-8">
                   <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
                 </div>

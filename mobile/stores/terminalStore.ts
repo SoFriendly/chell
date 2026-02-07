@@ -35,7 +35,7 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
   outputBuffer: new Map(),
 
   spawnTerminal: async (cwd: string, command?: string, type: "shell" | "assistant" = "shell"): Promise<string> => {
-    const { invoke } = useConnectionStore.getState();
+    const { invoke, attachTerminal } = useConnectionStore.getState();
 
     const terminalId = await invoke<string>("spawn_terminal", {
       shell: command || "",
@@ -43,6 +43,9 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
       cols: 80,
       rows: 24,
     });
+
+    // Register with portal for live output forwarding
+    attachTerminal(terminalId);
 
     const terminal: MobileTerminal = {
       id: terminalId,

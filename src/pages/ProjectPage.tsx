@@ -313,7 +313,7 @@ export default function ProjectPage() {
   const [showShellPanel, setShowShellPanel] = useState(true);
   const [showNotesPanel, setShowNotesPanel] = useState(false);
   const [showMarkdownPanel, setShowMarkdownPanel] = useState(false);
-  const [markdownFile, setMarkdownFile] = useState<{ path: string; content: string } | null>(null);
+  const [markdownFile, setMarkdownFile] = useState<{ path: string; content: string; lineNumber?: number } | null>(null);
   const [markdownEditMode, setMarkdownEditMode] = useState(false);
   const [shellCwd, setShellCwd] = useState<string>("");
   const [shellDirs, setShellDirs] = useState<string[]>([]);
@@ -373,10 +373,10 @@ export default function ProjectPage() {
   };
 
   // Markdown panel handlers
-  const handleOpenMarkdownInPanel = async (filePath: string) => {
+  const handleOpenMarkdownInPanel = async (filePath: string, lineNumber?: number) => {
     try {
       const content = await invoke<string>("read_text_file", { path: filePath });
-      setMarkdownFile({ path: filePath, content });
+      setMarkdownFile({ path: filePath, content, lineNumber });
 
       // Expand window to accommodate the panel if not already showing
       if (!showMarkdownPanel) {
@@ -405,7 +405,7 @@ export default function ProjectPage() {
         content: markdownFile.content
       });
       toast.success("File saved");
-      setMarkdownEditMode(false);
+      handleCloseMarkdownPanel();
     } catch (err) {
       toast.error(`Failed to save: ${err}`);
     }
@@ -418,7 +418,30 @@ export default function ProjectPage() {
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
       handleSaveMarkdown();
     });
+
+    // Jump to line number if specified
+    if (markdownFile?.lineNumber) {
+      const line = markdownFile.lineNumber;
+      editor.revealLineInCenter(line);
+      editor.setPosition({ lineNumber: line, column: 1 });
+      editor.focus();
+    }
   };
+
+  // Jump to line when markdownFile changes and editor is already mounted
+  useEffect(() => {
+    if (markdownFile?.lineNumber && editorRef.current) {
+      const line = markdownFile.lineNumber;
+      // Small delay to ensure content is loaded
+      setTimeout(() => {
+        if (editorRef.current) {
+          editorRef.current.revealLineInCenter(line);
+          editorRef.current.setPosition({ lineNumber: line, column: 1 });
+          editorRef.current.focus();
+        }
+      }, 50);
+    }
+  }, [markdownFile?.path, markdownFile?.lineNumber]);
 
   const handleEditorFind = () => {
     if (editorRef.current) {
@@ -2092,13 +2115,13 @@ export default function ProjectPage() {
         {/* Right-most panel - Markdown Editor */}
         <div
           className={cn(
-            "h-full flex flex-col overflow-hidden shrink-0",
+            "h-full flex flex-col overflow-hidden",
             !showMarkdownPanel && "hidden"
           )}
-          style={{ width: markdownPanelWidth }}
+          style={{ flex: `1 1 ${markdownPanelWidth}px`, minWidth: 300 }}
         >
-          {/* Header */}
-          <div className="flex h-10 items-center justify-between px-2 border-b border-border">
+          {/* Header - z-50 to stay above Monaco find widget */}
+          <div className="flex h-10 items-center justify-between px-2 border-b border-border relative z-50 bg-background">
             <div className="flex items-center gap-2 min-w-0 flex-1">
               <FileText className="h-4 w-4 shrink-0 text-primary" />
               <span className="text-xs truncate">

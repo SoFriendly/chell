@@ -125,6 +125,22 @@ pub struct FileTreeNode {
     pub children: Option<Vec<FileTreeNode>>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ContentMatch {
+    pub path: String,
+    #[serde(rename = "lineNumber")]
+    pub line_number: usize,
+    pub line: String,
+    #[serde(rename = "absolutePath")]
+    pub absolute_path: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ContentSearchResult {
+    pub matches: Vec<ContentMatch>,
+    pub truncated: bool,
+}
+
 // Terminal state management
 struct TerminalState {
     master: Box<dyn portable_pty::MasterPty + Send>,
@@ -549,14 +565,22 @@ fn spawn_terminal(
                     break;
                 }
                 Ok(n) => {
-                    // Only buffer output if portal mode is enabled (for mobile attach replay)
+                    // Buffer output and forward to mobile if portal mode is enabled
                     if *state_for_read.portal_enabled.lock() {
-                        let mut buf = output_buffer_clone.lock();
-                        buf.extend_from_slice(&buffer[..n]);
-                        // Trim if over max size (keep most recent data)
-                        if buf.len() > MAX_OUTPUT_BUFFER_SIZE {
-                            let excess = buf.len() - MAX_OUTPUT_BUFFER_SIZE;
-                            buf.drain(0..excess);
+                        {
+                            let mut buf = output_buffer_clone.lock();
+                            buf.extend_from_slice(&buffer[..n]);
+                            // Trim if over max size (keep most recent data)
+                            if buf.len() > MAX_OUTPUT_BUFFER_SIZE {
+                                let excess = buf.len() - MAX_OUTPUT_BUFFER_SIZE;
+                                buf.drain(0..excess);
+                            }
+                        }
+
+                        // Forward live output to mobile via portal
+                        if let Some(ref portal) = *state_for_read.portal.lock() {
+                            let raw_data = String::from_utf8_lossy(&buffer[..n]);
+                            crate::portal::forward_terminal_output(portal, &terminal_id, &raw_data);
                         }
                     }
 
@@ -858,6 +882,128 @@ fn get_file_tree(path: String, show_hidden: bool) -> Result<Vec<FileTreeNode>, S
 
     let path = Path::new(&path);
     build_tree(path, path, 0, show_hidden)
+}
+
+#[tauri::command]
+fn search_file_contents(path: String, query: String, show_hidden: bool, max_results: Option<usize>) -> Result<ContentSearchResult, String> {
+    use std::fs;
+    use std::io::{BufRead, BufReader};
+    use std::path::Path;
+
+    let max = max_results.unwrap_or(100);
+    let query_lower = query.to_lowercase();
+    let mut matches: Vec<ContentMatch> = Vec::new();
+    let mut truncated = false;
+
+    let binary_extensions = [
+        ".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp", ".ico", ".bmp", ".tiff", ".tif", ".psd", ".ai",
+        ".mp4", ".mov", ".avi", ".mkv", ".webm", ".mp3", ".wav", ".ogg", ".flac", ".aac", ".m4a",
+        ".zip", ".tar", ".gz", ".bz2", ".7z", ".rar", ".xz", ".dmg", ".iso",
+        ".exe", ".dll", ".so", ".dylib", ".bin", ".app", ".deb", ".rpm", ".msi",
+        ".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx", ".odt", ".ods", ".odp",
+        ".ttf", ".otf", ".woff", ".woff2", ".eot",
+        ".sqlite", ".db", ".pyc", ".class", ".o", ".a", ".wasm",
+    ];
+
+    fn walk_dir(
+        dir_path: &Path,
+        base_path: &Path,
+        query_lower: &str,
+        show_hidden: bool,
+        binary_extensions: &[&str],
+        matches: &mut Vec<ContentMatch>,
+        max: usize,
+        truncated: &mut bool,
+        depth: usize,
+    ) {
+        if depth > 10 || *truncated {
+            return;
+        }
+
+        let entries = match fs::read_dir(dir_path) {
+            Ok(e) => e,
+            Err(_) => return,
+        };
+
+        for entry in entries {
+            if matches.len() >= max {
+                *truncated = true;
+                return;
+            }
+
+            let entry = match entry {
+                Ok(e) => e,
+                Err(_) => continue,
+            };
+
+            let path = entry.path();
+            let name = entry.file_name().to_string_lossy().to_string();
+
+            // Skip hidden files/dirs unless show_hidden is true
+            if !show_hidden && name.starts_with('.') {
+                continue;
+            }
+
+            // Always skip common ignore patterns
+            if name == "node_modules" || name == "target" || name == "__pycache__" || name == "dist" || name == "build" || name == ".git" {
+                continue;
+            }
+
+            if path.is_dir() {
+                walk_dir(&path, base_path, query_lower, show_hidden, binary_extensions, matches, max, truncated, depth + 1);
+            } else {
+                // Skip binary files by extension
+                let name_lower = name.to_lowercase();
+                if binary_extensions.iter().any(|ext| name_lower.ends_with(ext)) {
+                    continue;
+                }
+
+                // Skip files > 1MB
+                if let Ok(metadata) = fs::metadata(&path) {
+                    if metadata.len() > 1_048_576 {
+                        continue;
+                    }
+                }
+
+                // Search file contents
+                let file = match fs::File::open(&path) {
+                    Ok(f) => f,
+                    Err(_) => continue,
+                };
+
+                let reader = BufReader::new(file);
+                for (line_idx, line_result) in reader.lines().enumerate() {
+                    if matches.len() >= max {
+                        *truncated = true;
+                        return;
+                    }
+
+                    let line = match line_result {
+                        Ok(l) => l,
+                        Err(_) => break, // binary content or encoding error
+                    };
+
+                    if line.to_lowercase().contains(query_lower) {
+                        let relative_path = path.strip_prefix(base_path)
+                            .map(|p| p.to_string_lossy().to_string())
+                            .unwrap_or_else(|_| name.clone());
+
+                        matches.push(ContentMatch {
+                            path: relative_path,
+                            line_number: line_idx + 1,
+                            line: if line.len() > 500 { line[..500].to_string() } else { line },
+                            absolute_path: path.to_string_lossy().to_string(),
+                        });
+                    }
+                }
+            }
+        }
+    }
+
+    let base = Path::new(&path);
+    walk_dir(base, base, &query_lower, show_hidden, &binary_extensions, &mut matches, max, &mut truncated, 0);
+
+    Ok(ContentSearchResult { matches, truncated })
 }
 
 #[tauri::command]
@@ -2472,6 +2618,7 @@ pub fn run() {
             list_directories,
             get_shell_history,
             get_file_tree,
+            search_file_contents,
             delete_file,
             rename_file,
             save_clipboard_image,

@@ -64,6 +64,7 @@ export default function AssistantTabPage() {
   const { status, activeProject, invoke, remoteTerminals, attachTerminal, detachTerminal, hasReceivedInitialStatus, availableProjects } = useConnectionStore();
   console.log("[Assistant] Status:", status, "activeProject:", activeProject?.name);
   const {
+    terminals: localTerminals,
     spawnTerminal,
     killTerminal,
     sendInput,
@@ -71,8 +72,9 @@ export default function AssistantTabPage() {
     resizeTerminal,
   } = useTerminalStore();
 
-  // Filter remote terminals to only show assistants
-  const remoteAssistants = remoteTerminals.filter(t => t.type === "assistant");
+  // Filter remote terminals to only show assistants that weren't spawned by mobile
+  const localTerminalIds = new Set(localTerminals.map(t => t.id));
+  const remoteAssistants = remoteTerminals.filter(t => t.type === "assistant" && !localTerminalIds.has(t.id));
 
   const [tabs, setTabs] = useState<AssistantTab[]>([]);
   const [activeTabId, setActiveTabId] = useState<string | null>(null);
@@ -144,7 +146,7 @@ export default function AssistantTabPage() {
     console.log("[Assistant] Auto-load check:", {
       projectPath: !!projectPath,
       isConnected,
-      hasAutoLoaded,
+      hasAutoLoaded: hasAutoLoaded,
       installedCommandsLength: installedCommands.length,
       isCheckingInstalled,
       hasReceivedInitialStatus,
@@ -160,6 +162,7 @@ export default function AssistantTabPage() {
       // First, try to load remote assistant sessions
       if (remoteAssistants.length > 0) {
         console.log("[Assistant] Loading remote assistant sessions:", remoteAssistants.map(t => t.title));
+        setHasAutoLoaded(true);
 
         // Create tabs for remote assistants
         const remoteTabs: AssistantTab[] = remoteAssistants.map(remote => ({
@@ -186,8 +189,6 @@ export default function AssistantTabPage() {
         if (remoteTabs.length > 0) {
           setActiveTabId(remoteTabs[0].id);
         }
-
-        setHasAutoLoaded(true);
       } else if (installedCommands.length > 0) {
         // No remote assistants, auto-launch a local one
         const defaultCommand = installedCommands.includes("claude")
@@ -199,8 +200,8 @@ export default function AssistantTabPage() {
         if (defaultCommand) {
           const option = ASSISTANT_OPTIONS.find((o) => o.command === defaultCommand);
           if (option) {
-            handleAddTab(option);
             setHasAutoLoaded(true);
+            handleAddTab(option);
           }
         }
       }
@@ -249,7 +250,7 @@ export default function AssistantTabPage() {
         });
       });
     }
-  }, [remoteAssistants, hasAutoLoaded, isConnected, dismissedRemoteIds]);
+  }, [remoteAssistants, isConnected, hasAutoLoaded, dismissedRemoteIds]);
 
   const handleAddTab = async (option: AssistantOption) => {
     if (!projectPath) return;
@@ -532,7 +533,7 @@ export default function AssistantTabPage() {
           <Text className="text-muted-foreground text-center mt-2 px-8">
             {isCheckingInstalled
               ? "Checking installed coding assistants..."
-              : "Tap + to launch a coding assistant like Claude Code or Aider"}
+              : "Tap + to launch a coding assistant"}
           </Text>
         </View>
       ) : (

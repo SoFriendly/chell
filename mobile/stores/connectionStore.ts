@@ -87,6 +87,9 @@ function getDeviceName(): string {
   return "Mobile Device";
 }
 
+// Track the current handler's unsubscribe function to prevent accumulation
+let currentHandlerUnsubscribe: (() => void) | null = null;
+
 // Shared message handler setup - used by both connect() and pairFromQR()
 function setupMessageHandler(
   ws: ChellWebSocket,
@@ -95,7 +98,13 @@ function setupMessageHandler(
   desktopNameOverride?: string,
   pendingPassphrase?: string
 ) {
-  ws.onMessage(async (message: WSMessage) => {
+  // Clean up previous handler if any (prevents handler accumulation)
+  if (currentHandlerUnsubscribe) {
+    currentHandlerUnsubscribe();
+    currentHandlerUnsubscribe = null;
+  }
+
+  currentHandlerUnsubscribe = ws.onMessage(async (message: WSMessage) => {
     switch (message.type) {
       case "pair_response":
         if (message.success && message.sessionToken) {
@@ -183,6 +192,17 @@ function setupMessageHandler(
                 : p
             ),
           }));
+
+          // Handle theme sync from desktop
+          const statusMsg = message as any;
+          if (statusMsg.theme) {
+            import("./themeStore").then(({ useThemeStore }) => {
+              const { syncWithDesktop, syncFromDesktop } = useThemeStore.getState();
+              if (syncWithDesktop) {
+                syncFromDesktop(statusMsg.theme, statusMsg.customTheme);
+              }
+            });
+          }
         } else {
           set((state) => ({
             linkedPortals: state.linkedPortals.map((p) =>
@@ -267,9 +287,14 @@ export const useConnectionStore = create<ConnectionStore>()(
       setWsUrl: (url: string) => set({ wsUrl: url }),
 
       connect: async () => {
-        const { wsUrl, activePortalId } = get();
+        const { wsUrl, activePortalId, status: currentStatus } = get();
         if (!wsUrl) {
           set({ error: "No WebSocket URL configured" });
+          return;
+        }
+
+        // Guard against concurrent connect calls (including during QR pairing)
+        if (currentStatus === "connecting" || currentStatus === "connected" || currentStatus === "pairing") {
           return;
         }
 
@@ -322,15 +347,7 @@ export const useConnectionStore = create<ConnectionStore>()(
                 ),
               }));
 
-              // Request current status from desktop (including terminals)
-              console.log("[ConnectionStore] Requesting status after resume...");
-              setTimeout(() => {
-                try {
-                  ws.requestStatus();
-                } catch (err) {
-                  console.error("[ConnectionStore] Failed to request status:", err);
-                }
-              }, 500);
+              // Status will be requested by _layout.tsx when status becomes "connected"
               return;
             }
           }
@@ -382,8 +399,8 @@ export const useConnectionStore = create<ConnectionStore>()(
 
           const { relay, passphrase, desktopName } = data;
 
-          // Set the relay URL and connect
-          set({ wsUrl: relay, desktopDeviceName: desktopName });
+          // Set status to pairing FIRST to prevent _layout.tsx auto-connect race
+          set({ wsUrl: relay, desktopDeviceName: desktopName, status: "pairing" });
 
           const ws = initWebSocket(relay);
 
@@ -400,8 +417,6 @@ export const useConnectionStore = create<ConnectionStore>()(
             deviceName: getDeviceName(),
             pairingPassphrase: passphrase,
           });
-
-          set({ status: "pairing" });
         } catch (err) {
           set({
             status: "disconnected",
@@ -460,7 +475,7 @@ export const useConnectionStore = create<ConnectionStore>()(
         // Optimistically set the active project locally
         const project = get().availableProjects.find((p) => p.id === projectId);
         if (project) {
-          set({ activeProject: { ...project, lastOpened: "" } });
+          set({ activeProject: project });
         }
 
         // Also notify the desktop to switch its active tab

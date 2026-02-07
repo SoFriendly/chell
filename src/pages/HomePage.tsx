@@ -299,9 +299,11 @@ export default function HomePage() {
     }
   };
 
-  const handleProjectClick = (project: Project) => {
-    // Update last opened
-    addProject({ ...project, lastOpened: new Date().toISOString() });
+  const handleProjectClick = async (project: Project) => {
+    // Update last opened in both zustand store and database
+    const updated = { ...project, lastOpened: new Date().toISOString() };
+    addProject(updated);
+    await invoke("add_project", { project: updated });
     navigate(`/project/${project.id}`);
   };
 

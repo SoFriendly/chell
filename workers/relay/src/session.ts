@@ -147,6 +147,10 @@ export class SessionDO implements DurableObject {
         await this.handleProjectChanged(ws, message);
         break;
 
+      case "attach_terminal_response":
+        await this.handleAttachTerminalResponse(ws, message);
+        break;
+
       default:
         this.sendError(ws, "UNKNOWN_MESSAGE", `Unknown message type: ${message.type}`);
     }
@@ -602,6 +606,23 @@ export class SessionDO implements DurableObject {
         terminalId,
       })
     );
+  }
+
+  private async handleAttachTerminalResponse(ws: WebSocket, message: any) {
+    const state = this.connections.get(ws);
+    if (!state || state.type !== "desktop") return;
+
+    // Forward to all mobile clients
+    for (const [token, desktop] of this.desktopBySession) {
+      if (desktop === ws) {
+        const mobiles = this.mobilesBySession.get(token);
+        if (mobiles) {
+          for (const mobileWs of mobiles) {
+            mobileWs.send(JSON.stringify(message));
+          }
+        }
+      }
+    }
   }
 
   private async handleResumeSession(ws: WebSocket, message: any) {

@@ -121,8 +121,8 @@ export default function TerminalTabPage() {
   // Auto-launch default shell terminal when first opening
   useEffect(() => {
     if (projectPath && isConnected && !hasAutoLaunched && shellTerminals.length === 0) {
-      spawnTerminal(projectPath);
       setHasAutoLaunched(true);
+      spawnTerminal(projectPath);
     }
   }, [projectPath, isConnected, hasAutoLaunched, shellTerminals.length]);
 
@@ -155,9 +155,11 @@ export default function TerminalTabPage() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
   };
 
-  // Filter remote terminals to only show ones not already attached
-  const attachedTerminalIds = new Set(terminals.map((t) => t.id));
-  const availableRemoteTerminals = remoteTerminals.filter((rt) => !attachedTerminalIds.has(rt.id));
+  // Filter remote terminals to only show shell-type ones not already attached/spawned locally
+  const localTerminalIds = new Set(terminals.map((t) => t.id));
+  const availableRemoteTerminals = remoteTerminals.filter(
+    (rt) => rt.type === "shell" && !localTerminalIds.has(rt.id)
+  );
 
   const handleSend = useCallback(() => {
     if (!activeTerminalId || !input.trim()) return;

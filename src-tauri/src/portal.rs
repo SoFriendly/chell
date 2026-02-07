@@ -119,6 +119,8 @@ pub struct ProjectInfo {
     pub id: String,
     pub name: String,
     pub path: String,
+    #[serde(rename = "lastOpened")]
+    pub last_opened: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub folders: Option<Vec<ProjectFolderInfo>>,
 }
@@ -340,6 +342,7 @@ async fn handle_message(
                     id: p.id.clone(),
                     name: p.name,
                     path: p.path.clone(),
+                    last_opened: p.last_opened,
                     folders: p.folders.map(|folders| {
                         folders.into_iter().map(|f| ProjectFolderInfo {
                             id: f.id,

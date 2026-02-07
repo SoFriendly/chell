@@ -8,17 +8,13 @@ import { Pressable, View, Text } from "react-native";
 import { ChevronLeft, Home, Settings, GitBranch, ChevronDown, ArrowUp, ArrowDown } from "lucide-react-native";
 import { ThemeProvider, useTheme } from "~/components/ThemeProvider";
 import { useConnectionStore } from "~/stores/connectionStore";
-import { useThemeStore } from "~/stores/themeStore";
 import { useGitStore } from "~/stores/gitStore";
-import type { WSMessage } from "~/types";
-import { getWebSocket } from "~/lib/websocket";
 
 // Prevent splash screen from auto-hiding before fonts load
 SplashScreen.preventAutoHideAsync();
 
 function RootLayoutContent() {
   const { status, connect, wsUrl, requestStatus } = useConnectionStore();
-  const { syncFromDesktop, syncWithDesktop } = useThemeStore();
   const { status: gitStatus, toggleBranchPicker } = useGitStore();
   const { theme, colors } = useTheme();
 
@@ -40,28 +36,7 @@ function RootLayoutContent() {
     }
   }, [status]);
 
-  // Listen for messages from desktop (theme sync only - terminal output handled in connectionStore)
-  useEffect(() => {
-    if (status !== "connected") return;
-
-    try {
-      const ws = getWebSocket();
-      const unsubscribe = ws.onMessage((message: WSMessage) => {
-        // Handle theme sync from desktop
-        if (message.type === "status_update" && syncWithDesktop) {
-          const statusMsg = message as any;
-          if (statusMsg.theme) {
-            // Use syncFromDesktop to handle both regular and custom themes
-            syncFromDesktop(statusMsg.theme, statusMsg.customTheme);
-          }
-        }
-      });
-
-      return unsubscribe;
-    } catch {
-      // WebSocket not initialized yet
-    }
-  }, [status, syncWithDesktop]);
+  // Theme sync is now handled inside connectionStore's setupMessageHandler
 
   return (
     <>

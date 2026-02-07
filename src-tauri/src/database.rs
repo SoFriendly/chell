@@ -7,8 +7,14 @@ use std::path::PathBuf;
 pub struct LinkedDevice {
     pub id: String,
     pub name: String,
+    #[serde(rename = "type")]
     pub device_type: String,
-    pub paired_at: String,
+    #[serde(rename = "pairedAt")]
+    pub paired_at: u64,
+    #[serde(rename = "lastSeen", default)]
+    pub last_seen: u64,
+    #[serde(rename = "sessionToken", default)]
+    pub session_token: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
