@@ -2,6 +2,11 @@
 
 All notable changes to Chell will be documented in this file.
 
+## [0.1.72]
+
+### File Search
+- Add file-tree context menus to search results and support double-click to open here
+
 ## [0.1.71]
 
 ### New Features

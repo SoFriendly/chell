@@ -773,6 +773,132 @@ export default function GitPanel({ projectPath, projectName, isGitRepo, onRefres
     }
   };
 
+  const openFileInEditorOrDefault = (absolutePath: string, basePath: string) => {
+    if (preferredEditor) {
+      const fileName = absolutePath.split("/").pop() || absolutePath;
+      const title = `${preferredEditor} - ${fileName}`;
+
+      try {
+        const params = new URLSearchParams({
+          editor: preferredEditor,
+          file: absolutePath,
+          cwd: basePath,
+          title,
+        });
+
+        const webview = new WebviewWindow(`editor-${Date.now()}`, {
+          url: `/terminal?${params.toString()}`,
+          title,
+          width: 900,
+          height: 600,
+          center: true,
+          titleBarStyle: "overlay",
+          hiddenTitle: true,
+          visible: true,
+        });
+
+        webview.once("tauri://error", (e) => {
+          console.error("Failed to create editor window:", e);
+          toast.error(`Failed to open ${preferredEditor}`);
+        });
+      } catch (err) {
+        toast.error(`Failed to open ${preferredEditor}: ${err}`);
+      }
+    } else {
+      invoke("open_in_finder", { path: absolutePath });
+    }
+  };
+
+  const refreshTreeForBasePath = (basePath: string) => {
+    if (folders && folders.length > 0) {
+      const folder = folders.find(f => f.path === basePath);
+      if (folder) {
+        loadFolderTree(folder.id, folder.path);
+        setExpandedFolders(prev => {
+          const next = new Set(prev);
+          next.add(folder.id);
+          return next;
+        });
+        return;
+      }
+    }
+    loadFileTree();
+  };
+
+  const expandToPath = (path: string, basePath: string) => {
+    setExpandedDirs(prev => {
+      const next = new Set(prev);
+      const parts = path.split("/");
+      let current = "";
+      for (const part of parts.slice(0, -1)) {
+        current = current ? `${current}/${part}` : part;
+        next.add(current);
+      }
+      return next;
+    });
+    if (folders && folders.length > 0) {
+      const folder = folders.find(f => f.path === basePath);
+      if (folder) {
+        setExpandedFolders(prev => {
+          const next = new Set(prev);
+          next.add(folder.id);
+          return next;
+        });
+      }
+    }
+  };
+
+  const handleRenameFromSearch = (filePath: string, name: string, basePath: string) => {
+    handleCloseSearch();
+    expandToPath(filePath, basePath);
+    setRenamingFile(filePath);
+    setRenameValue(name);
+  };
+
+  const handleDeleteFileAbsolute = async (absolutePath: string, basePath: string) => {
+    try {
+      await invoke("delete_file", { path: absolutePath });
+      toast.success("File deleted");
+      refreshTreeForBasePath(basePath);
+      onRefresh();
+    } catch (error) {
+      toast.error("Failed to delete file");
+      console.error(error);
+    }
+  };
+
+  const handleCopyPathAbsolute = (absolutePath: string) => {
+    navigator.clipboard.writeText(absolutePath);
+    toast.success("Path copied to clipboard");
+  };
+
+  const handleRevealAbsolute = (absolutePath: string) => {
+    invoke("reveal_in_file_manager", { path: absolutePath });
+  };
+
+  const handleOpenAbsolute = (absolutePath: string) => {
+    invoke("open_in_finder", { path: absolutePath });
+  };
+
+  const handleAddToGitignoreForBase = async (filePath: string, basePath: string) => {
+    try {
+      await invoke("add_to_gitignore", { repoPath: basePath, pattern: filePath });
+      toast.success(`Added ${filePath} to .gitignore`);
+      onRefresh();
+    } catch (error) {
+      toast.error("Failed to add to .gitignore");
+      console.error(error);
+    }
+  };
+
+  const getBasePathForContentMatch = (match: ContentMatch) => {
+    const suffix = `/${match.path}`;
+    if (match.absolutePath.endsWith(suffix)) {
+      return match.absolutePath.slice(0, match.absolutePath.length - suffix.length);
+    }
+    return projectPath;
+  };
+
   const generateCommitMessage = async () => {
     // Filter diffs to only include selected files
     const selectedDiffs = diffs.filter(d => filesToCommit.has(d.path));
@@ -2059,19 +2185,91 @@ export default function GitPanel({ projectPath, projectName, isGitRepo, onRefres
                       </h4>
                       <div className="space-y-0.5">
                         {fileNameMatches.map((match, i) => (
-                          <div
-                            key={`fn-${i}`}
-                            className="flex items-center gap-1.5 py-1 px-1 rounded hover:bg-muted/50 cursor-pointer"
-                            onClick={() => handleSearchResultClick(match)}
-                          >
+                          <ContextMenu key={`fn-${i}`}>
+                            <ContextMenuTrigger asChild>
+                              <div
+                                className="flex items-center gap-1.5 py-1 px-1 rounded hover:bg-muted/50 cursor-pointer"
+                                onClick={(e) => {
+                                  if (e.detail > 1) return;
+                                  handleSearchResultClick(match);
+                                }}
+                                onDoubleClick={() => {
+                                  if (!match.isDir && isPreviewable(match.path) && onOpenMarkdown) {
+                                    onOpenMarkdown(`${match.basePath}/${match.path}`);
+                                  }
+                                }}
+                              >
+                                {match.isDir ? (
+                                  <Folder className="h-3.5 w-3.5 text-primary shrink-0" />
+                                ) : (
+                                  <File className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                                )}
+                                <span className="text-xs font-medium truncate">{match.name}</span>
+                                <span className="text-[10px] text-muted-foreground truncate ml-auto">{match.path}</span>
+                              </div>
+                            </ContextMenuTrigger>
                             {match.isDir ? (
-                              <Folder className="h-3.5 w-3.5 text-primary shrink-0" />
+                              <ContextMenuContent>
+                                <ContextMenuItem onClick={() => handleRevealAbsolute(`${match.basePath}/${match.path}`)}>
+                                  <FolderOpen className="mr-2 h-4 w-4" />
+                                  {getRevealLabel()}
+                                </ContextMenuItem>
+                                <ContextMenuItem onClick={() => handleCopyPathAbsolute(`${match.basePath}/${match.path}`)}>
+                                  <Copy className="mr-2 h-4 w-4" />
+                                  Copy Path
+                                </ContextMenuItem>
+                                <ContextMenuSeparator />
+                                <ContextMenuItem onClick={() => handleAddToGitignoreForBase(match.path, match.basePath)}>
+                                  <EyeOff className="mr-2 h-4 w-4" />
+                                  Add to .gitignore
+                                </ContextMenuItem>
+                              </ContextMenuContent>
                             ) : (
-                              <File className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                              <ContextMenuContent>
+                                <ContextMenuItem onClick={() => handleOpenAbsolute(`${match.basePath}/${match.path}`)}>
+                                  <ExternalLink className="mr-2 h-4 w-4" />
+                                  Open
+                                </ContextMenuItem>
+                                {isPreviewable(match.path) && onOpenMarkdown && (
+                                  <ContextMenuItem onClick={() => onOpenMarkdown(`${match.basePath}/${match.path}`)}>
+                                    <FileIcon className="mr-2 h-4 w-4" />
+                                    Open Here
+                                  </ContextMenuItem>
+                                )}
+                                <ContextMenuItem onClick={() => handleRevealAbsolute(`${match.basePath}/${match.path}`)}>
+                                  <FolderOpen className="mr-2 h-4 w-4" />
+                                  {getRevealLabel()}
+                                </ContextMenuItem>
+                                {preferredEditor && (
+                                  <ContextMenuItem onClick={() => openFileInEditorOrDefault(`${match.basePath}/${match.path}`, match.basePath)}>
+                                    <SquareTerminal className="mr-2 h-4 w-4" />
+                                    Open in {preferredEditor}
+                                  </ContextMenuItem>
+                                )}
+                                <ContextMenuSeparator />
+                                <ContextMenuItem onClick={() => handleCopyPathAbsolute(`${match.basePath}/${match.path}`)}>
+                                  <Copy className="mr-2 h-4 w-4" />
+                                  Copy Path
+                                </ContextMenuItem>
+                                <ContextMenuItem onClick={() => handleRenameFromSearch(match.path, match.name, match.basePath)}>
+                                  <Pencil className="mr-2 h-4 w-4" />
+                                  Rename
+                                </ContextMenuItem>
+                                <ContextMenuItem onClick={() => handleAddToGitignoreForBase(match.path, match.basePath)}>
+                                  <EyeOff className="mr-2 h-4 w-4" />
+                                  Add to .gitignore
+                                </ContextMenuItem>
+                                <ContextMenuSeparator />
+                                <ContextMenuItem
+                                  onClick={() => handleDeleteFileAbsolute(`${match.basePath}/${match.path}`, match.basePath)}
+                                  className="text-destructive focus:text-destructive"
+                                >
+                                  <Trash2 className="mr-2 h-4 w-4" />
+                                  Delete
+                                </ContextMenuItem>
+                              </ContextMenuContent>
                             )}
-                            <span className="text-xs font-medium truncate">{match.name}</span>
-                            <span className="text-[10px] text-muted-foreground truncate ml-auto">{match.path}</span>
-                          </div>
+                          </ContextMenu>
                         ))}
                       </div>
                     </div>
@@ -2084,21 +2282,75 @@ export default function GitPanel({ projectPath, projectName, isGitRepo, onRefres
                       </h4>
                       <div className="space-y-0.5">
                         {contentSearchResults.map((match, i) => (
-                          <div
-                            key={`cm-${i}`}
-                            className="flex flex-col gap-0.5 py-1 px-1 rounded hover:bg-muted/50 cursor-pointer"
-                            onClick={() => handleContentMatchClick(match)}
-                          >
-                            <div className="flex items-center gap-1.5">
-                              <File className="h-3 w-3 text-muted-foreground shrink-0" />
-                              <span className="text-[11px] text-muted-foreground truncate">
-                                {match.path}:{match.lineNumber}
-                              </span>
-                            </div>
-                            <span className="text-[11px] font-mono text-foreground/80 truncate pl-[18px]">
-                              {match.line.trim()}
-                            </span>
-                          </div>
+                          <ContextMenu key={`cm-${i}`}>
+                            <ContextMenuTrigger asChild>
+                              <div
+                                className="flex flex-col gap-0.5 py-1 px-1 rounded hover:bg-muted/50 cursor-pointer"
+                                onClick={(e) => {
+                                  if (e.detail > 1) return;
+                                  handleContentMatchClick(match);
+                                }}
+                                onDoubleClick={() => {
+                                  if (isPreviewable(match.path) && onOpenMarkdown) {
+                                    onOpenMarkdown(match.absolutePath, match.lineNumber);
+                                  }
+                                }}
+                              >
+                                <div className="flex items-center gap-1.5">
+                                  <File className="h-3 w-3 text-muted-foreground shrink-0" />
+                                  <span className="text-[11px] text-muted-foreground truncate">
+                                    {match.path}:{match.lineNumber}
+                                  </span>
+                                </div>
+                                <span className="text-[11px] font-mono text-foreground/80 truncate pl-[18px]">
+                                  {match.line.trim()}
+                                </span>
+                              </div>
+                            </ContextMenuTrigger>
+                            <ContextMenuContent>
+                              <ContextMenuItem onClick={() => handleOpenAbsolute(match.absolutePath)}>
+                                <ExternalLink className="mr-2 h-4 w-4" />
+                                Open
+                              </ContextMenuItem>
+                              {isPreviewable(match.path) && onOpenMarkdown && (
+                                <ContextMenuItem onClick={() => onOpenMarkdown(match.absolutePath, match.lineNumber)}>
+                                  <FileIcon className="mr-2 h-4 w-4" />
+                                  Open Here
+                                </ContextMenuItem>
+                              )}
+                              <ContextMenuItem onClick={() => handleRevealAbsolute(match.absolutePath)}>
+                                <FolderOpen className="mr-2 h-4 w-4" />
+                                {getRevealLabel()}
+                              </ContextMenuItem>
+                              {preferredEditor && (
+                                <ContextMenuItem onClick={() => openFileInEditorOrDefault(match.absolutePath, getBasePathForContentMatch(match))}>
+                                  <SquareTerminal className="mr-2 h-4 w-4" />
+                                  Open in {preferredEditor}
+                                </ContextMenuItem>
+                              )}
+                              <ContextMenuSeparator />
+                              <ContextMenuItem onClick={() => handleCopyPathAbsolute(match.absolutePath)}>
+                                <Copy className="mr-2 h-4 w-4" />
+                                Copy Path
+                              </ContextMenuItem>
+                              <ContextMenuItem onClick={() => handleRenameFromSearch(match.path, match.path.split("/").pop() || match.path, getBasePathForContentMatch(match))}>
+                                <Pencil className="mr-2 h-4 w-4" />
+                                Rename
+                              </ContextMenuItem>
+                              <ContextMenuItem onClick={() => handleAddToGitignoreForBase(match.path, getBasePathForContentMatch(match))}>
+                                <EyeOff className="mr-2 h-4 w-4" />
+                                Add to .gitignore
+                              </ContextMenuItem>
+                              <ContextMenuSeparator />
+                              <ContextMenuItem
+                                onClick={() => handleDeleteFileAbsolute(match.absolutePath, getBasePathForContentMatch(match))}
+                                className="text-destructive focus:text-destructive"
+                              >
+                                <Trash2 className="mr-2 h-4 w-4" />
+                                Delete
+                              </ContextMenuItem>
+                            </ContextMenuContent>
+                          </ContextMenu>
                         ))}
                       </div>
                     </div>
