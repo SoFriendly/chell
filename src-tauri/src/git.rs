@@ -459,7 +459,7 @@ impl GitService {
         }
 
         // Apply the patch in reverse using git command
-        let output = std::process::Command::new("git")
+        let mut child = std::process::Command::new("git")
             .arg("-C")
             .arg(repo_path)
             .arg("apply")
@@ -473,14 +473,13 @@ impl GitService {
             .map_err(|e| format!("Failed to run git: {}", e))?;
 
         use std::io::Write;
-        output
-            .stdin
-            .as_ref()
-            .ok_or("Failed to open stdin")?
+        let mut stdin = child.stdin.take().ok_or("Failed to open stdin")?;
+        stdin
             .write_all(patch.as_bytes())
             .map_err(|e| format!("Failed to write patch: {}", e))?;
+        drop(stdin); // Close stdin so git knows input is complete
 
-        let result = output
+        let result = child
             .wait_with_output()
             .map_err(|e| format!("Failed to wait for git: {}", e))?;
 
@@ -555,6 +554,9 @@ impl GitService {
             .arg("clone")
             .arg(url)
             .arg(path)
+            .stdin(std::process::Stdio::null())
+            .env("GIT_TERMINAL_PROMPT", "0")
+            .env("GIT_SSH_COMMAND", "ssh -o BatchMode=yes")
             .output()
             .map_err(|e| format!("Failed to run git: {}", e))?;
 
@@ -573,6 +575,9 @@ impl GitService {
             .arg(repo_path)
             .arg("fetch")
             .arg(remote)
+            .stdin(std::process::Stdio::null())
+            .env("GIT_TERMINAL_PROMPT", "0")
+            .env("GIT_SSH_COMMAND", "ssh -o BatchMode=yes")
             .output()
             .map_err(|e| format!("Failed to run git: {}", e))?;
 
@@ -593,6 +598,9 @@ impl GitService {
             .arg("pull")
             .arg("--rebase")
             .arg(remote)
+            .stdin(std::process::Stdio::null())
+            .env("GIT_TERMINAL_PROMPT", "0")
+            .env("GIT_SSH_COMMAND", "ssh -o BatchMode=yes")
             .output()
             .map_err(|e| format!("Failed to run git: {}", e))?;
 
@@ -630,6 +638,9 @@ impl GitService {
             .arg(repo_path)
             .arg("push")
             .arg(remote)
+            .stdin(std::process::Stdio::null())
+            .env("GIT_TERMINAL_PROMPT", "0")
+            .env("GIT_SSH_COMMAND", "ssh -o BatchMode=yes")
             .output()
             .map_err(|e| format!("Failed to run git: {}", e))?;
 
@@ -673,6 +684,9 @@ impl GitService {
             .arg("-u")
             .arg(remote)
             .arg(&branch_name)
+            .stdin(std::process::Stdio::null())
+            .env("GIT_TERMINAL_PROMPT", "0")
+            .env("GIT_SSH_COMMAND", "ssh -o BatchMode=yes")
             .output()
             .map_err(|e| format!("Failed to publish branch: {}", e))?;
 

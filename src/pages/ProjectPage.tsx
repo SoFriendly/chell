@@ -1182,13 +1182,12 @@ export default function ProjectPage() {
   const refreshGitData = useCallback(async () => {
     const path = currentProjectPathRef.current;
     if (path) {
-      // Fetch from remote first to get new branches
-      try {
-        await invoke("fetch_remote", { repoPath: path, remote: "origin" });
-      } catch {
-        // Silently continue - fetch may fail if no remote configured
-      }
+      // Load git data immediately without waiting for fetch
       loadGitData(path);
+      // Fire off fetch in background - don't block the refresh
+      invoke("fetch_remote", { repoPath: path, remote: "origin" })
+        .then(() => loadGitData(path))
+        .catch(() => {}); // Silently continue - fetch may fail if no remote configured
     }
   }, []);
 
