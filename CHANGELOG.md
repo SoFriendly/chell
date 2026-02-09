@@ -2,6 +2,18 @@
 
 All notable changes to Chell will be documented in this file.
 
+## [0.1.73]
+
+### Bug Fixes
+- Fix terminal scroll position randomly jumping to top and becoming unscrollable
+  - Replace `display: none` with `visibility: hidden` for inactive terminal tabs to preserve xterm viewport scroll state
+  - Save and restore scroll position around `fit()` resize operations
+  - Track viewport scroll position continuously to survive parent panel hide/show cycles
+  - Remove `theme` from terminal creation effect dependencies to prevent full terminal recreation on theme change
+
+### Git
+- Add publish branch functionality to push local branches to remote with upstream tracking
+
 ## [0.1.72]
 
 ### File Search
