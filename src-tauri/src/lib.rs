@@ -2727,7 +2727,33 @@ pub fn run() {
                 .tooltip("Chell - Running in background")
                 .on_menu_event(|app, event| {
                     match event.id().as_ref() {
-                        "new_window" | "show" => {
+                        "new_window" => {
+                            let label = format!("chell-{}", std::time::SystemTime::now()
+                                .duration_since(std::time::UNIX_EPOCH)
+                                .unwrap_or_default()
+                                .as_millis());
+                            let mut builder = tauri::WebviewWindowBuilder::new(
+                                app,
+                                &label,
+                                tauri::WebviewUrl::App("/".into()),
+                            )
+                            .title("Chell")
+                            .inner_size(1200.0, 800.0)
+                            .min_inner_size(600.0, 600.0)
+                            .center()
+                            .visible(false)
+                            .title_bar_style(tauri::TitleBarStyle::Overlay)
+                            .hidden_title(true);
+                            #[cfg(target_os = "macos")]
+                            {
+                                builder = builder.background_color((0x12, 0x12, 0x12, 0xff).into());
+                            }
+                            match builder.build() {
+                                Ok(window) => { let _ = window.show(); }
+                                Err(e) => log::error!("Failed to create new window: {}", e),
+                            }
+                        }
+                        "show" => {
                             if let Some(window) = app.get_webview_window("main") {
                                 let _ = window.show();
                                 let _ = window.set_focus();

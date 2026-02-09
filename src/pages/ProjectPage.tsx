@@ -3,6 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
+import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { getCurrentWindow, LogicalSize } from "@tauri-apps/api/window";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import {
@@ -478,9 +479,33 @@ export default function ProjectPage() {
     }
   };
 
-  // Navigate to home screen
-  const handleGoHome = () => {
-    navigate("/");
+  // Open a new window
+  const handleNewWindow = async () => {
+    try {
+      const webview = new WebviewWindow(`chell-${Date.now()}`, {
+        url: "/",
+        title: "Chell",
+        width: 1200,
+        height: 800,
+        minWidth: 600,
+        minHeight: 600,
+        center: true,
+        titleBarStyle: "overlay",
+        hiddenTitle: true,
+        visible: false,
+        backgroundColor: "#121212",
+      });
+      webview.once("tauri://created", () => {
+        webview.show();
+      });
+      webview.once("tauri://error", (e) => {
+        console.error("Failed to create window:", e);
+        toast.error("Failed to open new window");
+      });
+    } catch (error) {
+      console.error("Error creating window:", error);
+      toast.error("Failed to open new window");
+    }
   };
 
   // Resize handle drag handler
@@ -1348,7 +1373,7 @@ export default function ProjectPage() {
           <Tooltip delayDuration={0}>
             <TooltipTrigger asChild>
               <button
-                onClick={handleGoHome}
+                onClick={handleNewWindow}
                 className="flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
               >
                 <Plus className="h-5 w-5" />
