@@ -2806,16 +2806,17 @@ pub fn run() {
             Ok(())
         })
         .on_window_event(move |window, event| {
-            // Only minimize to tray if portal mode is enabled, otherwise quit
+            // Only minimize to tray for the main window when portal mode is enabled
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
-                let portal_enabled = *state_for_window_event.portal_enabled.lock();
-                if portal_enabled {
-                    // Hide the window instead of closing it (tray mode)
-                    let _ = window.hide();
-                    // Prevent the window from being closed
-                    api.prevent_close();
+                if window.label() == "main" {
+                    let portal_enabled = *state_for_window_event.portal_enabled.lock();
+                    if portal_enabled {
+                        // Hide the main window instead of closing it (tray mode)
+                        let _ = window.hide();
+                        api.prevent_close();
+                    }
                 }
-                // If portal is disabled, let the window close normally (quit app)
+                // Secondary windows and non-portal mode close normally
             }
         })
         .build(tauri::generate_context!())

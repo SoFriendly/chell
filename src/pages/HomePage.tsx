@@ -91,6 +91,9 @@ export default function HomePage() {
         visible: false,
         backgroundColor: "#121212",
       });
+      webview.once("tauri://created", () => {
+        webview.show();
+      });
       webview.once("tauri://error", (e) => {
         console.error("Failed to create window:", e);
         toast.error("Failed to open new window");

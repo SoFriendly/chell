@@ -381,6 +381,7 @@ export default function ProjectPage() {
 
       // Expand window to accommodate the panel if not already showing
       if (!showMarkdownPanel) {
+        isMarkdownResizing.current = true;
         const window = getCurrentWindow();
         const scaleFactor = await window.scaleFactor();
         const physicalSize = await window.innerSize();
@@ -388,6 +389,8 @@ export default function ProjectPage() {
         const logicalHeight = physicalSize.height / scaleFactor;
         const panelWidth = savedMarkdownWidth.current + 5; // +5 for resize handle
         await window.setSize(new LogicalSize(logicalWidth + panelWidth, logicalHeight));
+        // Clear the flag after layout settles
+        setTimeout(() => { isMarkdownResizing.current = false; }, 100);
       }
 
       setShowMarkdownPanel(true);
@@ -459,6 +462,7 @@ export default function ProjectPage() {
 
     // Then shrink window (don't block on this)
     try {
+      isMarkdownResizing.current = true;
       const window = getCurrentWindow();
       const scaleFactor = await window.scaleFactor();
       const physicalSize = await window.innerSize();
@@ -466,8 +470,11 @@ export default function ProjectPage() {
       const logicalHeight = physicalSize.height / scaleFactor;
       const panelWidth = markdownPanelWidth + 5; // +5 for resize handle
       await window.setSize(new LogicalSize(logicalWidth - panelWidth, logicalHeight));
+      // Clear the flag after layout settles
+      setTimeout(() => { isMarkdownResizing.current = false; }, 100);
     } catch (err) {
       console.error("Failed to resize window:", err);
+      isMarkdownResizing.current = false;
     }
   };
 
@@ -628,6 +635,7 @@ export default function ProjectPage() {
   const savedMarkdownWidth = useRef(400);
   const savedNotesWidth = useRef(320);
   const lastContainerWidth = useRef<number | null>(null);
+  const isMarkdownResizing = useRef(false);
 
   // Proportionally resize all panels when window is resized
   useEffect(() => {
@@ -640,6 +648,12 @@ export default function ProjectPage() {
 
       // Initialize on first run
       if (oldWidth === null) {
+        lastContainerWidth.current = newWidth;
+        return;
+      }
+
+      // Skip proportional resize when the window change is from opening/closing the markdown panel
+      if (isMarkdownResizing.current) {
         lastContainerWidth.current = newWidth;
         return;
       }
@@ -2124,7 +2138,7 @@ export default function ProjectPage() {
             "h-full flex flex-col overflow-hidden",
             !showMarkdownPanel && "hidden"
           )}
-          style={{ flex: `1 1 ${markdownPanelWidth}px`, minWidth: 300 }}
+          style={{ width: markdownPanelWidth, minWidth: 300 }}
         >
           {/* Header - z-50 to stay above Monaco find widget */}
           <div className="flex h-10 items-center justify-between px-2 border-b border-border relative z-50 bg-background">
