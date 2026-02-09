@@ -2,6 +2,18 @@
 
 All notable changes to Chell will be documented in this file.
 
+## [0.1.75]
+
+### Window Management
+- Add ability to open new windows from the tray menu and the project page "+" button
+- New windows open with custom labels, overlay title bar, and consistent styling
+- Show new window only after it is fully created for a smoother experience
+- Only minimize main window to tray when portal mode is enabled; secondary windows now close normally
+
+### Bug Fixes
+- Fix proportional panel resize being incorrectly triggered when opening/closing the markdown panel
+- Use fixed width instead of flex for the markdown panel to prevent layout shifts during window resize
+
 ## [0.1.74]
 
 ### Git
