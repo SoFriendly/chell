@@ -354,7 +354,8 @@ export default function HomePage() {
       }}
     >
       {/* Left icon sidebar */}
-      <div
+      <nav
+        aria-label="Main navigation"
         className="flex w-12 flex-col items-center bg-background pt-8 pb-3"
       >
         {/* Top icons */}
@@ -363,6 +364,7 @@ export default function HomePage() {
             <TooltipTrigger asChild>
               <button
                 onClick={() => setActiveSidebarItem("home")}
+                aria-label="Home"
                 className={cn(
                   "flex h-9 w-9 items-center justify-center rounded-lg transition-colors",
                   activeSidebarItem === "home"
@@ -380,6 +382,7 @@ export default function HomePage() {
             <TooltipTrigger asChild>
               <button
                 onClick={handleNewWindow}
+                aria-label="New window"
                 className="flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
               >
                 <Plus className="h-5 w-5" />
@@ -392,6 +395,7 @@ export default function HomePage() {
             <TooltipTrigger asChild>
               <button
                 onClick={handleOpenProjectFile}
+                aria-label="Open workspace"
                 className="flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
               >
                 <FolderOpen className="h-5 w-5" />
@@ -407,6 +411,7 @@ export default function HomePage() {
                   setActiveSidebarItem("settings");
                   setShowSettings(true);
                 }}
+                aria-label="Settings"
                 className={cn(
                   "flex h-9 w-9 items-center justify-center rounded-lg transition-colors",
                   activeSidebarItem === "settings"
@@ -430,6 +435,7 @@ export default function HomePage() {
             <TooltipTrigger asChild>
               <button
                 onClick={() => setHasSeenOnboarding(false)}
+                aria-label="Show tour"
                 className="flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
               >
                 <HelpCircle className="h-5 w-5" />
@@ -438,10 +444,10 @@ export default function HomePage() {
             <TooltipContent side="right">Show Tour</TooltipContent>
           </Tooltip>
         </div>
-      </div>
+      </nav>
 
       {/* Main content */}
-      <div className="flex flex-1 flex-col overflow-hidden">
+      <main className="flex flex-1 flex-col overflow-hidden">
         <div className="flex flex-1 flex-col overflow-hidden px-6 py-8">
           <div className="mx-auto w-full max-w-md flex flex-col flex-1 overflow-hidden">
             {/* Hero */}
@@ -449,7 +455,7 @@ export default function HomePage() {
               <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-primary/20 to-primary/10 border border-primary/30">
                 <ChellLogo size={36} />
               </div>
-              <h2 className="text-xl font-semibold">Welcome to Chell</h2>
+              <h1 className="text-xl font-semibold">Welcome to Chell</h1>
               <p className="mt-2 text-sm text-muted-foreground">
                 Think in changes, not commands.
               </p>
@@ -520,6 +526,7 @@ export default function HomePage() {
                         onChange={(e) => setProjectSearch(e.target.value)}
                         autoFocus
                         data-no-focus-ring
+                        aria-label="Search projects"
                         className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
                       />
                       <button
@@ -527,6 +534,7 @@ export default function HomePage() {
                           setShowProjectSearch(false);
                           setProjectSearch("");
                         }}
+                        aria-label="Close search"
                         className="text-muted-foreground hover:text-foreground"
                       >
                         <X className="h-3.5 w-3.5" />
@@ -539,6 +547,7 @@ export default function HomePage() {
                       </h2>
                       <button
                         onClick={() => setShowProjectSearch(true)}
+                        aria-label="Search projects"
                         className="text-muted-foreground hover:text-foreground"
                       >
                         <Search className="h-3.5 w-3.5" />
@@ -589,7 +598,7 @@ export default function HomePage() {
 
           </div>
         </div>
-      </div>
+      </main>
 
       {/* Clone Dialog */}
       <Dialog open={showCloneDialog} onOpenChange={handleCloneDialogChange}>
@@ -605,12 +614,14 @@ export default function HomePage() {
               placeholder="https://github.com/user/repo.git"
               value={cloneUrl}
               onChange={(e) => setCloneUrl(e.target.value)}
+              aria-label="Repository URL"
             />
             <div className="flex gap-2">
               <Input
                 placeholder="Local path"
                 value={clonePath}
                 onChange={(e) => setClonePath(e.target.value)}
+                aria-label="Clone path"
                 className="flex-1"
               />
               <Button
@@ -618,6 +629,7 @@ export default function HomePage() {
                 variant="outline"
                 size="icon"
                 onClick={handleSelectClonePath}
+                aria-label="Browse folder"
               >
                 <FolderOpen className="h-4 w-4" />
               </Button>
@@ -634,7 +646,7 @@ export default function HomePage() {
               disabled={isCloning}
               className="bg-primary hover:bg-primary/90"
             >
-              {isCloning ? "Cloning..." : "Clone"}
+              <span aria-live="polite">{isCloning ? "Cloning..." : "Clone"}</span>
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -654,12 +666,14 @@ export default function HomePage() {
               placeholder="Repository name"
               value={newRepoName}
               onChange={(e) => setNewRepoName(e.target.value)}
+              aria-label="Repository name"
             />
             <div className="flex gap-2">
               <Input
                 placeholder="Parent directory"
                 value={newRepoPath}
                 onChange={(e) => setNewRepoPath(e.target.value)}
+                aria-label="Parent directory"
                 className="flex-1"
               />
               <Button
@@ -667,6 +681,7 @@ export default function HomePage() {
                 variant="outline"
                 size="icon"
                 onClick={handleSelectCreatePath}
+                aria-label="Browse folder"
               >
                 <FolderOpen className="h-4 w-4" />
               </Button>

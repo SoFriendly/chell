@@ -1363,7 +1363,8 @@ export default function ProjectPage() {
       <div className="absolute left-12 top-10 bottom-0 w-px bg-border" />
 
       {/* Left icon sidebar */}
-      <div
+      <nav
+        aria-label="Sidebar"
         className="flex w-12 flex-col bg-background pt-8 pb-3"
       >
         {/* Inner container */}
@@ -1374,6 +1375,7 @@ export default function ProjectPage() {
             <TooltipTrigger asChild>
               <button
                 onClick={() => setActiveSidebarItem("terminal")}
+                aria-label="Home"
                 className={cn(
                   "flex h-9 w-9 items-center justify-center rounded-lg transition-colors",
                   activeSidebarItem === "terminal"
@@ -1391,6 +1393,7 @@ export default function ProjectPage() {
             <TooltipTrigger asChild>
               <button
                 onClick={handleNewWindow}
+                aria-label="New window"
                 className="flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
               >
                 <Plus className="h-5 w-5" />
@@ -1444,6 +1447,7 @@ export default function ProjectPage() {
                     }
                   }
                 }}
+                aria-label="Open workspace"
                 className="flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
               >
                 <FolderOpen className="h-5 w-5" />
@@ -1459,6 +1463,7 @@ export default function ProjectPage() {
                   setActiveSidebarItem("settings");
                   setShowSettings(true);
                 }}
+                aria-label="Settings"
                 className={cn(
                   "flex h-9 w-9 items-center justify-center rounded-lg transition-colors",
                   activeSidebarItem === "settings"
@@ -1482,6 +1487,7 @@ export default function ProjectPage() {
             <TooltipTrigger asChild>
               <button
                 onClick={toggleGitPanel}
+                aria-label={showGitPanel ? "Hide git panel" : "Show git panel"}
                 className={cn(
                   "flex h-9 w-9 items-center justify-center rounded-lg transition-colors",
                   showGitPanel
@@ -1505,6 +1511,7 @@ export default function ProjectPage() {
             <TooltipTrigger asChild>
               <button
                 onClick={toggleAssistantPanel}
+                aria-label={showAssistantPanel ? "Hide assistant" : "Show assistant"}
                 className={cn(
                   "flex h-9 w-9 items-center justify-center rounded-lg transition-colors",
                   showAssistantPanel
@@ -1527,6 +1534,7 @@ export default function ProjectPage() {
             <TooltipTrigger asChild>
               <button
                 onClick={toggleShellPanel}
+                aria-label={showShellPanel ? "Hide shell" : "Show shell"}
                 className={cn(
                   "flex h-9 w-9 items-center justify-center rounded-lg transition-colors",
                   showShellPanel
@@ -1549,6 +1557,7 @@ export default function ProjectPage() {
             <TooltipTrigger asChild>
               <button
                 onClick={toggleNotesPanel}
+                aria-label={showNotesPanel ? "Hide notes" : "Show notes"}
                 className={cn(
                   "flex h-9 w-9 items-center justify-center rounded-lg transition-colors",
                   showNotesPanel
@@ -1573,6 +1582,7 @@ export default function ProjectPage() {
           <Tooltip delayDuration={0}>
             <TooltipTrigger asChild>
               <button
+                aria-label="Help"
                 className="flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
               >
                 <HelpCircle className="h-5 w-5" />
@@ -1582,15 +1592,18 @@ export default function ProjectPage() {
           </Tooltip>
         </div>
         </div>
-      </div>
+      </nav>
 
       {/* Main content area */}
-      <div
+      <main
         ref={containerRef}
         className="flex-1 flex overflow-hidden"
       >
+        <h1 className="sr-only">{currentProject.name} - Chell</h1>
         {/* Left sidebar - Git panel */}
         <div
+          role="region"
+          aria-label="Git panel"
           className={cn("h-full flex flex-col overflow-hidden", !showGitPanel && "hidden")}
           style={{ width: gitPanelWidth, minWidth: 200 }}
         >
@@ -1620,6 +1633,8 @@ export default function ProjectPage() {
         {/* Center - Terminal area */}
         <div
           ref={assistantPanelRef}
+          role="region"
+          aria-label="Assistant panel"
           className={cn(
             "h-full overflow-hidden",
             !showAssistantPanel && "hidden"
@@ -1633,6 +1648,8 @@ export default function ProjectPage() {
           <div className="flex h-10 items-center border-b border-border">
             <div
               ref={tabListRef}
+              role="tablist"
+              aria-label="Terminal tabs"
               className="tab-scroll flex flex-1 items-center"
               onWheel={handleTabWheel}
             >
@@ -1641,6 +1658,8 @@ export default function ProjectPage() {
                   <div
                     key={tab.id}
                     data-tab-item
+                    role="tab"
+                    aria-selected={activeTabId === tab.id}
                     ref={(el) => {
                       if (el) tabRefs.current.set(tab.id, el);
                       else tabRefs.current.delete(tab.id);
@@ -1687,6 +1706,7 @@ export default function ProjectPage() {
                       e.stopPropagation();
                       closeTab(tab.id);
                     }}
+                    aria-label={`Close ${tab.name} tab`}
                     className="ml-1 rounded p-0.5 opacity-0 group-hover:opacity-100 hover:bg-muted transition-opacity"
                   >
                     <X className="h-3 w-3" />
@@ -1698,6 +1718,7 @@ export default function ProjectPage() {
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <button
+                  aria-label="New tab"
                   className="flex h-full items-center px-3 py-2 text-muted-foreground transition-colors hover:bg-muted/30 hover:text-foreground"
                 >
                   <Plus className="h-4 w-4" />
@@ -1913,6 +1934,8 @@ export default function ProjectPage() {
         {/* Right sidebar - Utility terminal */}
         <div
           ref={shellPanelRef}
+          role="region"
+          aria-label="Shell panel"
           className={cn(
             "h-full flex flex-col overflow-hidden",
             !showShellPanel && "hidden",
@@ -1967,6 +1990,7 @@ export default function ProjectPage() {
                       <Button
                         variant="ghost"
                         size="icon"
+                        aria-label="Natural language terminal"
                         className={cn(
                           "h-6 w-6 shrink-0",
                           showNlt && "text-primary"
@@ -1983,6 +2007,7 @@ export default function ProjectPage() {
                       <Button
                         variant="ghost"
                         size="icon"
+                        aria-label="Search history"
                         className="h-6 w-6 shrink-0"
                         onClick={() => {
                           loadShellHistory();
@@ -2000,6 +2025,7 @@ export default function ProjectPage() {
                 <Button
                   variant="ghost"
                   size="icon"
+                  aria-label="Close shell"
                   className="h-6 w-6 shrink-0"
                   onClick={() => {
                     if (utilityTerminalId) {
@@ -2157,6 +2183,8 @@ export default function ProjectPage() {
 
         {/* Notes Panel */}
         <div
+          role="region"
+          aria-label="Notes panel"
           className={cn(
             "h-full flex flex-col overflow-hidden shrink-0",
             !showNotesPanel && "hidden"
@@ -2198,6 +2226,7 @@ export default function ProjectPage() {
                       <Button
                         variant="ghost"
                         size="icon"
+                        aria-label={markdownEditMode ? "Preview" : "Edit"}
                         className={cn("h-6 w-6", markdownEditMode && "text-primary hover:text-primary")}
                         onClick={() => setMarkdownEditMode(!markdownEditMode)}
                       >
@@ -2212,6 +2241,7 @@ export default function ProjectPage() {
                         <Button
                           variant="ghost"
                           size="icon"
+                          aria-label="Save"
                           className="h-6 w-6"
                           onClick={handleSaveMarkdown}
                         >
@@ -2230,6 +2260,7 @@ export default function ProjectPage() {
                     <Button
                       variant="ghost"
                       size="icon"
+                      aria-label="Save"
                       className="h-6 w-6"
                       onClick={handleSaveMarkdown}
                     >
@@ -2246,6 +2277,7 @@ export default function ProjectPage() {
                     <Button
                       variant="ghost"
                       size="icon"
+                      aria-label="Find"
                       className="h-6 w-6"
                       onClick={handleEditorFind}
                     >
@@ -2258,6 +2290,7 @@ export default function ProjectPage() {
               <Button
                 variant="ghost"
                 size="icon"
+                aria-label="Close file panel"
                 className="h-6 w-6"
                 onClick={handleCloseMarkdownPanel}
               >
@@ -2319,7 +2352,7 @@ export default function ProjectPage() {
             )}
           </div>
         </div>
-      </div>
+      </main>
 
       {/* Settings Sheet */}
       <SettingsSheet

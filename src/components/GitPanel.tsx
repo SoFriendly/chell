@@ -1351,11 +1351,19 @@ export default function GitPanel({ projectPath, projectName, isGitRepo, onRefres
         <ContextMenu>
           <ContextMenuTrigger asChild>
             <div
+              tabIndex={0}
+              role="button"
               className={cn(
                 "relative flex items-center gap-2 rounded pr-8 py-1.5 transition-colors cursor-grab active:cursor-grabbing",
                 isSelected ? "bg-primary/20" : "hover:bg-muted/50"
               )}
               onClick={(e) => handleFileClick(diff.path, index, e)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  toggleFileExpanded(diff.path);
+                }
+              }}
               onDoubleClick={() => {
                 if (isPreviewable(diff.path) && onOpenMarkdown) {
                   onOpenMarkdown(`${projectPath}/${diff.path}`);
@@ -1372,6 +1380,9 @@ export default function GitPanel({ projectPath, projectName, isGitRepo, onRefres
                 <span className="h-3 w-3 shrink-0" /> // Placeholder for alignment
               )}
               <button
+                role="checkbox"
+                aria-checked={filesToCommit.has(diff.path)}
+                aria-label={`Stage ${diff.path} for commit`}
                 onClick={(e) => toggleFileToCommit(diff.path, e)}
                 className={cn(
                   "h-3.5 w-3.5 shrink-0 rounded-sm border flex items-center justify-center transition-colors",
@@ -1384,6 +1395,9 @@ export default function GitPanel({ projectPath, projectName, isGitRepo, onRefres
                   <Check className="h-2.5 w-2.5 text-white" strokeWidth={3} />
                 )}
               </button>
+              <span className="sr-only">
+                {diff.status === "added" ? "New file" : diff.status === "deleted" ? "Deleted" : "Modified"}
+              </span>
               <div className="flex-1 min-w-0">
                 <span className="block break-all font-mono text-xs">{diff.path}</span>
               </div>
@@ -1391,6 +1405,7 @@ export default function GitPanel({ projectPath, projectName, isGitRepo, onRefres
               <Button
                 variant="ghost"
                 size="icon"
+                aria-label={`Discard changes to ${diff.path}`}
                 className="absolute right-5 top-1/2 -translate-y-1/2 h-5 w-5 opacity-0 group-hover:opacity-100 bg-background/80 hover:bg-muted"
                 onClick={(e) => {
                   e.stopPropagation();
@@ -1493,8 +1508,8 @@ export default function GitPanel({ projectPath, projectName, isGitRepo, onRefres
                                   }
                                 }}
                               >
-                                {line.type === "addition" && "+"}
-                                {line.type === "deletion" && "-"}
+                                {line.type === "addition" && <><span className="sr-only">Added: </span>+</>}
+                                {line.type === "deletion" && <><span className="sr-only">Removed: </span>-</>}
                                 {line.type === "context" && " "}
                                 {isEditing ? (
                                   <input
@@ -1710,6 +1725,14 @@ export default function GitPanel({ projectPath, projectName, isGitRepo, onRefres
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden select-none">
+      <h2 className="sr-only">Git Panel</h2>
+      {/* Aria-live region for git operation status */}
+      <div aria-live="polite" aria-atomic="true" className="sr-only">
+        {isPulling && "Pulling from remote..."}
+        {isPushing && "Pushing to remote..."}
+        {isCommitting && "Committing changes..."}
+        {loading && "Refreshing git status..."}
+      </div>
       {/* Floating drag indicator */}
       {draggingFile && (
         <div
@@ -1731,6 +1754,7 @@ export default function GitPanel({ projectPath, projectName, isGitRepo, onRefres
               <Button
                 variant="ghost"
                 size="icon"
+                aria-label={isPulling ? "Pulling..." : status && status.behind > 0 ? `Pull (${status.behind} behind)` : "Pull"}
                 className={cn("h-7 w-7 relative", isPulling && "text-primary")}
                 onClick={handlePull}
                 disabled={isPulling}
@@ -1742,7 +1766,7 @@ export default function GitPanel({ projectPath, projectName, isGitRepo, onRefres
                 )}
                 {!isPulling && status && status.behind > 0 && (
                   <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-blue-500 px-1 text-[9px] font-medium text-white">
-                    {status.behind}
+                    {status.behind}<span className="sr-only"> commits behind</span>
                   </span>
                 )}
               </Button>
@@ -1757,6 +1781,7 @@ export default function GitPanel({ projectPath, projectName, isGitRepo, onRefres
               <Button
                 variant="ghost"
                 size="icon"
+                aria-label={isPushing ? "Pushing..." : status && status.ahead > 0 ? `Push (${status.ahead} ahead)` : "Push"}
                 className={cn("h-7 w-7 relative", isPushing && "text-primary")}
                 onClick={handlePush}
                 disabled={isPushing}
@@ -1768,7 +1793,7 @@ export default function GitPanel({ projectPath, projectName, isGitRepo, onRefres
                 )}
                 {!isPushing && status && status.ahead > 0 && (
                   <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[9px] font-medium text-primary-foreground">
-                    {status.ahead}
+                    {status.ahead}<span className="sr-only"> commits ahead</span>
                   </span>
                 )}
               </Button>
@@ -1783,6 +1808,7 @@ export default function GitPanel({ projectPath, projectName, isGitRepo, onRefres
               <Button
                 variant="ghost"
                 size="icon"
+                aria-label="Refresh"
                 className="h-7 w-7"
                 onClick={onRefresh}
                 disabled={loading}
@@ -1798,6 +1824,7 @@ export default function GitPanel({ projectPath, projectName, isGitRepo, onRefres
               <Button
                 variant="ghost"
                 size="icon"
+                aria-label={viewMode === "history" ? "Show changes" : "Show history"}
                 className={cn("h-7 w-7", viewMode === "history" && "bg-muted text-foreground")}
                 onClick={() => setViewMode(viewMode === "history" ? "changes" : "history")}
               >
@@ -1812,6 +1839,7 @@ export default function GitPanel({ projectPath, projectName, isGitRepo, onRefres
               <Button
                 variant="ghost"
                 size="icon"
+                aria-label={viewMode === "files" ? "Show changes" : "Browse files"}
                 className={cn("h-7 w-7", viewMode === "files" && "bg-muted text-foreground")}
                 onClick={() => setViewMode(viewMode === "files" ? "changes" : "files")}
               >
@@ -2317,6 +2345,7 @@ export default function GitPanel({ projectPath, projectName, isGitRepo, onRefres
                   <Button
                     variant="ghost"
                     size="icon"
+                    aria-label={isSearchOpen ? "Close search" : "Search files"}
                     className={cn("h-5 w-5", isSearchOpen && "text-primary")}
                     onClick={() => {
                       if (isSearchOpen) {
@@ -2379,6 +2408,7 @@ export default function GitPanel({ projectPath, projectName, isGitRepo, onRefres
                     <Button
                       variant="ghost"
                       size="icon"
+                      aria-label="Refresh files"
                       className="h-5 w-5"
                       onClick={() => loadFileTree()}
                       disabled={isLoadingFiles}
@@ -2401,6 +2431,7 @@ export default function GitPanel({ projectPath, projectName, isGitRepo, onRefres
                       if (e.key === "Escape") handleCloseSearch();
                     }}
                     placeholder="Search files and content..."
+                    aria-label="Search files"
                     className="w-full text-xs bg-muted border border-border rounded pl-7 pr-7 py-1.5 outline-none focus:ring-1 focus:ring-primary"
                   />
                   {isSearchingContent && (
@@ -2698,6 +2729,7 @@ export default function GitPanel({ projectPath, projectName, isGitRepo, onRefres
               placeholder="Summary (required)"
               value={commitSubject}
               onChange={(e) => setCommitSubject(e.target.value)}
+              aria-label="Commit summary"
               className={cn("bg-muted/50 text-sm", isGenerating && "pr-8")}
               disabled={isGenerating}
             />
@@ -2711,6 +2743,7 @@ export default function GitPanel({ projectPath, projectName, isGitRepo, onRefres
             placeholder="Description (optional)"
             value={commitDescription}
             onChange={(e) => setCommitDescription(e.target.value)}
+            aria-label="Commit description"
             className="bg-muted/50 text-sm min-h-[60px] resize-none"
             disabled={isGenerating}
           />
@@ -2788,6 +2821,7 @@ export default function GitPanel({ projectPath, projectName, isGitRepo, onRefres
             placeholder="Branch name"
             value={newBranchName}
             onChange={(e) => setNewBranchName(e.target.value)}
+            aria-label="New branch name"
             onKeyDown={(e) => {
               if (e.key === "Enter" && newBranchName.trim()) {
                 handleCreateBranch();

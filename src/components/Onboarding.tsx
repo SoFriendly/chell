@@ -313,7 +313,16 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-background">
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label="Onboarding tour"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-background"
+      onKeyDown={(e) => {
+        if (e.key === "ArrowRight") handleNext();
+        if (e.key === "ArrowLeft") handlePrev();
+      }}
+    >
       {/* Mock UI - exact layout from ProjectPage */}
       <div className="absolute inset-0 flex">
         {/* Horizontal divider line */}
@@ -475,7 +484,7 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
                 <p className="text-xs font-medium uppercase tracking-wider text-primary mb-2">
                   {step.subtitle}
                 </p>
-                <h2 className="text-2xl font-bold mb-4">{step.title}</h2>
+                <h1 className="text-2xl font-bold mb-4">{step.title}</h1>
                 <p className="text-muted-foreground leading-relaxed">
                   {step.description}
                 </p>
@@ -491,6 +500,7 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
                 <button
                   key={index}
                   onClick={() => setCurrentStep(index)}
+                  aria-label={`Go to step ${index + 1}`}
                   className={cn(
                     "w-2 h-2 rounded-full transition-all",
                     index === currentStep
@@ -507,6 +517,7 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
                 variant="ghost"
                 onClick={isFirst ? handleSkip : handlePrev}
                 className="text-muted-foreground"
+                aria-label={isFirst ? "Skip tour" : "Previous step"}
               >
                 {isFirst ? (
                   "Skip"
@@ -521,6 +532,7 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
               <Button
                 onClick={handleNext}
                 className="bg-primary hover:bg-primary/90 text-white"
+                aria-label={isLast ? "Get started" : "Next step"}
               >
                 {isLast ? (
                   <>

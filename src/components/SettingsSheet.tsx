@@ -341,7 +341,7 @@ export default function SettingsSheet({ open, onOpenChange }: SettingsSheetProps
                 <div className="space-y-8">
                   {/* Git Configuration Section */}
                   <section>
-                    <h2 className="text-lg font-semibold">Git Configuration</h2>
+                    <h3 className="text-lg font-semibold">Git Configuration</h3>
                     <p className="text-sm text-muted-foreground mb-6">
                       Manage your global git identity and repository behaviors.
                     </p>
@@ -363,6 +363,7 @@ export default function SettingsSheet({ open, onOpenChange }: SettingsSheetProps
                               setDefaultClonePath(e.target.value || undefined);
                             }}
                             placeholder="~/Projects"
+                            aria-label="Default clone path"
                             className="w-56 h-9 bg-muted/50"
                           />
                           <Button
@@ -370,6 +371,7 @@ export default function SettingsSheet({ open, onOpenChange }: SettingsSheetProps
                             size="icon"
                             className="h-9 w-9"
                             onClick={handleSelectDefaultClonePath}
+                            aria-label="Browse for default clone path"
                           >
                             <FolderOpen className="h-4 w-4" />
                           </Button>
@@ -402,6 +404,7 @@ export default function SettingsSheet({ open, onOpenChange }: SettingsSheetProps
                           value={preferredEditor || ""}
                           onChange={(e) => setPreferredEditor(e.target.value || undefined)}
                           placeholder="nvim"
+                          aria-label="Preferred terminal editor"
                           className="w-32 h-9 bg-muted/50 font-mono text-sm"
                         />
                       </div>
@@ -428,7 +431,7 @@ export default function SettingsSheet({ open, onOpenChange }: SettingsSheetProps
               {activeTab === "assistants" && (
                 <div className="space-y-8">
                   <section>
-                    <h2 className="text-lg font-semibold">AI Coding Assistants</h2>
+                    <h3 className="text-lg font-semibold">AI Coding Assistants</h3>
                     <p className="text-sm text-muted-foreground mb-6">
                       Configure which AI assistants are available and set your default.
                     </p>
@@ -488,7 +491,7 @@ export default function SettingsSheet({ open, onOpenChange }: SettingsSheetProps
                                   size="icon"
                                   className="h-8 w-8"
                                   onClick={() => toggleAssistantHidden(assistant.id)}
-                                  title={isHidden ? "Show in menu" : "Hide from menu"}
+                                  aria-label={isHidden ? `Show ${assistant.name}` : `Hide ${assistant.name}`}
                                 >
                                   {isHidden ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
                                 </Button>
@@ -527,6 +530,7 @@ export default function SettingsSheet({ open, onOpenChange }: SettingsSheetProps
                                     size="icon"
                                     className="h-8 w-8"
                                     onClick={() => window.open(assistant.docsUrl, "_blank")}
+                                    aria-label={`Open ${assistant.name} documentation`}
                                   >
                                     <ExternalLink className="h-3.5 w-3.5" />
                                   </Button>
@@ -537,6 +541,7 @@ export default function SettingsSheet({ open, onOpenChange }: SettingsSheetProps
                                     size="icon"
                                     className="h-8 w-8 text-destructive hover:text-destructive"
                                     onClick={() => handleRemoveCustomAssistant(assistant.id, assistant.name)}
+                                    aria-label={`Remove ${assistant.name}`}
                                   >
                                     <Trash2 className="h-3.5 w-3.5" />
                                   </Button>
@@ -556,6 +561,7 @@ export default function SettingsSheet({ open, onOpenChange }: SettingsSheetProps
                                     }))}
                                     onBlur={() => handleSaveAssistantArgs(argsKey, assistantArgsState[argsKey] || "")}
                                     placeholder="--flag value"
+                                    aria-label={`Launch arguments for ${assistant.name}`}
                                     className="w-64 h-8 text-xs bg-muted/50"
                                   />
                                 </div>
@@ -665,7 +671,7 @@ export default function SettingsSheet({ open, onOpenChange }: SettingsSheetProps
               {activeTab === "appearance" && (
                 <div className="space-y-8">
                   <section>
-                    <h2 className="text-lg font-semibold">Appearance</h2>
+                    <h3 className="text-lg font-semibold">Appearance</h3>
                     <p className="text-sm text-muted-foreground mb-6">
                       Customize the look and feel of your terminal environment.
                     </p>
@@ -703,7 +709,7 @@ export default function SettingsSheet({ open, onOpenChange }: SettingsSheetProps
 
                   {theme === "custom" && (
                     <section>
-                      <h2 className="text-lg font-semibold">Customize Theme</h2>
+                      <h3 className="text-lg font-semibold">Customize Theme</h3>
                       <p className="text-sm text-muted-foreground mb-4">
                         Set your own colors using hex values.
                       </p>
@@ -717,7 +723,7 @@ export default function SettingsSheet({ open, onOpenChange }: SettingsSheetProps
               {activeTab === "ai" && (
                 <div className="space-y-8">
                   <section>
-                    <h2 className="text-lg font-semibold">AI Shell</h2>
+                    <h3 className="text-lg font-semibold">AI Shell</h3>
                     <p className="text-sm text-muted-foreground mb-6">
                       Configure the AI-powered shell command assistant.
                     </p>
@@ -748,6 +754,7 @@ export default function SettingsSheet({ open, onOpenChange }: SettingsSheetProps
                             }
                           }}
                           placeholder="gsk_..."
+                          aria-label="API key"
                           className="w-56 h-9 bg-muted/50 font-mono text-xs"
                         />
                       </div>
@@ -755,7 +762,7 @@ export default function SettingsSheet({ open, onOpenChange }: SettingsSheetProps
                   </section>
 
                   <section>
-                    <h2 className="text-lg font-semibold">AI Behavior</h2>
+                    <h3 className="text-lg font-semibold">AI Behavior</h3>
                     <p className="text-sm text-muted-foreground mb-6">
                       Tune how AI interacts with your workflow and code.
                     </p>
@@ -792,7 +799,7 @@ export default function SettingsSheet({ open, onOpenChange }: SettingsSheetProps
               {activeTab === "keyboard" && (
                 <div className="space-y-8">
                   <section>
-                    <h2 className="text-lg font-semibold">Keyboard Shortcuts</h2>
+                    <h3 className="text-lg font-semibold">Keyboard Shortcuts</h3>
                     <p className="text-sm text-muted-foreground mb-6">
                       Global hotkeys for rapid terminal operations.
                     </p>
@@ -840,7 +847,7 @@ export default function SettingsSheet({ open, onOpenChange }: SettingsSheetProps
               {activeTab === "about" && (
                 <div className="space-y-8">
                   <section>
-                    <h2 className="text-lg font-semibold">About Chell</h2>
+                    <h3 className="text-lg font-semibold">About Chell</h3>
                     <p className="text-sm text-muted-foreground mb-6">
                       Think in changes, not commands.
                     </p>

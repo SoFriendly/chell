@@ -307,7 +307,7 @@ export default function NotesPanel({ projectPath, onNoteDropAtPosition }: NotesP
           <div className="flex items-center gap-1 min-w-0 flex-1">
             <Tooltip delayDuration={0}>
               <TooltipTrigger asChild>
-                <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={handleBack}>
+                <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={handleBack} aria-label="Back to notes list">
                   <ArrowLeft className="h-3.5 w-3.5" />
                 </Button>
               </TooltipTrigger>
@@ -321,7 +321,7 @@ export default function NotesPanel({ projectPath, onNoteDropAtPosition }: NotesP
             {editing ? (
               <Tooltip delayDuration={0}>
                 <TooltipTrigger asChild>
-                  <Button variant="ghost" size="icon" className="h-6 w-6" onClick={handleSaveNote}>
+                  <Button variant="ghost" size="icon" className="h-6 w-6" onClick={handleSaveNote} aria-label="Save note">
                     <Save className="h-3 w-3" />
                   </Button>
                 </TooltipTrigger>
@@ -335,6 +335,7 @@ export default function NotesPanel({ projectPath, onNoteDropAtPosition }: NotesP
                     size="icon"
                     className="h-6 w-6"
                     onClick={() => setEditing(true)}
+                    aria-label="Edit note"
                   >
                     <Pencil className="h-3 w-3" />
                   </Button>
@@ -346,7 +347,7 @@ export default function NotesPanel({ projectPath, onNoteDropAtPosition }: NotesP
               <Tooltip delayDuration={0}>
                 <TooltipTrigger asChild>
                   <AlertDialogTrigger asChild>
-                    <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive">
+                    <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive" aria-label="Delete note">
                       <Trash2 className="h-3 w-3" />
                     </Button>
                   </AlertDialogTrigger>
@@ -377,6 +378,7 @@ export default function NotesPanel({ projectPath, onNoteDropAtPosition }: NotesP
             <Textarea
               value={editContent}
               onChange={(e) => setEditContent(e.target.value)}
+              aria-label="Note content"
               className="h-full w-full resize-none rounded-none border-0 text-sm focus-visible:ring-0 focus-visible:ring-offset-0"
               placeholder="Write your note..."
             />
@@ -411,7 +413,7 @@ export default function NotesPanel({ projectPath, onNoteDropAtPosition }: NotesP
         </div>
         <Tooltip delayDuration={0}>
           <TooltipTrigger asChild>
-            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={handleCreateNote}>
+            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={handleCreateNote} aria-label="Create new note">
               <Plus className="h-3.5 w-3.5" />
             </Button>
           </TooltipTrigger>
