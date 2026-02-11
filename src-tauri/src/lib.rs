@@ -821,6 +821,11 @@ fn get_history(repo_path: String, limit: u32) -> Result<Vec<Commit>, String> {
 }
 
 #[tauri::command]
+fn get_commit_diff(repo_path: String, commit_id: String) -> Result<Vec<FileDiff>, String> {
+    GitService::get_commit_diff(&repo_path, &commit_id)
+}
+
+#[tauri::command]
 fn discard_file(repo_path: String, file_path: String) -> Result<(), String> {
     GitService::discard_file(&repo_path, &file_path)
 }
@@ -2670,6 +2675,7 @@ pub fn run() {
             checkout_branch,
             create_branch,
             get_history,
+            get_commit_diff,
             discard_file,
             add_to_gitignore,
             get_remote_url,

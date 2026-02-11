@@ -2,6 +2,29 @@
 
 All notable changes to Chell will be documented in this file.
 
+## [0.1.76]
+
+### New Features
+- Add "Check for Updates..." menu item to the macOS app menu
+- Add "Open Remote URL" context menu on project/folder name in the Git panel
+  - Converts SSH remote URLs to HTTPS and strips trailing `.git` before opening
+- Add expandable commit history with inline file diffs
+  - Click a commit to see the list of files changed
+  - Click a file to expand its diff inline with the same green/red line coloring as the changes view
+  - Diffs are cached after first fetch for instant re-expand
+  - Right-click files for Open, Open Here, Reveal in Finder, Open in editor, and Copy Path
+  - File actions are hidden for deleted files to prevent crashes
+- Redesign commit history items to match GitHub's style
+  - Commit message is now the primary prominent text
+  - Author and timestamp shown on a secondary line with commit icon
+  - SHA hidden from the row (accessible via right-click > Copy SHA)
+
+### Bug Fixes
+- Fix terminals not being properly destroyed on close
+  - Kill child shell processes explicitly via PID (SIGHUP on Unix) when terminals are removed
+  - Kill all terminal sessions when a project window or terminal window is closed
+  - Portal mobile `kill_terminal` message now properly cleans up the backend process
+
 ## [0.1.75]
 
 ### Window Management

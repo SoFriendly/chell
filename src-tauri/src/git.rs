@@ -726,6 +726,112 @@ impl GitService {
         Ok(())
     }
 
+    pub fn get_commit_diff(repo_path: &str, commit_id: &str) -> Result<Vec<FileDiff>, String> {
+        use std::cell::RefCell;
+        use std::collections::HashMap;
+
+        let repo = Repository::open(repo_path).map_err(|e| e.to_string())?;
+        let oid = git2::Oid::from_str(commit_id).map_err(|e| e.to_string())?;
+        let commit = repo.find_commit(oid).map_err(|e| e.to_string())?;
+        let tree = commit.tree().map_err(|e| e.to_string())?;
+
+        let parent_tree = if commit.parent_count() > 0 {
+            Some(commit.parent(0).map_err(|e| e.to_string())?.tree().map_err(|e| e.to_string())?)
+        } else {
+            None
+        };
+
+        let diff = repo
+            .diff_tree_to_tree(parent_tree.as_ref(), Some(&tree), None)
+            .map_err(|e| e.to_string())?;
+
+        let diffs: RefCell<HashMap<String, FileDiff>> = RefCell::new(HashMap::new());
+
+        diff.foreach(
+            &mut |delta, _| {
+                let path = delta
+                    .new_file()
+                    .path()
+                    .or_else(|| delta.old_file().path())
+                    .map(|p| p.to_string_lossy().to_string())
+                    .unwrap_or_default();
+
+                let status = match delta.status() {
+                    git2::Delta::Added | git2::Delta::Untracked => "added",
+                    git2::Delta::Deleted => "deleted",
+                    git2::Delta::Modified => "modified",
+                    git2::Delta::Renamed => "renamed",
+                    _ => "modified",
+                }
+                .to_string();
+
+                diffs.borrow_mut().insert(path.clone(), FileDiff {
+                    path,
+                    status,
+                    hunks: Vec::new(),
+                });
+
+                true
+            },
+            None,
+            Some(&mut |delta, hunk| {
+                let path = delta
+                    .new_file()
+                    .path()
+                    .or_else(|| delta.old_file().path())
+                    .map(|p| p.to_string_lossy().to_string())
+                    .unwrap_or_default();
+
+                if let Some(file_diff) = diffs.borrow_mut().get_mut(&path) {
+                    file_diff.hunks.push(DiffHunk {
+                        old_start: hunk.old_start(),
+                        old_lines: hunk.old_lines(),
+                        new_start: hunk.new_start(),
+                        new_lines: hunk.new_lines(),
+                        lines: Vec::new(),
+                    });
+                }
+
+                true
+            }),
+            Some(&mut |delta, _hunk, line| {
+                let path = delta
+                    .new_file()
+                    .path()
+                    .or_else(|| delta.old_file().path())
+                    .map(|p| p.to_string_lossy().to_string())
+                    .unwrap_or_default();
+
+                let line_type = match line.origin() {
+                    '+' => "addition",
+                    '-' => "deletion",
+                    _ => "context",
+                }
+                .to_string();
+
+                let content = String::from_utf8_lossy(line.content()).to_string();
+
+                if let Some(file_diff) = diffs.borrow_mut().get_mut(&path) {
+                    if let Some(hunk) = file_diff.hunks.last_mut() {
+                        hunk.lines.push(DiffLine {
+                            line_type,
+                            content: content.trim_end_matches('\n').to_string(),
+                            old_line_no: line.old_lineno(),
+                            new_line_no: line.new_lineno(),
+                        });
+                    }
+                }
+
+                true
+            }),
+        )
+        .map_err(|e| e.to_string())?;
+
+        let mut result: Vec<FileDiff> = diffs.into_inner().into_values().collect();
+        result.sort_by(|a, b| a.path.cmp(&b.path));
+        Ok(result)
+    }
+
     pub fn get_remote_url(repo_path: &str) -> Result<String, String> {
         let repo = Repository::open(repo_path).map_err(|e| e.to_string())?;
         let remote = repo

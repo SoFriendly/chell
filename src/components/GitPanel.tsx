@@ -185,6 +185,11 @@ export default function GitPanel({ projectPath, projectName, isGitRepo, onRefres
   const [showDiscardSelectedDialog, setShowDiscardSelectedDialog] = useState(false);
   const [isDiscardingSelected, setIsDiscardingSelected] = useState(false);
   const [viewMode, setViewMode] = useState<"changes" | "history" | "files">("changes");
+  // Expandable commit history state
+  const [expandedCommits, setExpandedCommits] = useState<Set<string>>(new Set());
+  const [commitDiffs, setCommitDiffs] = useState<Map<string, FileDiff[]>>(new Map());
+  const [expandedCommitFiles, setExpandedCommitFiles] = useState<Set<string>>(new Set());
+  const [loadingCommitDiffs, setLoadingCommitDiffs] = useState<Set<string>>(new Set());
   const [commitToReset, setCommitToReset] = useState<string | null>(null);
   const [isResetting, setIsResetting] = useState(false);
   const [isUndoing, setIsUndoing] = useState(false);
@@ -1064,6 +1069,50 @@ export default function GitPanel({ projectPath, projectName, isGitRepo, onRefres
       toast.error("Failed to revert commit");
       console.error(error);
     }
+  };
+
+  const toggleCommitExpand = async (commitId: string) => {
+    const next = new Set(expandedCommits);
+    if (next.has(commitId)) {
+      next.delete(commitId);
+    } else {
+      next.add(commitId);
+      // Fetch diff if not cached
+      if (!commitDiffs.has(commitId)) {
+        setLoadingCommitDiffs(prev => new Set(prev).add(commitId));
+        try {
+          const diffs = await invoke<FileDiff[]>("get_commit_diff", {
+            repoPath: projectPath,
+            commitId,
+          });
+          setCommitDiffs(prev => new Map(prev).set(commitId, diffs));
+        } catch (error) {
+          toast.error("Failed to load commit diff");
+          console.error(error);
+          next.delete(commitId);
+        } finally {
+          setLoadingCommitDiffs(prev => {
+            const s = new Set(prev);
+            s.delete(commitId);
+            return s;
+          });
+        }
+      }
+    }
+    setExpandedCommits(next);
+  };
+
+  const toggleCommitFile = (commitId: string, filePath: string) => {
+    const key = `${commitId}:${filePath}`;
+    setExpandedCommitFiles(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) {
+        next.delete(key);
+      } else {
+        next.add(key);
+      }
+      return next;
+    });
   };
 
   const handleDiscardFile = async (filePath: string) => {
@@ -2012,43 +2061,173 @@ export default function GitPanel({ projectPath, projectName, isGitRepo, onRefres
                 Commit History
               </h3>
               {history.length > 0 ? (
-                history.map((commit) => (
-                  <ContextMenu key={commit.id}>
-                    <ContextMenuTrigger asChild>
-                      <div className="group flex flex-col gap-0.5 rounded px-2 py-1.5 hover:bg-muted/50 cursor-pointer overflow-hidden">
-                        <div className="flex items-center gap-2 min-w-0">
-                          <GitCommit className="h-3 w-3 shrink-0 text-muted-foreground" />
-                          <span className="font-mono text-[10px] text-primary shrink-0">{commit.shortId}</span>
-                          <span className="text-xs break-words min-w-0">{commit.message.split('\n')[0]}</span>
+                history.map((commit) => {
+                  const isExpanded = expandedCommits.has(commit.id);
+                  const isLoading = loadingCommitDiffs.has(commit.id);
+                  const fileDiffs = commitDiffs.get(commit.id);
+
+                  return (
+                    <div key={commit.id}>
+                      <ContextMenu>
+                        <ContextMenuTrigger asChild>
+                          <div
+                            className={cn(
+                              "group flex items-start gap-2 rounded px-2 py-2 hover:bg-muted/50 cursor-pointer overflow-hidden",
+                              isExpanded && "bg-muted/30"
+                            )}
+                            onClick={() => toggleCommitExpand(commit.id)}
+                          >
+                            <div className="pt-0.5 shrink-0">
+                              {isLoading ? (
+                                <Loader2 className="h-3 w-3 text-muted-foreground animate-spin" />
+                              ) : isExpanded ? (
+                                <ChevronDown className="h-3 w-3 text-muted-foreground" />
+                              ) : (
+                                <ChevronRight className="h-3 w-3 text-muted-foreground" />
+                              )}
+                            </div>
+                            <div className="flex flex-col gap-0.5 min-w-0">
+                              <span className="text-xs font-medium leading-snug break-words">{commit.message.split('\n')[0]}</span>
+                              <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
+                                <GitCommit className="h-3 w-3 shrink-0" />
+                                <span className="truncate">{commit.author}</span>
+                                <span className="shrink-0">·</span>
+                                <span className="shrink-0">{formatTimestamp(commit.timestamp)}</span>
+                              </div>
+                            </div>
+                          </div>
+                        </ContextMenuTrigger>
+                        <ContextMenuContent>
+                          <ContextMenuItem onClick={() => {
+                            navigator.clipboard.writeText(commit.id);
+                            toast.success("SHA copied to clipboard");
+                          }}>
+                            <Copy className="mr-2 h-4 w-4" />
+                            Copy SHA
+                          </ContextMenuItem>
+                          <ContextMenuSeparator />
+                          <ContextMenuItem onClick={() => handleRevertCommit(commit.id)}>
+                            <RotateCcw className="mr-2 h-4 w-4" />
+                            Revert this commit
+                          </ContextMenuItem>
+                          <ContextMenuSeparator />
+                          <ContextMenuItem onClick={() => setCommitToReset(commit.id)}>
+                            <Undo2 className="mr-2 h-4 w-4" />
+                            Reset to this commit...
+                          </ContextMenuItem>
+                        </ContextMenuContent>
+                      </ContextMenu>
+
+                      {/* Expanded commit file list */}
+                      {isExpanded && fileDiffs && (
+                        <div className="ml-5 mt-1 mb-2 space-y-0.5">
+                          {fileDiffs.length === 0 ? (
+                            <div className="text-[10px] text-muted-foreground px-2 py-1">No file changes</div>
+                          ) : (
+                            fileDiffs.map((diff) => {
+                              const fileKey = `${commit.id}:${diff.path}`;
+                              const isFileExpanded = expandedCommitFiles.has(fileKey);
+
+                              const fileExists = diff.status !== "deleted";
+
+                              return (
+                                <div key={diff.path}>
+                                  <ContextMenu>
+                                    <ContextMenuTrigger asChild>
+                                      <div
+                                        className="flex items-center gap-2 rounded px-2 py-1 hover:bg-muted/50 cursor-pointer"
+                                        onClick={() => toggleCommitFile(commit.id, diff.path)}
+                                      >
+                                        {diff.hunks.length > 0 ? (
+                                          isFileExpanded ? (
+                                            <ChevronDown className="h-3 w-3 shrink-0 text-muted-foreground" />
+                                          ) : (
+                                            <ChevronRight className="h-3 w-3 shrink-0 text-muted-foreground" />
+                                          )
+                                        ) : (
+                                          <span className="h-3 w-3 shrink-0" />
+                                        )}
+                                        <span className={cn(
+                                          "h-2 w-2 shrink-0 rounded-full",
+                                          getStatusColor(diff.status)
+                                        )} />
+                                        <span className="font-mono text-[10px] break-all min-w-0">{diff.path}</span>
+                                      </div>
+                                    </ContextMenuTrigger>
+                                    <ContextMenuContent>
+                                      {fileExists && (
+                                        <ContextMenuItem onClick={() => handleOpenFile(diff.path)}>
+                                          <ExternalLink className="mr-2 h-4 w-4" />
+                                          Open
+                                        </ContextMenuItem>
+                                      )}
+                                      {fileExists && isPreviewable(diff.path) && onOpenMarkdown && (
+                                        <ContextMenuItem onClick={() => onOpenMarkdown(`${projectPath}/${diff.path}`)}>
+                                          <FileIcon className="mr-2 h-4 w-4" />
+                                          Open Here
+                                        </ContextMenuItem>
+                                      )}
+                                      {fileExists && (
+                                        <ContextMenuItem onClick={() => handleRevealInFileManager(diff.path)}>
+                                          <FolderOpen className="mr-2 h-4 w-4" />
+                                          {getRevealLabel()}
+                                        </ContextMenuItem>
+                                      )}
+                                      {fileExists && preferredEditor && (
+                                        <ContextMenuItem onClick={() => handleOpenInTerminalEditor(diff.path)}>
+                                          <SquareTerminal className="mr-2 h-4 w-4" />
+                                          Open in {preferredEditor}
+                                        </ContextMenuItem>
+                                      )}
+                                      {fileExists && <ContextMenuSeparator />}
+                                      <ContextMenuItem onClick={() => handleCopyPath(diff.path)}>
+                                        <Copy className="mr-2 h-4 w-4" />
+                                        Copy Path
+                                      </ContextMenuItem>
+                                    </ContextMenuContent>
+                                  </ContextMenu>
+
+                                  {/* Inline diff for expanded file */}
+                                  {isFileExpanded && diff.hunks.length > 0 && (
+                                    <div className="ml-5 mt-1 overflow-hidden rounded bg-[#0d0d0d]">
+                                      <div className="p-2 select-text">
+                                        <div className="font-mono text-[10px] leading-relaxed">
+                                          {diff.hunks.map((hunk, hi) => (
+                                            <div key={hi}>
+                                              <div className="text-muted-foreground">
+                                                @@ -{hunk.oldStart},{hunk.oldLines} +{hunk.newStart},{hunk.newLines} @@
+                                              </div>
+                                              {hunk.lines.map((line, li) => (
+                                                <div
+                                                  key={li}
+                                                  className={cn(
+                                                    "whitespace-pre-wrap break-words",
+                                                    line.type === "addition" && "bg-green-500/10 text-green-400",
+                                                    line.type === "deletion" && "bg-red-500/10 text-red-400",
+                                                    line.type === "context" && "text-muted-foreground"
+                                                  )}
+                                                >
+                                                  {line.type === "addition" && "+"}
+                                                  {line.type === "deletion" && "-"}
+                                                  {line.type === "context" && " "}
+                                                  {line.content}
+                                                </div>
+                                              ))}
+                                            </div>
+                                          ))}
+                                        </div>
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })
+                          )}
                         </div>
-                        <div className="ml-5 flex items-center gap-2 text-[10px] text-muted-foreground min-w-0">
-                          <span className="truncate min-w-0">{commit.author}</span>
-                          <span className="shrink-0">·</span>
-                          <span className="shrink-0">{formatTimestamp(commit.timestamp)}</span>
-                        </div>
-                      </div>
-                    </ContextMenuTrigger>
-                    <ContextMenuContent>
-                      <ContextMenuItem onClick={() => {
-                        navigator.clipboard.writeText(commit.id);
-                        toast.success("SHA copied to clipboard");
-                      }}>
-                        <Copy className="mr-2 h-4 w-4" />
-                        Copy SHA
-                      </ContextMenuItem>
-                      <ContextMenuSeparator />
-                      <ContextMenuItem onClick={() => handleRevertCommit(commit.id)}>
-                        <RotateCcw className="mr-2 h-4 w-4" />
-                        Revert this commit
-                      </ContextMenuItem>
-                      <ContextMenuSeparator />
-                      <ContextMenuItem onClick={() => setCommitToReset(commit.id)}>
-                        <Undo2 className="mr-2 h-4 w-4" />
-                        Reset to this commit...
-                      </ContextMenuItem>
-                    </ContextMenuContent>
-                  </ContextMenu>
-                ))
+                      )}
+                    </div>
+                  );
+                })
               ) : (
                 <div className="flex h-full flex-col items-center justify-center p-6">
                   <div className="flex flex-col items-center text-center max-w-[200px]">
