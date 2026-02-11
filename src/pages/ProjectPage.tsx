@@ -280,7 +280,7 @@ interface AssistantOption {
 export default function ProjectPage() {
   const { projectId } = useParams<{ projectId: string }>();
   const navigate = useNavigate();
-  const { projects, openTab, addFolderToProject, updateProject, addProject } = useProjectStore();
+  const { projects, openTab, addFolderToProject, removeFolderFromProject, updateProject, addProject } = useProjectStore();
   const { setStatus, setDiffs, setBranches, setHistory, setLoading } = useGitStore();
   const { assistantArgs, defaultAssistant, autoFetchRemote, theme, customTheme, customAssistants, hiddenAssistantIds } = useSettingsStore();
 
@@ -748,6 +748,15 @@ export default function ProjectPage() {
       loadProjectFromBackend();
     }
   }, [projectId, projects, currentProject?.id]);
+
+  // Sync local currentProject state when the store's project data changes (e.g. folder add/remove)
+  useEffect(() => {
+    if (!currentProject) return;
+    const updatedProject = projects.find((p) => p.id === currentProject.id);
+    if (updatedProject && updatedProject !== currentProject) {
+      setCurrentProject(updatedProject);
+    }
+  }, [projects]);
 
   // Check installed assistants on mount
   useEffect(() => {
@@ -1617,6 +1626,7 @@ export default function ProjectPage() {
             shellCwd={shellCwd}
             folders={currentProject.folders}
             onAddFolder={handleAddFolder}
+            onRemoveFolder={(folderId) => removeFolderFromProject(currentProject.id, folderId)}
             workspaceName={currentProject.name}
             onRenameWorkspace={handleRenameWorkspace}
             onSaveWorkspace={handleSaveProject}

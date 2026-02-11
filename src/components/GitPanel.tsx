@@ -28,6 +28,7 @@ import {
   Pencil,
   Copy,
   FolderOpen,
+  FolderMinus,
   EyeOff,
   ExternalLink,
   SquareTerminal,
@@ -89,6 +90,7 @@ interface GitPanelProps {
   shellCwd?: string; // Current working directory from terminal (Issue #7)
   folders?: ProjectFolder[]; // All folders in the project (Issue #6)
   onAddFolder?: () => void; // Callback to add a new folder
+  onRemoveFolder?: (folderId: string) => void; // Callback to remove a folder from workspace
   workspaceName?: string; // Custom workspace name (Issue #6)
   onRenameWorkspace?: (name: string) => void; // Callback to rename workspace
   onSaveWorkspace?: () => void; // Callback to save workspace file
@@ -153,7 +155,7 @@ const isPreviewable = (path: string): boolean => {
   return !binaryExtensions.some(ext => lower.endsWith(ext));
 };
 
-export default function GitPanel({ projectPath, projectName, isGitRepo, onRefresh, onInitRepo, onOpenMarkdown, shellCwd, folders, onAddFolder, workspaceName, onRenameWorkspace, onSaveWorkspace }: GitPanelProps) {
+export default function GitPanel({ projectPath, projectName, isGitRepo, onRefresh, onInitRepo, onOpenMarkdown, shellCwd, folders, onAddFolder, onRemoveFolder, workspaceName, onRenameWorkspace, onSaveWorkspace }: GitPanelProps) {
   const { diffs, branches, loading, status, history } = useGitStore();
   const { autoCommitMessage, groqApiKey, preferredEditor, showHiddenFiles } = useSettingsStore();
   // Track the current root path for the file tree (can be changed by cd command)
@@ -215,6 +217,7 @@ export default function GitPanel({ projectPath, projectName, isGitRepo, onRefres
   const hasGeneratedInitialMessage = useRef(false);
   const pendingAutoGenerate = useRef(false);
   const lastClickedIndex = useRef<number>(-1);
+  const justDraggedRef = useRef(false);
 
   const currentBranch = branches.find((b) => b.isHead);
   const localBranches = branches.filter((b) => !b.isRemote);
@@ -629,7 +632,7 @@ export default function GitPanel({ projectPath, projectName, isGitRepo, onRefres
   };
 
   // Custom drag using mouse events (bypasses Tauri's drop interception)
-  const handleFileDragStart = (e: React.MouseEvent, filePath: string, isDir = false) => {
+  const handleFileDragStart = (e: React.MouseEvent, filePath: string, isDir = false, basePath?: string) => {
     // Only start drag on left mouse button
     if (e.button !== 0) return;
 
@@ -637,8 +640,9 @@ export default function GitPanel({ projectPath, projectName, isGitRepo, onRefres
     const target = e.target as HTMLElement;
     if (target.closest('button, input, [role="menuitem"]')) return;
 
-    const fullPath = `"${projectPath}/${filePath}"`;
-    const fileName = filePath.split("/").pop() || filePath;
+    const effectivePath = basePath || projectPath;
+    const fullPath = filePath ? `"${effectivePath}/${filePath}"` : `"${effectivePath}"`;
+    const fileName = filePath ? (filePath.split("/").pop() || filePath) : (effectivePath.split("/").pop() || effectivePath);
     const startX = e.clientX;
     const startY = e.clientY;
     const DRAG_THRESHOLD = 5; // pixels before drag starts
@@ -665,6 +669,8 @@ export default function GitPanel({ projectPath, projectName, isGitRepo, onRefres
       if (isDragging) {
         document.body.style.cursor = "";
         setDraggingFile(null);
+        justDraggedRef.current = true;
+        setTimeout(() => { justDraggedRef.current = false; }, 100);
         // Don't clear path immediately - let terminal clear it after writing
         // Just clean up after a delay as fallback
         setTimeout(() => {
@@ -679,15 +685,15 @@ export default function GitPanel({ projectPath, projectName, isGitRepo, onRefres
     document.addEventListener("mouseup", handleMouseUp);
   };
 
-  const handleCopyPath = (filePath: string) => {
-    const fullPath = `${projectPath}/${filePath}`;
+  const handleCopyPath = (filePath: string, basePath?: string) => {
+    const fullPath = `${basePath || projectPath}/${filePath}`;
     navigator.clipboard.writeText(fullPath);
     toast.success("Path copied to clipboard");
   };
 
-  const handleDeleteFile = async (filePath: string) => {
+  const handleDeleteFile = async (filePath: string, basePath?: string) => {
     try {
-      await invoke("delete_file", { path: `${projectPath}/${filePath}` });
+      await invoke("delete_file", { path: `${basePath || projectPath}/${filePath}` });
       toast.success("File deleted");
       loadFileTree();
       onRefresh();
@@ -702,7 +708,7 @@ export default function GitPanel({ projectPath, projectName, isGitRepo, onRefres
     setRenameValue(currentName);
   };
 
-  const handleFinishRename = async (oldPath: string) => {
+  const handleFinishRename = async (oldPath: string, basePath?: string) => {
     if (!renameValue.trim() || renameValue === oldPath.split('/').pop()) {
       setRenamingFile(null);
       return;
@@ -710,11 +716,12 @@ export default function GitPanel({ projectPath, projectName, isGitRepo, onRefres
 
     const dir = oldPath.includes('/') ? oldPath.substring(0, oldPath.lastIndexOf('/') + 1) : '';
     const newPath = dir + renameValue;
+    const effectivePath = basePath || projectPath;
 
     try {
       await invoke("rename_file", {
-        oldPath: `${projectPath}/${oldPath}`,
-        newPath: `${projectPath}/${newPath}`
+        oldPath: `${effectivePath}/${oldPath}`,
+        newPath: `${effectivePath}/${newPath}`
       });
       toast.success("File renamed");
       setRenamingFile(null);
@@ -726,12 +733,12 @@ export default function GitPanel({ projectPath, projectName, isGitRepo, onRefres
     }
   };
 
-  const handleOpenFile = (filePath: string) => {
-    invoke("open_in_finder", { path: `${projectPath}/${filePath}` });
+  const handleOpenFile = (filePath: string, basePath?: string) => {
+    invoke("open_in_finder", { path: `${basePath || projectPath}/${filePath}` });
   };
 
-  const handleRevealInFileManager = (filePath: string) => {
-    invoke("reveal_in_file_manager", { path: `${projectPath}/${filePath}` });
+  const handleRevealInFileManager = (filePath: string, basePath?: string) => {
+    invoke("reveal_in_file_manager", { path: `${basePath || projectPath}/${filePath}` });
   };
 
   // Platform-specific label for revealing files in file manager
@@ -742,13 +749,14 @@ export default function GitPanel({ projectPath, projectName, isGitRepo, onRefres
     return 'Show in File Manager';
   };
 
-  const handleOpenInTerminalEditor = async (filePath: string) => {
+  const handleOpenInTerminalEditor = async (filePath: string, basePath?: string) => {
     if (!preferredEditor) {
       toast.error("No preferred editor set. Configure it in Settings.");
       return;
     }
 
-    const fullPath = `${projectPath}/${filePath}`;
+    const effectivePath = basePath || projectPath;
+    const fullPath = `${effectivePath}/${filePath}`;
     const fileName = filePath.split("/").pop() || filePath;
     const title = `${preferredEditor} - ${fileName}`;
 
@@ -756,7 +764,7 @@ export default function GitPanel({ projectPath, projectName, isGitRepo, onRefres
       const params = new URLSearchParams({
         editor: preferredEditor,
         file: fullPath,
-        cwd: projectPath,
+        cwd: effectivePath,
         title,
       });
 
@@ -1131,9 +1139,9 @@ export default function GitPanel({ projectPath, projectName, isGitRepo, onRefres
     }
   };
 
-  const handleAddToGitignore = async (filePath: string) => {
+  const handleAddToGitignore = async (filePath: string, basePath?: string) => {
     try {
-      await invoke("add_to_gitignore", { repoPath: projectPath, pattern: filePath });
+      await invoke("add_to_gitignore", { repoPath: basePath || projectPath, pattern: filePath });
       toast.success(`Added ${filePath} to .gitignore`);
       onRefresh();
     } catch (error) {
@@ -1593,14 +1601,12 @@ export default function GitPanel({ projectPath, projectName, isGitRepo, onRefres
         <div key={node.path}>
           {node.isDir ? (
             <>
-              <div
-                onMouseDown={(e) => handleFileDragStart(e, node.path, true)}
-              >
               <ContextMenu>
                 <ContextMenuTrigger asChild>
                   <div
                     className="flex items-center gap-1.5 py-1 px-1 rounded hover:bg-muted/50 cursor-grab active:cursor-grabbing"
-                    onClick={() => onToggleDir(node.path)}
+                    onMouseDown={(e) => handleFileDragStart(e, node.path, true, projectPath)}
+                    onClick={() => { if (!justDraggedRef.current) onToggleDir(node.path); }}
                   >
                     {expandedDirs.has(node.path) ? (
                       <ChevronDown className="h-3 w-3 text-muted-foreground shrink-0" />
@@ -1612,22 +1618,21 @@ export default function GitPanel({ projectPath, projectName, isGitRepo, onRefres
                   </div>
                 </ContextMenuTrigger>
                 <ContextMenuContent>
-                  <ContextMenuItem onClick={() => handleRevealInFileManager(node.path)}>
+                  <ContextMenuItem onClick={() => handleRevealInFileManager(node.path, projectPath)}>
                     <FolderOpen className="mr-2 h-4 w-4" />
                     {getRevealLabel()}
                   </ContextMenuItem>
-                  <ContextMenuItem onClick={() => handleCopyPath(node.path)}>
+                  <ContextMenuItem onClick={() => handleCopyPath(node.path, projectPath)}>
                     <Copy className="mr-2 h-4 w-4" />
                     Copy Path
                   </ContextMenuItem>
                   <ContextMenuSeparator />
-                  <ContextMenuItem onClick={() => handleAddToGitignore(node.path)}>
+                  <ContextMenuItem onClick={() => handleAddToGitignore(node.path, projectPath)}>
                     <EyeOff className="mr-2 h-4 w-4" />
                     Add to .gitignore
                   </ContextMenuItem>
                 </ContextMenuContent>
               </ContextMenu>
-              </div>
               {expandedDirs.has(node.path) && node.children && (
                 <FileTreeView
                   nodes={node.children}
@@ -1639,13 +1644,11 @@ export default function GitPanel({ projectPath, projectName, isGitRepo, onRefres
               )}
             </>
           ) : (
-            <div
-              onMouseDown={(e) => renamingFile !== node.path && handleFileDragStart(e, node.path)}
-            >
             <ContextMenu>
               <ContextMenuTrigger asChild>
                 <div
                   className="flex items-center gap-1.5 py-1 px-1 pl-5 rounded hover:bg-muted/50 cursor-grab active:cursor-grabbing"
+                  onMouseDown={(e) => renamingFile !== node.path && handleFileDragStart(e, node.path, false, projectPath)}
                   onDoubleClick={() => {
                     if (isPreviewable(node.path) && onOpenMarkdown) {
                       onOpenMarkdown(`${projectPath}/${node.path}`);
@@ -1658,9 +1661,9 @@ export default function GitPanel({ projectPath, projectName, isGitRepo, onRefres
                       type="text"
                       value={renameValue}
                       onChange={(e) => setRenameValue(e.target.value)}
-                      onBlur={() => handleFinishRename(node.path)}
+                      onBlur={() => handleFinishRename(node.path, projectPath)}
                       onKeyDown={(e) => {
-                        if (e.key === "Enter") handleFinishRename(node.path);
+                        if (e.key === "Enter") handleFinishRename(node.path, projectPath);
                         if (e.key === "Escape") setRenamingFile(null);
                       }}
                       autoFocus
@@ -1673,7 +1676,7 @@ export default function GitPanel({ projectPath, projectName, isGitRepo, onRefres
                 </div>
               </ContextMenuTrigger>
               <ContextMenuContent>
-                <ContextMenuItem onClick={() => handleOpenFile(node.path)}>
+                <ContextMenuItem onClick={() => handleOpenFile(node.path, projectPath)}>
                   <ExternalLink className="mr-2 h-4 w-4" />
                   Open
                 </ContextMenuItem>
@@ -1683,18 +1686,18 @@ export default function GitPanel({ projectPath, projectName, isGitRepo, onRefres
                     Open Here
                   </ContextMenuItem>
                 )}
-                <ContextMenuItem onClick={() => handleRevealInFileManager(node.path)}>
+                <ContextMenuItem onClick={() => handleRevealInFileManager(node.path, projectPath)}>
                   <FolderOpen className="mr-2 h-4 w-4" />
                   {getRevealLabel()}
                 </ContextMenuItem>
                 {preferredEditor && (
-                  <ContextMenuItem onClick={() => handleOpenInTerminalEditor(node.path)}>
+                  <ContextMenuItem onClick={() => handleOpenInTerminalEditor(node.path, projectPath)}>
                     <SquareTerminal className="mr-2 h-4 w-4" />
                     Open in {preferredEditor}
                   </ContextMenuItem>
                 )}
                 <ContextMenuSeparator />
-                <ContextMenuItem onClick={() => handleCopyPath(node.path)}>
+                <ContextMenuItem onClick={() => handleCopyPath(node.path, projectPath)}>
                   <Copy className="mr-2 h-4 w-4" />
                   Copy Path
                 </ContextMenuItem>
@@ -1702,13 +1705,13 @@ export default function GitPanel({ projectPath, projectName, isGitRepo, onRefres
                   <Pencil className="mr-2 h-4 w-4" />
                   Rename
                 </ContextMenuItem>
-                <ContextMenuItem onClick={() => handleAddToGitignore(node.path)}>
+                <ContextMenuItem onClick={() => handleAddToGitignore(node.path, projectPath)}>
                   <EyeOff className="mr-2 h-4 w-4" />
                   Add to .gitignore
                 </ContextMenuItem>
                 <ContextMenuSeparator />
                 <ContextMenuItem
-                  onClick={() => handleDeleteFile(node.path)}
+                  onClick={() => handleDeleteFile(node.path, projectPath)}
                   className="text-destructive focus:text-destructive"
                 >
                   <Trash2 className="mr-2 h-4 w-4" />
@@ -1716,7 +1719,6 @@ export default function GitPanel({ projectPath, projectName, isGitRepo, onRefres
                 </ContextMenuItem>
               </ContextMenuContent>
             </ContextMenu>
-            </div>
           )}
         </div>
       ))}
@@ -2637,19 +2639,46 @@ export default function GitPanel({ projectPath, projectName, isGitRepo, onRefres
                 <div className="space-y-1">
                   {folders.map((folder) => (
                     <div key={folder.id}>
-                      {/* Folder header - collapsible */}
-                      <div
-                        className="flex items-center gap-1.5 py-1 px-1 rounded hover:bg-muted/50 cursor-pointer"
-                        onClick={() => toggleFolderExpanded(folder.id)}
-                      >
-                        {expandedFolders.has(folder.id) ? (
-                          <ChevronDown className="h-3 w-3 text-muted-foreground shrink-0" />
-                        ) : (
-                          <ChevronRight className="h-3 w-3 text-muted-foreground shrink-0" />
-                        )}
-                        <Folder className="h-3.5 w-3.5 text-primary shrink-0" />
-                        <span className="text-xs font-medium truncate">{folder.name}</span>
-                      </div>
+                      {/* Folder header - collapsible + draggable */}
+                      <ContextMenu>
+                        <ContextMenuTrigger asChild>
+                          <div
+                            className="flex items-center gap-1.5 py-1 px-1 rounded hover:bg-muted/50 cursor-grab active:cursor-grabbing"
+                            onMouseDown={(e) => handleFileDragStart(e, '', true, folder.path)}
+                            onClick={() => { if (!justDraggedRef.current) toggleFolderExpanded(folder.id); }}
+                          >
+                            {expandedFolders.has(folder.id) ? (
+                              <ChevronDown className="h-3 w-3 text-muted-foreground shrink-0" />
+                            ) : (
+                              <ChevronRight className="h-3 w-3 text-muted-foreground shrink-0" />
+                            )}
+                            <Folder className="h-3.5 w-3.5 text-primary shrink-0" />
+                            <span className="text-xs font-medium truncate">{folder.name}</span>
+                          </div>
+                        </ContextMenuTrigger>
+                        <ContextMenuContent>
+                          <ContextMenuItem onClick={() => invoke("reveal_in_file_manager", { path: folder.path })}>
+                            <FolderOpen className="mr-2 h-4 w-4" />
+                            {getRevealLabel()}
+                          </ContextMenuItem>
+                          <ContextMenuItem onClick={() => { navigator.clipboard.writeText(folder.path); toast.success("Path copied to clipboard"); }}>
+                            <Copy className="mr-2 h-4 w-4" />
+                            Copy Path
+                          </ContextMenuItem>
+                          {onRemoveFolder && folders && folders.length > 1 && (
+                            <>
+                              <ContextMenuSeparator />
+                              <ContextMenuItem
+                                onClick={() => onRemoveFolder(folder.id)}
+                                className="text-destructive focus:text-destructive"
+                              >
+                                <FolderMinus className="mr-2 h-4 w-4" />
+                                Remove from Workspace
+                              </ContextMenuItem>
+                            </>
+                          )}
+                        </ContextMenuContent>
+                      </ContextMenu>
                       {/* Folder contents */}
                       {expandedFolders.has(folder.id) && (
                         <div className="ml-3 border-l border-border/50 pl-2">
