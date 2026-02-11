@@ -208,3 +208,16 @@ export interface Note {
   position: number;
   content: string;
 }
+
+// NLT (Natural Language Terminal) types
+export interface NltResponse {
+  command: string;
+  explanation?: string;
+}
+
+export interface NltProgressEvent {
+  status: "thinking" | "tool_call" | "done" | "error";
+  message: string;
+  tool_name?: string;
+  iteration: number;
+}

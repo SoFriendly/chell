@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { Loader2, MoreHorizontal, RefreshCw, EyeOff } from "lucide-react";
+import type { NltResponse, NltProgressEvent } from "@/types";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import {
@@ -48,8 +50,9 @@ export default function SmartShell({
 }: SmartShellProps) {
   const [aiInput, setAiInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [preview, setPreview] = useState<string | null>(null);
+  const [preview, setPreview] = useState<NltResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [progressMsg, setProgressMsg] = useState<string | null>(null);
   const [history, setHistory] = useState<string[]>([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
   const [projectContext, setProjectContext] = useState<ProjectContext | null>(null);
@@ -57,6 +60,19 @@ export default function SmartShell({
 
   const inputRef = useRef<HTMLInputElement>(null);
   const { groqApiKey } = useSettingsStore();
+
+  // Listen for NLT progress events
+  useEffect(() => {
+    const unlisten = listen<NltProgressEvent>("nlt-progress", (event) => {
+      const { status, message } = event.payload;
+      if (status === "done" || status === "error") {
+        setProgressMsg(null);
+      } else {
+        setProgressMsg(message);
+      }
+    });
+    return () => { unlisten.then((f) => f()); };
+  }, []);
 
   // Load project context on mount or when cwd changes
   const loadContext = useCallback(async (forceRefresh = false) => {
@@ -102,15 +118,18 @@ export default function SmartShell({
 
     setIsLoading(true);
     setError(null);
+    setProgressMsg("Analyzing your request...");
 
     try {
-      const command = await invoke<string>("ai_shell_command", {
+      const response = await invoke<NltResponse>("ai_shell_command", {
         request: aiInput.trim(),
         context: projectContext,
+        cwd,
         apiKey: groqApiKey,
       });
 
-      setPreview(command);
+      setPreview(response);
+      setAiInput("");
 
       // Add to history
       setHistory((prev) => {
@@ -122,15 +141,16 @@ export default function SmartShell({
       setError(err instanceof Error ? err.message : String(err));
     } finally {
       setIsLoading(false);
+      setProgressMsg(null);
     }
   };
 
-  const handleExecute = async (command: string) => {
-    if (!internalTerminalId) return;
+  const handleExecute = async () => {
+    if (!internalTerminalId || !preview) return;
 
     try {
       // Write command to terminal
-      await invoke("write_terminal", { id: internalTerminalId, data: command });
+      await invoke("write_terminal", { id: internalTerminalId, data: preview.command });
       // Send Enter to execute
       await invoke("write_terminal", { id: internalTerminalId, data: "\r" });
 
@@ -204,7 +224,7 @@ export default function SmartShell({
               {isLoading ? (
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
               ) : (
-                "Send"
+                "Ask NLT"
               )}
             </Button>
             <DropdownMenu>
@@ -230,6 +250,14 @@ export default function SmartShell({
             </DropdownMenu>
           </div>
 
+          {/* Progress message */}
+          {isLoading && progressMsg && (
+            <p className="mt-2 text-xs text-muted-foreground flex items-center gap-1.5">
+              <Loader2 className="h-3 w-3 animate-spin" />
+              {progressMsg}
+            </p>
+          )}
+
           {/* Error message */}
           {error && (
             <p className="mt-2 text-sm text-destructive">{error}</p>
@@ -238,7 +266,8 @@ export default function SmartShell({
           {/* Command preview */}
           {preview && (
             <CommandPreview
-              command={preview}
+              command={preview.command}
+              explanation={preview.explanation}
               onExecute={handleExecute}
               onCancel={handleCancel}
               className="mt-2"

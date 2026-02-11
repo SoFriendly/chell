@@ -321,7 +321,7 @@ export default function ProjectPage() {
   const [shellDirs, setShellDirs] = useState<string[]>([]);
   const [showHistorySearch, setShowHistorySearch] = useState(false);
   const [shellHistory, setShellHistory] = useState<string[]>([]);
-  const [showNlt, setShowNlt] = useState(false);
+  const [showNlt, setShowNlt] = useState(true);
   // Track selected folders for tabs pending folder selection (Issue #6)
   const [pendingTabFolders, setPendingTabFolders] = useState<Record<string, string>>({});
   const [pendingShellFolder, setPendingShellFolder] = useState<string>("");

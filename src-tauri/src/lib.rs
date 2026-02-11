@@ -2013,10 +2013,57 @@ fn install_assistant(command: String) -> Result<String, String> {
 }
 
 // AI commands using Groq
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 struct GroqMessage {
     role: String,
-    content: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    content: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    tool_calls: Option<Vec<ToolCall>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    tool_call_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    name: Option<String>,
+}
+
+impl GroqMessage {
+    fn user(content: &str) -> Self {
+        Self { role: "user".into(), content: Some(content.into()), tool_calls: None, tool_call_id: None, name: None }
+    }
+    fn system(content: &str) -> Self {
+        Self { role: "system".into(), content: Some(content.into()), tool_calls: None, tool_call_id: None, name: None }
+    }
+    fn tool_result(tool_call_id: &str, name: &str, content: &str) -> Self {
+        Self { role: "tool".into(), content: Some(content.into()), tool_calls: None, tool_call_id: Some(tool_call_id.into()), name: Some(name.into()) }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct ToolCall {
+    id: String,
+    #[serde(rename = "type")]
+    call_type: String,
+    function: ToolCallFunction,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct ToolCallFunction {
+    name: String,
+    arguments: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+struct Tool {
+    #[serde(rename = "type")]
+    tool_type: String,
+    function: ToolFunction,
+}
+
+#[derive(Debug, Clone, Serialize)]
+struct ToolFunction {
+    name: String,
+    description: String,
+    parameters: serde_json::Value,
 }
 
 #[derive(Debug, Serialize)]
@@ -2025,11 +2072,16 @@ struct GroqRequest {
     messages: Vec<GroqMessage>,
     temperature: f32,
     max_tokens: u32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    tools: Option<Vec<Tool>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    tool_choice: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
 struct GroqChoice {
     message: GroqMessage,
+    finish_reason: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -2041,6 +2093,21 @@ struct GroqResponse {
 struct CommitSuggestion {
     subject: String,
     description: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct NltResponse {
+    command: String,
+    explanation: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct NltProgressEvent {
+    status: String,
+    message: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    tool_name: Option<String>,
+    iteration: usize,
 }
 
 // Portal commands
@@ -2360,12 +2427,11 @@ Keep the description brief or empty if the subject is self-explanatory."#,
     let client = reqwest::Client::new();
     let request = GroqRequest {
         model: "llama-3.1-8b-instant".to_string(),
-        messages: vec![GroqMessage {
-            role: "user".to_string(),
-            content: prompt,
-        }],
+        messages: vec![GroqMessage::user(&prompt)],
         temperature: 0.3,
         max_tokens: 200,
+        tools: None,
+        tool_choice: None,
     };
 
     let response = client
@@ -2385,7 +2451,7 @@ Keep the description brief or empty if the subject is self-explanatory."#,
     let groq_response: GroqResponse = response.json().await.map_err(|e| e.to_string())?;
 
     if let Some(choice) = groq_response.choices.first() {
-        let content = &choice.message.content;
+        let content = choice.message.content.as_deref().unwrap_or("");
 
         // Strip markdown code fences if present (e.g., ```json ... ```)
         let json_content = content
@@ -2530,12 +2596,307 @@ fn scan_project_context(cwd: String, _force_refresh: Option<bool>) -> Result<Pro
     Ok(context)
 }
 
+// --- NLT Tool Calling Helpers ---
+
+/// Resolve a relative path against cwd and validate it doesn't escape the project root.
+fn resolve_and_validate_path(cwd: &str, rel_path: &str) -> Result<PathBuf, String> {
+    let base = PathBuf::from(cwd).canonicalize().map_err(|e| format!("Invalid cwd: {}", e))?;
+    let resolved = base.join(rel_path).canonicalize()
+        .map_err(|e| format!("Path not found: {} ({})", rel_path, e))?;
+    if !resolved.starts_with(&base) {
+        return Err(format!("Access denied: path '{}' is outside the project directory", rel_path));
+    }
+    Ok(resolved)
+}
+
+/// Flat directory listing suitable for LLM consumption.
+fn list_directory_flat(path: &std::path::Path, max_depth: usize) -> Result<String, String> {
+    use std::fs;
+    let mut lines = Vec::new();
+    let skip_dirs = ["node_modules", "target", "__pycache__", "dist", "build", ".git", ".next", "vendor"];
+
+    fn walk(dir: &std::path::Path, base: &std::path::Path, depth: usize, max_depth: usize, skip: &[&str], out: &mut Vec<String>) {
+        if depth > max_depth { return; }
+        let entries = match fs::read_dir(dir) {
+            Ok(e) => e,
+            Err(_) => return,
+        };
+        let mut items: Vec<_> = entries.filter_map(|e| e.ok()).collect();
+        items.sort_by_key(|e| e.file_name());
+        for entry in items {
+            let name = entry.file_name().to_string_lossy().to_string();
+            if name.starts_with('.') && name != ".env.example" { continue; }
+            if skip.iter().any(|s| *s == name) { continue; }
+            let rel = entry.path().strip_prefix(base).map(|p| p.to_string_lossy().to_string()).unwrap_or(name.clone());
+            let is_dir = entry.path().is_dir();
+            let prefix = "  ".repeat(depth);
+            if is_dir {
+                out.push(format!("{}{}/", prefix, rel.rsplit('/').next().unwrap_or(&rel)));
+                walk(&entry.path(), base, depth + 1, max_depth, skip, out);
+            } else {
+                out.push(format!("{}{}", prefix, rel.rsplit('/').next().unwrap_or(&rel)));
+            }
+            if out.len() > 500 { return; }
+        }
+    }
+
+    walk(path, path, 0, max_depth, &skip_dirs, &mut lines);
+    if lines.len() > 500 {
+        lines.truncate(500);
+        lines.push("... (truncated)".to_string());
+    }
+    Ok(lines.join("\n"))
+}
+
+/// Execute a tool call and return the result as a string.
+fn execute_tool_call(tool_name: &str, arguments_json: &str, cwd: &str) -> String {
+    let args: serde_json::Value = match serde_json::from_str(arguments_json) {
+        Ok(v) => v,
+        Err(e) => return format!("Error parsing arguments: {}", e),
+    };
+
+    match tool_name {
+        "read_file" => {
+            let rel_path = args["path"].as_str().unwrap_or("");
+            match resolve_and_validate_path(cwd, rel_path) {
+                Ok(abs) => {
+                    match std::fs::read_to_string(&abs) {
+                        Ok(content) => {
+                            if content.len() > 102_400 {
+                                format!("{}\n... (file truncated at 100KB, total size: {} bytes)", &content[..102_400], content.len())
+                            } else {
+                                content
+                            }
+                        }
+                        Err(e) => format!("Error reading file: {}", e),
+                    }
+                }
+                Err(e) => e,
+            }
+        }
+        "search_files" => {
+            let query = args["query"].as_str().unwrap_or("");
+            let sub_path = args["path"].as_str().unwrap_or(".");
+            let search_root = match resolve_and_validate_path(cwd, sub_path) {
+                Ok(p) => p.to_string_lossy().to_string(),
+                Err(e) => return e,
+            };
+            match search_file_contents(search_root, query.to_string(), false, Some(50)) {
+                Ok(result) => {
+                    if result.matches.is_empty() {
+                        "No matches found.".to_string()
+                    } else {
+                        let mut out = String::new();
+                        for m in &result.matches {
+                            out.push_str(&format!("{}:{}: {}\n", m.path, m.line_number, m.line.trim()));
+                        }
+                        if result.truncated {
+                            out.push_str("... (results truncated)\n");
+                        }
+                        out
+                    }
+                }
+                Err(e) => format!("Search error: {}", e),
+            }
+        }
+        "list_files" => {
+            let rel_path = args["path"].as_str().unwrap_or(".");
+            let depth = args["depth"].as_u64().unwrap_or(2).min(3) as usize;
+            match resolve_and_validate_path(cwd, rel_path) {
+                Ok(abs) => list_directory_flat(&abs, depth).unwrap_or_else(|e| format!("Error: {}", e)),
+                Err(e) => e,
+            }
+        }
+        "get_git_status" => {
+            match GitService::get_status(cwd) {
+                Ok(status) => {
+                    let mut out = format!("Branch: {}\n", status.branch);
+                    if status.ahead > 0 { out.push_str(&format!("Ahead: {}\n", status.ahead)); }
+                    if status.behind > 0 { out.push_str(&format!("Behind: {}\n", status.behind)); }
+                    if !status.staged.is_empty() {
+                        out.push_str(&format!("Staged ({}):\n", status.staged.len()));
+                        for f in &status.staged { out.push_str(&format!("  {}\n", f)); }
+                    }
+                    if !status.unstaged.is_empty() {
+                        out.push_str(&format!("Unstaged ({}):\n", status.unstaged.len()));
+                        for f in &status.unstaged { out.push_str(&format!("  {}\n", f)); }
+                    }
+                    if !status.untracked.is_empty() {
+                        out.push_str(&format!("Untracked ({}):\n", status.untracked.len()));
+                        for f in &status.untracked { out.push_str(&format!("  {}\n", f)); }
+                    }
+                    if status.staged.is_empty() && status.unstaged.is_empty() && status.untracked.is_empty() {
+                        out.push_str("Working tree clean\n");
+                    }
+                    out
+                }
+                Err(e) => format!("Not a git repository or error: {}", e),
+            }
+        }
+        _ => format!("Unknown tool: {}", tool_name),
+    }
+}
+
+/// Build NLT tool definitions for the Groq API.
+fn build_nlt_tools() -> Vec<Tool> {
+    vec![
+        Tool {
+            tool_type: "function".into(),
+            function: ToolFunction {
+                name: "read_file".into(),
+                description: "Read the contents of a file. Use this to inspect config files, scripts, source code, etc.".into(),
+                parameters: serde_json::json!({
+                    "type": "object",
+                    "properties": {
+                        "path": {
+                            "type": "string",
+                            "description": "Relative path to the file from the project root"
+                        }
+                    },
+                    "required": ["path"]
+                }),
+            },
+        },
+        Tool {
+            tool_type: "function".into(),
+            function: ToolFunction {
+                name: "search_files".into(),
+                description: "Search for a text pattern across project files (case-insensitive grep). Returns matching file paths, line numbers, and line contents.".into(),
+                parameters: serde_json::json!({
+                    "type": "object",
+                    "properties": {
+                        "query": {
+                            "type": "string",
+                            "description": "The text pattern to search for"
+                        },
+                        "path": {
+                            "type": "string",
+                            "description": "Subdirectory to search within (relative to project root, defaults to '.')"
+                        }
+                    },
+                    "required": ["query"]
+                }),
+            },
+        },
+        Tool {
+            tool_type: "function".into(),
+            function: ToolFunction {
+                name: "list_files".into(),
+                description: "List files and directories in a given path. Returns a tree-like flat listing.".into(),
+                parameters: serde_json::json!({
+                    "type": "object",
+                    "properties": {
+                        "path": {
+                            "type": "string",
+                            "description": "Relative path to list (defaults to '.')"
+                        },
+                        "depth": {
+                            "type": "integer",
+                            "description": "Maximum depth to recurse (1-3, defaults to 2)"
+                        }
+                    },
+                    "required": []
+                }),
+            },
+        },
+        Tool {
+            tool_type: "function".into(),
+            function: ToolFunction {
+                name: "get_git_status".into(),
+                description: "Get the current git status: branch name, staged/unstaged/untracked files, ahead/behind counts.".into(),
+                parameters: serde_json::json!({
+                    "type": "object",
+                    "properties": {},
+                    "required": []
+                }),
+            },
+        },
+    ]
+}
+
+/// Build the enhanced NLT system prompt.
+fn build_nlt_system_prompt(shell_name: &str, folder_info: &str, config_info: &str) -> String {
+    let os_name = if cfg!(target_os = "macos") { "macOS" }
+        else if cfg!(target_os = "linux") { "Linux" }
+        else { "Windows" };
+
+    format!(
+        r#"You are a terminal command assistant running on {os_name} with {shell_name} shell.
+You help users by suggesting the right terminal command for their request.
+
+You have tools to gather context about the project before suggesting a command. Use them when you need to understand the project structure, read config files, check git status, or search for relevant code.
+
+## Guidelines
+- **Safety**: Never suggest destructive commands (rm -rf /, drop database, force push to main) without a clear warning. Prefer reversible operations. Never expose secrets inline.
+- **VCS awareness**: Consider the git status when relevant. Suggest standard git workflows.
+- **Command quality**: Return shell-compatible commands for {shell_name}. Use project tools (npm/cargo/make/etc.) when available. Chain related commands with &&.
+- **Tool usage**: If the user's request is simple and obvious (e.g., "list files"), respond directly. For anything project-specific (e.g., "run the app", "run the tests", "build"), ALWAYS use tools first to read config files (package.json, Cargo.toml, Makefile, etc.) and understand the actual project setup before suggesting a command. Do NOT guess based on folder structure alone.
+- **Framework awareness**: Many projects use meta-frameworks (e.g., Tauri wraps a web app — use `npm run tauri dev` not `npm run dev`; Next.js has `next dev` not `vite`). When you see a src-tauri/ directory, this is a Tauri app. Read the relevant configs to find the correct dev/build commands.
+- **Efficiency**: Don't call tools unnecessarily. 1-3 tool calls should usually be enough.
+
+## Project Context
+{folder_info}
+{config_info}
+
+## Response Format
+When you have the answer, respond with JSON:
+{{"command": "the shell command", "explanation": "brief optional explanation of what the command does"}}
+
+The "explanation" field is optional - include it when the command is complex or non-obvious.
+If the command has potential side effects, include a warning in the explanation.
+Always respond with valid JSON. No markdown fences."#,
+        os_name = os_name,
+        shell_name = shell_name,
+        folder_info = folder_info,
+        config_info = config_info
+    )
+}
+
+/// Parse the LLM's final response into an NltResponse, with fallback for plain text.
+fn parse_final_response(content: &str) -> NltResponse {
+    let trimmed = content.trim();
+
+    // Try stripping markdown fences
+    let json_str = trimmed
+        .strip_prefix("```json").or_else(|| trimmed.strip_prefix("```"))
+        .unwrap_or(trimmed)
+        .strip_suffix("```")
+        .unwrap_or(trimmed)
+        .trim();
+
+    // Try parsing as JSON NltResponse
+    if let Ok(resp) = serde_json::from_str::<NltResponse>(json_str) {
+        return resp;
+    }
+
+    // Try parsing as a JSON object with just "command"
+    if let Ok(val) = serde_json::from_str::<serde_json::Value>(json_str) {
+        if let Some(cmd) = val.get("command").and_then(|v| v.as_str()) {
+            return NltResponse {
+                command: cmd.to_string(),
+                explanation: val.get("explanation").and_then(|v| v.as_str()).map(|s| s.to_string()),
+            };
+        }
+    }
+
+    // Fallback: treat entire content as a raw command
+    let command = trimmed
+        .trim_matches('`')
+        .trim_matches('"')
+        .trim_matches('\'')
+        .trim()
+        .to_string();
+    NltResponse { command, explanation: None }
+}
+
 #[tauri::command]
 async fn ai_shell_command(
     request: String,
     context: ProjectContext,
+    cwd: String,
     api_key: String,
-) -> Result<String, String> {
+    app_handle: tauri::AppHandle,
+) -> Result<NltResponse, String> {
     if api_key.is_empty() {
         return Err("No API key provided. Set your Groq API key in Settings.".to_string());
     }
@@ -2549,74 +2910,146 @@ async fn ai_shell_command(
         #[cfg(target_os = "windows")]
         { "powershell.exe".to_string() }
     });
-    // Extract shell name from path (e.g., "/bin/zsh" -> "zsh")
     let shell_name = default_shell.rsplit('/').next().unwrap_or(&default_shell);
 
-    // Include config snippets if available
     let config_info = context.config_snippet.clone()
         .map(|s| format!("\n{}", s))
         .unwrap_or_default();
-
     let folder_info = context.folder_structure.clone()
         .map(|s| format!("\n=== Project structure ===\n{}", s))
         .unwrap_or_default();
 
-    let prompt = format!(
-        r#"You are a terminal command assistant. The user's shell is {shell_name}. Analyze the project structure and config files to understand what kind of project this is, then return the appropriate shell command for {shell_name}.
-{}
-{}
+    let system_prompt = build_nlt_system_prompt(shell_name, &folder_info, &config_info);
+    let user_msg = format!("User request: {}", request);
 
-User request: "{}"
+    let mut messages = vec![
+        GroqMessage::system(&system_prompt),
+        GroqMessage::user(&user_msg),
+    ];
 
-Consider the full project structure (folders like src-tauri/, mobile/, etc.) and all config files to determine the correct command. Respond with ONLY the shell command compatible with {shell_name}. No explanation."#,
-        folder_info,
-        config_info,
-        request,
-        shell_name = shell_name
-    );
-
-    println!("[SmartShell] Prompt:\n{}", prompt);
-
+    let tools = build_nlt_tools();
     let client = reqwest::Client::new();
-    let groq_request = GroqRequest {
-        model: "llama-3.3-70b-versatile".to_string(),
-        messages: vec![GroqMessage {
-            role: "user".to_string(),
-            content: prompt,
-        }],
-        temperature: 0.1,  // Low for deterministic output
-        max_tokens: 150,
-    };
+    let max_iterations = 8;
+    let started = std::time::Instant::now();
+    let timeout = Duration::from_secs(30);
+    let mut use_tools = true;
 
-    let response = client
-        .post("https://api.groq.com/openai/v1/chat/completions")
-        .header("Authorization", format!("Bearer {}", api_key))
-        .header("Content-Type", "application/json")
-        .json(&groq_request)
-        .send()
-        .await
-        .map_err(|e| e.to_string())?;
+    // Emit initial progress
+    let _ = app_handle.emit("nlt-progress", NltProgressEvent {
+        status: "thinking".into(),
+        message: "Analyzing your request...".into(),
+        tool_name: None,
+        iteration: 0,
+    });
 
-    if !response.status().is_success() {
-        let error_text = response.text().await.unwrap_or_default();
-        return Err(format!("Groq API error: {}", error_text));
+    for iteration in 0..max_iterations {
+        if started.elapsed() > timeout {
+            let _ = app_handle.emit("nlt-progress", NltProgressEvent {
+                status: "error".into(),
+                message: "Request timed out after 30 seconds".into(),
+                tool_name: None,
+                iteration,
+            });
+            return Err("Request timed out after 30 seconds".to_string());
+        }
+
+        let groq_request = GroqRequest {
+            model: "llama-3.3-70b-versatile".to_string(),
+            messages: messages.clone(),
+            temperature: 0.1,
+            max_tokens: 1024,
+            tools: if use_tools { Some(tools.clone()) } else { None },
+            tool_choice: None,
+        };
+
+        let response = client
+            .post("https://api.groq.com/openai/v1/chat/completions")
+            .header("Authorization", format!("Bearer {}", api_key))
+            .header("Content-Type", "application/json")
+            .json(&groq_request)
+            .send()
+            .await
+            .map_err(|e| e.to_string())?;
+
+        if !response.status().is_success() {
+            let error_text = response.text().await.unwrap_or_default();
+
+            // If tool calling failed, retry without tools
+            if use_tools && (error_text.contains("tool_use_failed") || error_text.contains("tool call validation")) {
+                println!("[NLT] Tool call validation failed, retrying without tools");
+                let _ = app_handle.emit("nlt-progress", NltProgressEvent {
+                    status: "thinking".into(),
+                    message: "Retrying without tools...".into(),
+                    tool_name: None,
+                    iteration: iteration + 1,
+                });
+                use_tools = false;
+                // Reset to just system + user messages for clean retry
+                messages.truncate(2);
+                continue;
+            }
+
+            return Err(format!("Groq API error: {}", error_text));
+        }
+
+        let groq_response: GroqResponse = response.json().await.map_err(|e| e.to_string())?;
+        let choice = groq_response.choices.into_iter().next()
+            .ok_or("No response from AI")?;
+
+        let finish_reason = choice.finish_reason.as_deref().unwrap_or("stop");
+
+        if finish_reason == "tool_calls" {
+            if let Some(tool_calls) = &choice.message.tool_calls {
+                // Append the assistant message (with tool_calls) to conversation
+                messages.push(choice.message.clone());
+
+                for tc in tool_calls {
+                    let tool_name = &tc.function.name;
+                    println!("[NLT] Tool call: {}({})", tool_name, &tc.function.arguments);
+
+                    let _ = app_handle.emit("nlt-progress", NltProgressEvent {
+                        status: "tool_call".into(),
+                        message: format!("Calling {}...", tool_name),
+                        tool_name: Some(tool_name.clone()),
+                        iteration: iteration + 1,
+                    });
+
+                    let result = execute_tool_call(tool_name, &tc.function.arguments, &cwd);
+                    // Truncate very large tool results
+                    let result = if result.len() > 30_000 {
+                        format!("{}\n... (output truncated)", &result[..30_000])
+                    } else {
+                        result
+                    };
+
+                    messages.push(GroqMessage::tool_result(&tc.id, tool_name, &result));
+                }
+                continue;
+            }
+        }
+
+        // finish_reason == "stop" or no tool calls - parse final response
+        let content = choice.message.content.as_deref().unwrap_or("");
+        let nlt_response = parse_final_response(content);
+
+        let _ = app_handle.emit("nlt-progress", NltProgressEvent {
+            status: "done".into(),
+            message: "Command ready".into(),
+            tool_name: None,
+            iteration: iteration + 1,
+        });
+
+        println!("[NLT] Final response: {:?}", nlt_response);
+        return Ok(nlt_response);
     }
 
-    let groq_response: GroqResponse = response.json().await.map_err(|e| e.to_string())?;
-
-    if let Some(choice) = groq_response.choices.first() {
-        // Clean up the response - remove any markdown formatting or quotes
-        let command = choice.message.content
-            .trim()
-            .trim_matches('`')
-            .trim_matches('"')
-            .trim_matches('\'')
-            .trim()
-            .to_string();
-        Ok(command)
-    } else {
-        Err("No response from AI".to_string())
-    }
+    let _ = app_handle.emit("nlt-progress", NltProgressEvent {
+        status: "error".into(),
+        message: "Too many tool-calling iterations".into(),
+        tool_name: None,
+        iteration: max_iterations,
+    });
+    Err("AI used too many tool calls without producing a final answer".to_string())
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
