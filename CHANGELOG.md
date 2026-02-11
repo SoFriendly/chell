@@ -2,6 +2,32 @@
 
 All notable changes to Chell will be documented in this file.
 
+## [0.1.77]
+
+### Workspace
+- Add "Remove from Workspace" context menu option for folders in multi-folder workspaces
+- Sync local project state when folders are added or removed from the store
+
+### Accessibility
+- Add ARIA labels to all icon buttons across Git panel, Notes panel, Settings, Home page, and Project page
+- Add `role="button"` and keyboard navigation (Enter/Space) for changed file rows in Git panel
+- Add `role="checkbox"` and `aria-checked` to file staging checkboxes
+- Add screen-reader-only text for diff line additions/removals and commit ahead/behind counts
+- Add `aria-live` region for git operation status announcements
+- Use semantic `<nav>`, `<main>`, and `<h1>` elements for page structure on Home and Project pages
+- Use `<h3>` instead of `<h2>` for Settings section headings to fix heading hierarchy
+- Add `role="dialog"` and keyboard arrow navigation to Onboarding tour
+- Add ARIA labels to all search inputs, clone/create dialogs, and assistant configuration fields
+
+### Bug Fixes
+- Fix window close button not working on macOS
+  - Add missing `core:window:allow-close`, `core:window:allow-destroy`, and `core:window:allow-hide` Tauri permissions
+  - The `onCloseRequested` JS handler delegates closing to `window.destroy()`, which requires explicit permission in Tauri v2
+- Fix file tree context menu actions (open, rename, delete, copy path, gitignore) using wrong base path in multi-folder workspaces
+  - All file operations now resolve paths relative to the correct folder root
+- Fix file drag-and-drop from Git panel using wrong path for multi-folder workspace files
+- Fix folder click toggling after a drag operation by suppressing click events briefly after drag ends
+
 ## [0.1.76]
 
 ### New Features
