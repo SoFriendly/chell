@@ -1718,7 +1718,8 @@ fn get_shell_history(limit: Option<usize>) -> Result<Vec<String>, String> {
     for history_path in history_paths {
         let path = std::path::Path::new(&history_path);
         if path.exists() {
-            let content = std::fs::read_to_string(path).map_err(|e| e.to_string())?;
+            let bytes = std::fs::read(path).map_err(|e| e.to_string())?;
+            let content = String::from_utf8_lossy(&bytes);
             let mut commands: Vec<String> = content
                 .lines()
                 .filter_map(|line| {
