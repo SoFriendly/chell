@@ -708,14 +708,14 @@ export default function GitPanel({ projectPath, projectName, isGitRepo, onRefres
     setRenameValue(currentName);
   };
 
-  const handleFinishRename = async (oldPath: string, basePath?: string) => {
-    if (!renameValue.trim() || renameValue === oldPath.split('/').pop()) {
+  const handleFinishRename = async (oldPath: string, newName: string, basePath?: string) => {
+    if (!newName.trim() || newName === oldPath.split('/').pop()) {
       setRenamingFile(null);
       return;
     }
 
     const dir = oldPath.includes('/') ? oldPath.substring(0, oldPath.lastIndexOf('/') + 1) : '';
-    const newPath = dir + renameValue;
+    const newPath = dir + newName;
     const effectivePath = basePath || projectPath;
 
     try {
@@ -1659,11 +1659,10 @@ export default function GitPanel({ projectPath, projectName, isGitRepo, onRefres
                   {renamingFile === node.path ? (
                     <input
                       type="text"
-                      value={renameValue}
-                      onChange={(e) => setRenameValue(e.target.value)}
-                      onBlur={() => handleFinishRename(node.path, projectPath)}
+                      defaultValue={renameValue}
+                      onBlur={(e) => handleFinishRename(node.path, e.target.value, projectPath)}
                       onKeyDown={(e) => {
-                        if (e.key === "Enter") handleFinishRename(node.path, projectPath);
+                        if (e.key === "Enter") handleFinishRename(node.path, e.currentTarget.value, projectPath);
                         if (e.key === "Escape") setRenamingFile(null);
                       }}
                       autoFocus
