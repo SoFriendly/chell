@@ -740,6 +740,8 @@ export default function Terminal({ id, command = "", args, cwd, onTerminalReady,
       invoke("write_terminal", { id: terminalId, data: draggedPath + " " });
       // Clear so it doesn't get written again
       (window as unknown as { __draggedFilePath?: string }).__draggedFilePath = undefined;
+      // Focus the terminal so user can type immediately
+      terminalRef.current?.focus();
     }
   };
 

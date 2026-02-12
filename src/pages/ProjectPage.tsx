@@ -587,6 +587,9 @@ export default function ProjectPage() {
     const activeTab = terminalTabs.find(t => t.id === activeTabId);
     if (activeTab?.terminalId) {
       invoke("write_terminal", { id: activeTab.terminalId, data: filePath + " " });
+      // Focus the terminal so user can type immediately
+      const textarea = assistantPanelRef.current?.querySelector('.xterm-helper-textarea') as HTMLTextAreaElement;
+      textarea?.focus();
     }
   };
 
@@ -598,6 +601,9 @@ export default function ProjectPage() {
 
     if (utilityTerminalId && utilityTerminalId !== "closed") {
       invoke("write_terminal", { id: utilityTerminalId, data: filePath + " " });
+      // Focus the terminal so user can type immediately
+      const textarea = shellPanelRef.current?.querySelector('.xterm-helper-textarea') as HTMLTextAreaElement;
+      textarea?.focus();
     }
   };
 
@@ -611,11 +617,15 @@ export default function ProjectPage() {
       const activeTab = terminalTabs.find(t => t.id === activeTabId);
       if (activeTab?.terminalId) {
         invoke("write_terminal", { id: activeTab.terminalId, data: text });
+        const textarea = assistantPanelRef.current?.querySelector('.xterm-helper-textarea') as HTMLTextAreaElement;
+        textarea?.focus();
       }
     } else if (shellRect && x >= shellRect.left && x <= shellRect.right &&
                y >= shellRect.top && y <= shellRect.bottom) {
       if (utilityTerminalId && utilityTerminalId !== "closed") {
         invoke("write_terminal", { id: utilityTerminalId, data: text });
+        const textarea = shellPanelRef.current?.querySelector('.xterm-helper-textarea') as HTMLTextAreaElement;
+        textarea?.focus();
       }
     }
   };
@@ -642,12 +652,16 @@ export default function ProjectPage() {
           const activeTab = terminalTabs.find(t => t.id === activeTabId);
           if (activeTab?.terminalId) {
             invoke("write_terminal", { id: activeTab.terminalId, data: escapedPaths });
+            const textarea = assistantPanelRef.current?.querySelector('.xterm-helper-textarea') as HTMLTextAreaElement;
+            textarea?.focus();
           }
         } else if (shellRect && position.x >= shellRect.left && position.x <= shellRect.right &&
                    position.y >= shellRect.top && position.y <= shellRect.bottom) {
           // Dropped on shell panel
           if (utilityTerminalId && utilityTerminalId !== "closed") {
             invoke("write_terminal", { id: utilityTerminalId, data: escapedPaths });
+            const textarea = shellPanelRef.current?.querySelector('.xterm-helper-textarea') as HTMLTextAreaElement;
+            textarea?.focus();
           }
         }
       }
