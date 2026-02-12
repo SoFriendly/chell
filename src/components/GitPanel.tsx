@@ -2874,7 +2874,7 @@ export default function GitPanel({ projectPath, projectName, isGitRepo, onRefres
             <AlertDialogTitle>Discard changes to {selectedFiles.size} file{selectedFiles.size > 1 ? 's' : ''}?</AlertDialogTitle>
             <AlertDialogDescription>
               This will discard all changes to the following files. This cannot be undone.
-              <ul className="mt-2 max-h-32 overflow-auto rounded bg-muted p-2 font-mono text-xs">
+              <ul className="mt-2 max-h-32 overflow-auto overflow-x-hidden rounded bg-muted p-2 font-mono text-xs">
                 {Array.from(selectedFiles).map(file => (
                   <li key={file} className="truncate">{file}</li>
                 ))}
