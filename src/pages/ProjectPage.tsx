@@ -1258,8 +1258,8 @@ export default function ProjectPage() {
     currentProjectPathRef.current = currentProject?.path || null;
   }, [currentProject?.path]);
 
-  const refreshGitData = useCallback(async () => {
-    const path = currentProjectPathRef.current;
+  const refreshGitData = useCallback(async (overridePath?: string) => {
+    const path = overridePath || currentProjectPathRef.current;
     if (path) {
       // Load git data immediately without waiting for fetch
       loadGitData(path);

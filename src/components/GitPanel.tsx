@@ -84,7 +84,7 @@ interface GitPanelProps {
   projectPath: string;
   projectName: string;
   isGitRepo: boolean;
-  onRefresh: () => void;
+  onRefresh: (path?: string) => void;
   onInitRepo: () => Promise<void>;
   onOpenMarkdown?: (filePath: string, lineNumber?: number) => void;
   shellCwd?: string; // Current working directory from terminal (Issue #7)
@@ -167,9 +167,7 @@ export default function GitPanel({ projectPath, projectName, isGitRepo, onRefres
   const [activeFolderId, setActiveFolderId] = useState<string | null>(folders?.[0]?.id ?? null);
   const activeFolder = folders?.find(f => f.id === activeFolderId) ?? folders?.[0];
   // Use active folder path for git operations, falling back to projectPath
-  // TODO: Replace projectPath usages with gitRepoPath for multi-folder git support
-  const _gitRepoPath = activeFolder?.path ?? projectPath;
-  void _gitRepoPath; // Suppress unused warning
+  const gitRepoPath = activeFolder?.path ?? projectPath;
   const [commitSubject, setCommitSubject] = useState("");
   const [commitDescription, setCommitDescription] = useState("");
   const [isCommitting, setIsCommitting] = useState(false);
@@ -394,6 +392,13 @@ export default function GitPanel({ projectPath, projectName, isGitRepo, onRefres
   useEffect(() => {
     setFileTreeRoot(projectPath);
   }, [projectPath]);
+
+  // Refresh git data when active folder changes in multi-folder workspace
+  useEffect(() => {
+    if (activeFolderId && folders && folders.length > 1) {
+      onRefresh(gitRepoPath);
+    }
+  }, [activeFolderId]);
 
   // Reload file tree when fileTreeRoot changes (due to cd or project change)
   useEffect(() => {
@@ -960,7 +965,7 @@ export default function GitPanel({ projectPath, projectName, isGitRepo, onRefres
         ? `${commitSubject}\n\n${commitDescription}`
         : commitSubject;
       const files = Array.from(filesToCommit);
-      await invoke("commit", { repoPath: projectPath, message: fullMessage, files });
+      await invoke("commit", { repoPath: gitRepoPath, message: fullMessage, files });
       toast.success("Changes committed");
       setCommitSubject("");
       setCommitDescription("");
@@ -983,7 +988,7 @@ export default function GitPanel({ projectPath, projectName, isGitRepo, onRefres
     try {
       const parentCommitId = history[1].id;
       await invoke("reset_to_commit", {
-        repoPath: projectPath,
+        repoPath: gitRepoPath,
         commitId: parentCommitId,
         mode: "soft"
       });
@@ -1003,7 +1008,7 @@ export default function GitPanel({ projectPath, projectName, isGitRepo, onRefres
     // Double RAF + timeout to ensure UI updates before blocking operation
     await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(resolve, 10))));
     try {
-      await invoke("pull_remote", { repoPath: projectPath, remote: "origin" });
+      await invoke("pull_remote", { repoPath: gitRepoPath, remote: "origin" });
       toast.success("Pulled from remote");
       onRefresh();
     } catch (error) {
@@ -1020,7 +1025,7 @@ export default function GitPanel({ projectPath, projectName, isGitRepo, onRefres
     // Double RAF + timeout to ensure UI updates before blocking operation
     await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(resolve, 10))));
     try {
-      await invoke("push_remote", { repoPath: projectPath, remote: "origin" });
+      await invoke("push_remote", { repoPath: gitRepoPath, remote: "origin" });
       toast.success("Pushed to remote");
       onRefresh();
     } catch (error) {
@@ -1041,7 +1046,7 @@ export default function GitPanel({ projectPath, projectName, isGitRepo, onRefres
     setIsPushing(true);
     await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(resolve, 10))));
     try {
-      await invoke("publish_branch", { repoPath: projectPath, remote: "origin" });
+      await invoke("publish_branch", { repoPath: gitRepoPath, remote: "origin" });
       toast.success("Branch published to remote");
       onRefresh();
     } catch (error) {
@@ -1056,7 +1061,7 @@ export default function GitPanel({ projectPath, projectName, isGitRepo, onRefres
   const handleResetToCommit = async (commitId: string, mode: "soft" | "hard") => {
     setIsResetting(true);
     try {
-      await invoke("reset_to_commit", { repoPath: projectPath, commitId, mode });
+      await invoke("reset_to_commit", { repoPath: gitRepoPath, commitId, mode });
       toast.success(mode === "hard" ? "Reset to commit (hard)" : "Reset to commit (soft)");
       setCommitToReset(null);
       onRefresh();
@@ -1070,7 +1075,7 @@ export default function GitPanel({ projectPath, projectName, isGitRepo, onRefres
 
   const handleRevertCommit = async (commitId: string) => {
     try {
-      await invoke("revert_commit", { repoPath: projectPath, commitId });
+      await invoke("revert_commit", { repoPath: gitRepoPath, commitId });
       toast.success("Commit reverted");
       onRefresh();
     } catch (error) {
@@ -1090,7 +1095,7 @@ export default function GitPanel({ projectPath, projectName, isGitRepo, onRefres
         setLoadingCommitDiffs(prev => new Set(prev).add(commitId));
         try {
           const diffs = await invoke<FileDiff[]>("get_commit_diff", {
-            repoPath: projectPath,
+            repoPath: gitRepoPath,
             commitId,
           });
           setCommitDiffs(prev => new Map(prev).set(commitId, diffs));
@@ -1125,7 +1130,7 @@ export default function GitPanel({ projectPath, projectName, isGitRepo, onRefres
 
   const handleDiscardFile = async (filePath: string) => {
     try {
-      await invoke("discard_file", { repoPath: projectPath, filePath });
+      await invoke("discard_file", { repoPath: gitRepoPath, filePath });
       toast.success("Changes discarded");
       setSelectedFiles(prev => {
         const next = new Set(prev);
@@ -1141,7 +1146,7 @@ export default function GitPanel({ projectPath, projectName, isGitRepo, onRefres
 
   const handleAddToGitignore = async (filePath: string, basePath?: string) => {
     try {
-      await invoke("add_to_gitignore", { repoPath: basePath || projectPath, pattern: filePath });
+      await invoke("add_to_gitignore", { repoPath: basePath || gitRepoPath, pattern: filePath });
       toast.success(`Added ${filePath} to .gitignore`);
       onRefresh();
     } catch (error) {
@@ -1152,7 +1157,7 @@ export default function GitPanel({ projectPath, projectName, isGitRepo, onRefres
 
   const handleOpenRemoteUrl = async () => {
     try {
-      const url = await invoke<string>("get_remote_url", { repoPath: projectPath });
+      const url = await invoke<string>("get_remote_url", { repoPath: gitRepoPath });
       await openUrl(url);
     } catch (error) {
       toast.error("Failed to open remote URL");
@@ -1166,7 +1171,7 @@ export default function GitPanel({ projectPath, projectName, isGitRepo, onRefres
     try {
       const filesToDiscard = Array.from(selectedFiles);
       for (const filePath of filesToDiscard) {
-        await invoke("discard_file", { repoPath: projectPath, filePath });
+        await invoke("discard_file", { repoPath: gitRepoPath, filePath });
       }
       toast.success(`Discarded changes to ${filesToDiscard.length} file${filesToDiscard.length > 1 ? 's' : ''}`);
       setSelectedFiles(new Set());
@@ -1226,10 +1231,10 @@ export default function GitPanel({ projectPath, projectName, isGitRepo, onRefres
     if (!newBranchName) return;
     setIsCreatingBranch(true);
     try {
-      await invoke("create_branch", { repoPath: projectPath, name: newBranchName });
+      await invoke("create_branch", { repoPath: gitRepoPath, name: newBranchName });
       toast.success(`Created branch ${newBranchName}`);
       // Automatically switch to the new branch
-      await invoke("checkout_branch", { repoPath: projectPath, branch: newBranchName });
+      await invoke("checkout_branch", { repoPath: gitRepoPath, branch: newBranchName });
       toast.success(`Switched to ${newBranchName}`);
       setShowBranchDialog(false);
       setNewBranchName("");
@@ -1246,7 +1251,7 @@ export default function GitPanel({ projectPath, projectName, isGitRepo, onRefres
     if (branchName === currentBranch?.name) return;
     setIsSwitchingBranch(true);
     try {
-      await invoke("checkout_branch", { repoPath: projectPath, branch: branchName });
+      await invoke("checkout_branch", { repoPath: gitRepoPath, branch: branchName });
       toast.success(`Switched to ${branchName}`);
       onRefresh();
     } catch (error) {
@@ -1321,7 +1326,7 @@ export default function GitPanel({ projectPath, projectName, isGitRepo, onRefres
       });
 
       await invoke("discard_hunk", {
-        repoPath: projectPath,
+        repoPath: gitRepoPath,
         filePath,
         oldStart: hunk.oldStart,
         oldLines: hunk.oldLines,
@@ -1811,7 +1816,7 @@ export default function GitPanel({ projectPath, projectName, isGitRepo, onRefres
                 size="icon"
                 aria-label="Refresh"
                 className="h-7 w-7"
-                onClick={onRefresh}
+                onClick={() => onRefresh(gitRepoPath)}
                 disabled={loading}
               >
                 <RefreshCw className={cn("h-3.5 w-3.5", loading && "animate-spin")} />
