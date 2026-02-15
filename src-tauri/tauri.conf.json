@@ -18,6 +18,7 @@
     "frontendDist": "../dist"
   },
   "app": {
+    "macOSPrivateApi": true,
     "windows": [
       {
         "title": "Chell",
@@ -29,7 +30,8 @@
         "fullscreen": false,
         "titleBarStyle": "Overlay",
         "hiddenTitle": true,
-        "visible": false
+        "visible": false,
+        "transparent": true
       }
     ],
     "security": {
@@ -50,6 +52,14 @@
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
+    ],
+    "fileAssociations": [
+      {
+        "ext": ["chell"],
+        "name": "Chell Workspace",
+        "role": "Editor",
+        "mimeType": "application/x-chell"
+      }
     ],
     "macOS": {
       "signingIdentity": null,

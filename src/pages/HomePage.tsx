@@ -1,6 +1,7 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { invoke } from "@tauri-apps/api/core";
+import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { open } from "@tauri-apps/plugin-dialog";
@@ -12,7 +13,6 @@ import {
   Trash2,
   FolderOpen,
   ArrowRight,
-  HelpCircle,
   Search,
   X,
 } from "lucide-react";
@@ -46,7 +46,7 @@ import Onboarding from "@/components/Onboarding";
 export default function HomePage() {
   const navigate = useNavigate();
   const { projects, addProject, removeProject, updateProject } = useProjectStore();
-  const { defaultClonePath, hasSeenOnboarding, setHasSeenOnboarding } = useSettingsStore();
+  const { defaultClonePath, hasSeenOnboarding, setHasSeenOnboarding, theme, customTheme } = useSettingsStore();
   const [cloneUrl, setCloneUrl] = useState("");
   const [clonePath, setClonePath] = useState("");
   const [isCloning, setIsCloning] = useState(false);
@@ -58,6 +58,7 @@ export default function HomePage() {
   const [activeSidebarItem, setActiveSidebarItem] = useState<"home" | "settings">("home");
   const [projectSearch, setProjectSearch] = useState("");
   const [showProjectSearch, setShowProjectSearch] = useState(false);
+  const sidebarNavRef = useRef<HTMLElement | null>(null);
 
   // Sort and filter projects
   const sortedProjects = [...projects]
@@ -76,6 +77,43 @@ export default function HomePage() {
     }
   }, [showCreateDialog, defaultClonePath]);
 
+  // Enforce intended sidebar width in case external styles inject inline overrides.
+  useEffect(() => {
+    const nav = sidebarNavRef.current;
+    if (!nav) return;
+    const enforceSidebarStyle = () => {
+      nav.style.setProperty("width", "56px", "important");
+      nav.style.setProperty("min-width", "56px", "important");
+      nav.style.setProperty("max-width", "56px", "important");
+    };
+    enforceSidebarStyle();
+    const observer = new MutationObserver((mutations) => {
+      for (const mutation of mutations) {
+        if (mutation.type === "attributes" && mutation.attributeName === "style") {
+          enforceSidebarStyle();
+        }
+      }
+    });
+    observer.observe(nav, { attributes: true, attributeFilter: ["style"] });
+    return () => observer.disconnect();
+  }, []);
+
+  // App background colors per theme (matches CSS --background values)
+  const appBgColors: Record<string, string> = {
+    dark: "#121212",
+    tokyo: "#191b24",
+    light: "#ffffff",
+  };
+  const appBgColor =
+    theme === "custom" && customTheme
+      ? customTheme.colors.background
+      : appBgColors[theme] || appBgColors.dark;
+
+  // Keep webview background aligned with app background to avoid edge tint differences
+  useEffect(() => {
+    getCurrentWebview().setBackgroundColor(appBgColor).catch(() => {});
+  }, [appBgColor]);
+
   const handleNewWindow = async () => {
     try {
       const webview = new WebviewWindow(`chell-${Date.now()}`, {
@@ -89,7 +127,7 @@ export default function HomePage() {
         titleBarStyle: "overlay",
         hiddenTitle: true,
         visible: false,
-        backgroundColor: "#121212",
+        backgroundColor: appBgColor,
       });
       webview.once("tauri://created", () => {
         webview.show();
@@ -340,9 +378,14 @@ export default function HomePage() {
     return "Just now";
   };
 
+  const navButtonBase =
+    "flex h-9 w-9 items-center justify-center rounded-xl border border-transparent text-muted-foreground transition-all";
+  const panelShellClass =
+    "rounded-2xl border border-border bg-card";
+
   return (
     <div
-      className="relative flex h-full bg-background"
+      className="relative flex h-full"
       onMouseDown={(e) => {
         // Only start dragging if clicking in the top 32px and not on interactive elements
         if (e.clientY <= 32) {
@@ -355,35 +398,19 @@ export default function HomePage() {
     >
       {/* Left icon sidebar */}
       <nav
+        ref={sidebarNavRef}
         aria-label="Main navigation"
-        className="flex w-12 flex-col items-center bg-background pt-8 pb-3"
+        className="relative z-20 flex w-14 flex-col pl-2 pb-2 pt-9"
       >
-        {/* Top icons */}
+        {/* Top icon container */}
+        <div className="flex flex-col items-center gap-1 px-3 py-1">
           <div className="flex flex-col items-center gap-1">
-          <Tooltip delayDuration={0}>
-            <TooltipTrigger asChild>
-              <button
-                onClick={() => setActiveSidebarItem("home")}
-                aria-label="Home"
-                className={cn(
-                  "flex h-9 w-9 items-center justify-center rounded-lg transition-colors",
-                  activeSidebarItem === "home"
-                    ? "bg-primary/20 text-primary"
-                    : "text-muted-foreground hover:bg-muted hover:text-foreground"
-                )}
-              >
-                <ChellIcon className="h-5 w-5" />
-              </button>
-            </TooltipTrigger>
-            <TooltipContent side="right">Home</TooltipContent>
-          </Tooltip>
-
           <Tooltip delayDuration={0}>
             <TooltipTrigger asChild>
               <button
                 onClick={handleNewWindow}
                 aria-label="New window"
-                className="flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                className={cn(navButtonBase, "hover:border-border/60 hover:bg-muted/40 hover:text-foreground")}
               >
                 <Plus className="h-5 w-5" />
               </button>
@@ -396,7 +423,7 @@ export default function HomePage() {
               <button
                 onClick={handleOpenProjectFile}
                 aria-label="Open workspace"
-                className="flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                className={cn(navButtonBase, "hover:border-border/60 hover:bg-muted/40 hover:text-foreground")}
               >
                 <FolderOpen className="h-5 w-5" />
               </button>
@@ -413,10 +440,10 @@ export default function HomePage() {
                 }}
                 aria-label="Settings"
                 className={cn(
-                  "flex h-9 w-9 items-center justify-center rounded-lg transition-colors",
+                  navButtonBase,
                   activeSidebarItem === "settings"
-                    ? "bg-primary/20 text-primary"
-                    : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                    ? "border-border bg-muted/70 text-foreground shadow-[0_0_0_1px_hsl(var(--primary)/0.3)]"
+                    : "hover:border-border/60 hover:bg-muted/40 hover:text-foreground"
                 )}
               >
                 <Settings className="h-5 w-5" />
@@ -425,29 +452,33 @@ export default function HomePage() {
             <TooltipContent side="right">Settings</TooltipContent>
           </Tooltip>
         </div>
+        </div>
 
         {/* Spacer */}
         <div className="flex-1" />
 
-        {/* Bottom icons */}
-        <div className="flex flex-col items-center gap-1">
-          <Tooltip delayDuration={0}>
-            <TooltipTrigger asChild>
-              <button
-                onClick={() => setHasSeenOnboarding(false)}
-                aria-label="Show tour"
-                className="flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-              >
-                <HelpCircle className="h-5 w-5" />
-              </button>
-            </TooltipTrigger>
-            <TooltipContent side="right">Show Tour</TooltipContent>
-          </Tooltip>
+        {/* Bottom icon container */}
+        <div className="flex flex-col items-center gap-1 px-3 py-2">
+          <div className="flex flex-col items-center gap-1">
+            <Tooltip delayDuration={0}>
+              <TooltipTrigger asChild>
+                <button
+                  onClick={() => setHasSeenOnboarding(false)}
+                  aria-label="Show tour"
+                  className="flex h-9 w-9 items-center justify-center text-muted-foreground transition-colors hover:text-foreground"
+                >
+                  <ChellIcon className="h-5 w-5" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="right">Show Tour</TooltipContent>
+            </Tooltip>
+          </div>
         </div>
       </nav>
 
       {/* Main content */}
-      <main className="flex flex-1 flex-col overflow-hidden">
+      <main className="relative z-10 flex flex-1 flex-col overflow-hidden px-2 pb-2 pt-9">
+        <div className={cn("flex flex-1 flex-col overflow-hidden", panelShellClass)}>
         <div className="flex flex-1 flex-col overflow-hidden px-6 py-8">
           <div className="mx-auto w-full max-w-md flex flex-col flex-1 overflow-hidden">
             {/* Hero */}
@@ -465,7 +496,7 @@ export default function HomePage() {
             <div className="space-y-3 mt-8 shrink-0">
               <button
                 onClick={() => setShowCloneDialog(true)}
-                className="group flex w-full items-center gap-4 rounded-lg border border-border bg-card p-4 text-left transition-all hover:border-primary/50 hover:bg-muted/50"
+                className="group flex w-full items-center gap-4 rounded-xl border border-border bg-card p-4 text-left transition-all hover:border-primary/40 hover:bg-muted/35"
               >
                 <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
                   <Download className="h-5 w-5 text-muted-foreground group-hover:text-primary" />
@@ -481,7 +512,7 @@ export default function HomePage() {
 
               <button
                 onClick={handleOpenProject}
-                className="group flex w-full items-center gap-4 rounded-lg border border-border bg-card p-4 text-left transition-all hover:border-primary/50 hover:bg-muted/50"
+                className="group flex w-full items-center gap-4 rounded-xl border border-border bg-card p-4 text-left transition-all hover:border-primary/40 hover:bg-muted/35"
               >
                 <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
                   <FolderOpen className="h-5 w-5 text-muted-foreground group-hover:text-primary" />
@@ -497,7 +528,7 @@ export default function HomePage() {
 
               <button
                 onClick={() => setShowCreateDialog(true)}
-                className="group flex w-full items-center gap-4 rounded-lg border border-border bg-card p-4 text-left transition-all hover:border-primary/50 hover:bg-muted/50"
+                className="group flex w-full items-center gap-4 rounded-xl border border-border bg-card p-4 text-left transition-all hover:border-primary/40 hover:bg-muted/35"
               >
                 <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
                   <Plus className="h-5 w-5 text-muted-foreground group-hover:text-primary" />
@@ -514,7 +545,7 @@ export default function HomePage() {
 
             {/* Recent projects */}
             {projects.length > 0 && (
-              <div className="flex flex-col mt-8 flex-1 min-h-0 overflow-hidden">
+              <div className="mt-8 flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-border bg-card p-2">
                 <div className="flex items-center justify-between px-1 mb-3 shrink-0">
                   {showProjectSearch ? (
                     <div className="flex items-center gap-2 flex-1">
@@ -562,7 +593,7 @@ export default function HomePage() {
                     <ContextMenu key={project.id}>
                       <ContextMenuTrigger>
                         <button
-                          className="group flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left transition-colors hover:bg-muted/50"
+                          className="group flex w-full items-center gap-3 rounded-lg border border-transparent px-3 py-2.5 text-left transition-colors hover:border-border/55 hover:bg-muted/40"
                           onClick={() => handleProjectClick(project)}
                         >
                           <FolderGit2 className="h-4 w-4 shrink-0 text-primary" />
@@ -597,6 +628,7 @@ export default function HomePage() {
             )}
 
           </div>
+        </div>
         </div>
       </main>
 

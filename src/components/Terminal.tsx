@@ -25,13 +25,13 @@ interface TerminalProps {
   isAssistant?: boolean;  // Hint for terminal type detection in backend
 }
 
-// Terminal themes matching app themes
+// Terminal themes matching app themes (backgrounds match --card CSS variable)
 const TERMINAL_THEMES: Record<string, ITheme> = {
   dark: {
-    background: "#0d0d0d",
+    background: "#171717",
     foreground: "#e0e0e0",
     cursor: "#FF6B00",
-    cursorAccent: "#0d0d0d",
+    cursorAccent: "#171717",
     selectionBackground: "#FF6B0040",
     black: "#000000",
     red: "#ff5555",
@@ -51,10 +51,10 @@ const TERMINAL_THEMES: Record<string, ITheme> = {
     brightWhite: "#ffffff",
   },
   tokyo: {
-    background: "#1a1b26",
+    background: "#1f2130",
     foreground: "#c0caf5",
     cursor: "#7aa2f7",
-    cursorAccent: "#1a1b26",
+    cursorAccent: "#1f2130",
     selectionBackground: "#7aa2f740",
     black: "#15161e",
     red: "#f7768e",
@@ -74,10 +74,10 @@ const TERMINAL_THEMES: Record<string, ITheme> = {
     brightWhite: "#c0caf5",
   },
   light: {
-    background: "#fafafa",
+    background: "#ffffff",
     foreground: "#383a42",
     cursor: "#526eff",
-    cursorAccent: "#fafafa",
+    cursorAccent: "#ffffff",
     selectionBackground: "#526eff30",
     black: "#383a42",
     red: "#e45649",
