@@ -1532,7 +1532,7 @@ export default function ProjectPage() {
   const navButtonBase =
     "flex h-9 w-9 items-center justify-center rounded-xl border border-transparent text-muted-foreground transition-all";
   const panelShellClass =
-    "rounded-2xl border border-border bg-card shadow-[var(--panel-shadow)]";
+    "rounded-2xl border border-border bg-card";
 
   return (
     <div
