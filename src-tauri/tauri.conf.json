@@ -53,6 +53,14 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
+    "fileAssociations": [
+      {
+        "ext": ["chell"],
+        "name": "Chell Workspace",
+        "role": "Editor",
+        "mimeType": "application/x-chell"
+      }
+    ],
     "macOS": {
       "signingIdentity": null,
       "providerShortName": "2H66PPM438",

@@ -71,6 +71,7 @@ import SmartShell from "@/components/SmartShell";
 import GitPanel from "@/components/GitPanel";
 import NotesPanel from "@/components/NotesPanel";
 import SettingsSheet from "@/components/SettingsSheet";
+import Onboarding from "@/components/Onboarding";
 import { useProjectStore, ensureFolders } from "@/stores/projectStore";
 import { useGitStore } from "@/stores/gitStore";
 import { useSettingsStore } from "@/stores/settingsStore";
@@ -293,7 +294,7 @@ export default function ProjectPage() {
   const navigate = useNavigate();
   const { projects, openTab, addFolderToProject, removeFolderFromProject, updateProject, addProject } = useProjectStore();
   const { branches, setStatus, setDiffs, setBranches, setHistory, setLoading } = useGitStore();
-  const { assistantArgs, defaultAssistant, autoFetchRemote, theme, customTheme, customAssistants, hiddenAssistantIds } = useSettingsStore();
+  const { assistantArgs, defaultAssistant, autoFetchRemote, theme, customTheme, customAssistants, hiddenAssistantIds, hasSeenOnboarding, setHasSeenOnboarding } = useSettingsStore();
 
   // Terminal background colors per theme (matches --card CSS variable)
   const terminalBgColors: Record<string, string> = {
@@ -1692,53 +1693,30 @@ export default function ProjectPage() {
               <button
                 onClick={async () => {
                   const selected = await open({
-                    directory: false,
+                    directory: true,
                     multiple: false,
-                    title: "Open Workspace",
-                    filters: [{ name: "Chell Project", extensions: ["chell"] }],
+                    title: "Select Folder",
                   });
                   if (selected && typeof selected === "string") {
-                    const projectData = await invoke<ProjectFileData>("load_project_file", { path: selected });
-                    const primaryPath = projectData.folders[0]?.path || "";
-                    if (!primaryPath) {
-                      toast.error("Project file has no folders");
-                      return;
-                    }
-                    // Check if project with this path already exists
-                    const existingProject = projects.find(p => p.path === primaryPath);
-                    if (existingProject) {
-                      // Update existing project with new folders from .chell file
-                      const updatedProject = {
-                        ...existingProject,
-                        name: projectData.name,
-                        folders: projectData.folders,
-                        lastOpened: new Date().toISOString(),
-                      };
-                      updateProject(existingProject.id, updatedProject);
-                      await invoke("add_project", { project: updatedProject });
-                      navigate(`/project/${existingProject.id}`);
-                    } else {
-                      // Create new project
-                      const project: Project = {
-                        id: crypto.randomUUID(),
-                        name: projectData.name,
-                        path: primaryPath,
-                        folders: projectData.folders,
-                        lastOpened: new Date().toISOString(),
-                      };
-                      addProject(project);
-                      await invoke("add_project", { project });
-                      navigate(`/project/${project.id}`);
-                    }
+                    const name = selected.split(/[/\\]/).pop() || "Unknown";
+                    const project: Project = ensureFolders({
+                      id: crypto.randomUUID(),
+                      name,
+                      path: selected,
+                      lastOpened: new Date().toISOString(),
+                    });
+                    addProject(project);
+                    await invoke("add_project", { project });
+                    navigate(`/project/${project.id}`);
                   }
                 }}
-                aria-label="Open workspace"
+                aria-label="Open folder"
                 className={cn(navButtonBase, "hover:border-border/60 hover:bg-muted/40 hover:text-foreground")}
               >
                 <FolderOpen className="h-5 w-5" />
               </button>
             </TooltipTrigger>
-            <TooltipContent side="right">Open Workspace</TooltipContent>
+            <TooltipContent side="right">Open Folder</TooltipContent>
           </Tooltip>
 
           <Tooltip delayDuration={0}>
@@ -1875,6 +1853,7 @@ export default function ProjectPage() {
               <TooltipTrigger asChild>
                 <button
                   aria-label="Help"
+                  onClick={() => setHasSeenOnboarding(false)}
                   className={cn(navButtonBase, "hover:border-border/60 hover:bg-muted/40 hover:text-foreground")}
                 >
                   <ChellIcon className="h-5 w-5" />
@@ -2710,6 +2689,11 @@ export default function ProjectPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Onboarding */}
+      {!hasSeenOnboarding && (
+        <Onboarding onComplete={() => setHasSeenOnboarding(true)} />
+      )}
     </div>
   );
 }

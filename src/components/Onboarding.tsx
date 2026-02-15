@@ -7,6 +7,8 @@ import {
   Sparkles,
   ArrowRight,
   ArrowLeft,
+  ArrowDownToLine,
+  ArrowUpFromLine,
   Check,
   ChevronDown,
   ChevronRight,
@@ -14,9 +16,11 @@ import {
   Plus,
   RotateCcw,
   Settings,
-  HelpCircle,
+  LetterText,
   X,
   Folder,
+  FolderOpen,
+  FolderTree,
   RefreshCw,
   History,
 } from "lucide-react";
@@ -82,17 +86,29 @@ function MockGitPanel({ showDiff, showRevert }: { showDiff?: boolean; showRevert
   return (
     <div className="flex h-full flex-col">
       {/* Header - matches GitPanel header */}
-      <div className="flex h-10 items-center justify-end gap-1 px-3">
-        <span className="flex items-center gap-1 rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium">
-          <GitBranch className="h-3 w-3" />
-          main
-        </span>
-        <button className="flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground">
-          <RefreshCw className="h-3.5 w-3.5" />
-        </button>
-        <button className="flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground">
-          <History className="h-3.5 w-3.5" />
-        </button>
+      <div className="flex h-10 items-center justify-between gap-1 px-4">
+        <div className="flex items-center gap-1">
+          <button className="flex h-7 w-7 items-center justify-center rounded text-muted-foreground">
+            <ArrowDownToLine className="h-3.5 w-3.5" />
+          </button>
+          <button className="flex h-7 w-7 items-center justify-center rounded text-muted-foreground">
+            <ArrowUpFromLine className="h-3.5 w-3.5" />
+          </button>
+          <button className="flex h-7 w-7 items-center justify-center rounded text-muted-foreground">
+            <RefreshCw className="h-3.5 w-3.5" />
+          </button>
+        </div>
+        <div className="flex items-center gap-1">
+          <button className="flex h-7 w-7 items-center justify-center rounded bg-primary/15 text-primary">
+            <GitBranch className="h-3.5 w-3.5" />
+          </button>
+          <button className="flex h-7 w-7 items-center justify-center rounded text-muted-foreground">
+            <History className="h-3.5 w-3.5" />
+          </button>
+          <button className="flex h-7 w-7 items-center justify-center rounded text-muted-foreground">
+            <FolderTree className="h-3.5 w-3.5" />
+          </button>
+        </div>
       </div>
 
       {/* Changes section */}
@@ -194,10 +210,10 @@ function MockAssistantPanel() {
   return (
     <div className="flex h-full flex-col select-none overflow-hidden">
       {/* Tab bar - exact match */}
-      <div className="flex h-10 items-center border-b border-border">
+      <div className="flex h-10 items-center border-b border-border/70">
         <div className="flex flex-1 items-center overflow-x-auto">
           {/* Active tab */}
-          <div className="group flex items-center gap-1 border-r border-border px-3 py-2 text-sm font-medium border-b-2 border-b-primary bg-muted/50 text-foreground">
+          <div className="group flex items-center gap-1 border-r border-border/70 px-3 py-2 text-sm font-medium bg-card text-foreground">
             <TerminalIcon className="h-3.5 w-3.5 shrink-0" />
             <span className="truncate max-w-[120px]">Claude Code</span>
             <button className="ml-1 rounded p-0.5 opacity-0 group-hover:opacity-100 hover:bg-muted transition-opacity">
@@ -205,7 +221,7 @@ function MockAssistantPanel() {
             </button>
           </div>
           {/* Inactive tab */}
-          <div className="group flex items-center gap-1 border-r border-border px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-muted/30 hover:text-foreground">
+          <div className="group flex items-center gap-1 border-r border-border/70 px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-card/50 hover:text-foreground">
             <TerminalIcon className="h-3.5 w-3.5 shrink-0" />
             <span className="truncate max-w-[120px]">Aider</span>
             <button className="ml-1 rounded p-0.5 opacity-0 group-hover:opacity-100 hover:bg-muted transition-opacity">
@@ -213,7 +229,7 @@ function MockAssistantPanel() {
             </button>
           </div>
         </div>
-        <button className="flex h-full items-center px-3 py-2 text-muted-foreground transition-colors hover:bg-muted/30 hover:text-foreground">
+        <button className="flex h-full items-center px-3 py-2 text-muted-foreground transition-colors hover:bg-card/50 hover:text-foreground">
           <Plus className="h-4 w-4" />
         </button>
       </div>
@@ -244,9 +260,8 @@ function MockShellPanel() {
   return (
     <div className="flex h-full flex-col overflow-hidden">
       {/* Header - exact match */}
-      <div className="flex h-10 items-center justify-between px-2 border-b border-border">
+      <div className="flex h-10 items-center justify-between px-2 border-b border-border/70 bg-card/45">
         <div className="flex items-center gap-2 min-w-0 flex-1">
-          <TerminalIcon className="h-4 w-4 shrink-0 text-primary" />
           <Button
             variant="ghost"
             size="sm"
@@ -257,9 +272,6 @@ function MockShellPanel() {
             <ChevronDown className="h-3 w-3 shrink-0" />
           </Button>
         </div>
-        <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0">
-          <X className="h-3 w-3" />
-        </Button>
       </div>
 
       {/* Terminal content */}
@@ -325,65 +337,62 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
     >
       {/* Mock UI - exact layout from ProjectPage */}
       <div className="absolute inset-0 flex">
-        {/* Horizontal divider line */}
-        <div className="absolute left-0 right-0 top-10 h-px bg-border" />
-        {/* Vertical divider for sidebar */}
-        <div className="absolute left-12 top-10 bottom-0 w-px bg-border" />
 
         {/* Left icon sidebar - exact match from ProjectPage */}
-        <div className="flex w-12 flex-col bg-background pt-8 pb-3">
-          <div className="flex flex-1 flex-col items-center mt-[9px] pt-3">
-            {/* Top icons */}
-            <div className="flex flex-col items-center gap-1">
-              <button className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/20 text-primary">
-                <ChellIcon className="h-5 w-5" />
-              </button>
-              <button className="flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground">
-                <Plus className="h-5 w-5" />
-              </button>
-              <button className="flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground">
-                <Settings className="h-5 w-5" />
-              </button>
-            </div>
+        <div className="flex w-14 flex-col pl-2 pb-2 pt-9">
+          {/* Top icons */}
+          <div className="flex flex-col items-center gap-1 px-3 py-1">
+            <button className="flex h-9 w-9 items-center justify-center rounded-xl text-muted-foreground">
+              <Plus className="h-5 w-5" />
+            </button>
+            <button className="flex h-9 w-9 items-center justify-center rounded-xl text-muted-foreground">
+              <FolderOpen className="h-5 w-5" />
+            </button>
+            <button className="flex h-9 w-9 items-center justify-center rounded-xl text-muted-foreground">
+              <Settings className="h-5 w-5" />
+            </button>
+          </div>
 
-            <div className="flex-1" />
+          <div className="flex-1" />
 
-            {/* Panel toggle icons */}
-            <div className="flex flex-col items-center gap-1">
-              <button className={cn(
-                "flex h-9 w-9 items-center justify-center rounded-lg transition-colors",
-                step.highlight === "git" ? "text-primary" : "text-foreground"
-              )}>
-                <GitBranch className="h-5 w-5" />
-              </button>
-              <button className={cn(
-                "flex h-9 w-9 items-center justify-center rounded-lg transition-colors",
-                step.highlight === "assistant" ? "text-primary" : "text-foreground"
-              )}>
-                <Bot className="h-5 w-5" />
-              </button>
-              <button className={cn(
-                "flex h-9 w-9 items-center justify-center rounded-lg transition-colors",
-                step.highlight === "shell" ? "text-primary" : "text-foreground"
-              )}>
-                <ChellIcon className="h-5 w-5" />
-              </button>
-            </div>
+          {/* Panel toggle icons */}
+          <div className="flex flex-col items-center gap-1 px-3 py-2">
+            <button className={cn(
+              "flex h-9 w-9 items-center justify-center rounded-xl text-muted-foreground transition-colors",
+              step.highlight === "git" && "border border-border bg-muted"
+            )}>
+              <GitBranch className="h-5 w-5" />
+            </button>
+            <button className={cn(
+              "flex h-9 w-9 items-center justify-center rounded-xl text-muted-foreground transition-colors",
+              step.highlight === "assistant" && "border border-border bg-muted"
+            )}>
+              <Bot className="h-5 w-5" />
+            </button>
+            <button className={cn(
+              "flex h-9 w-9 items-center justify-center rounded-xl text-muted-foreground transition-colors",
+              step.highlight === "shell" && "border border-border bg-muted"
+            )}>
+              <TerminalIcon className="h-5 w-5" />
+            </button>
+            <button className="flex h-9 w-9 items-center justify-center rounded-xl text-muted-foreground">
+              <LetterText className="h-5 w-5" />
+            </button>
+          </div>
 
-            {/* Bottom icons */}
-            <div className="flex flex-col items-center gap-1 mt-2">
-              <button className="flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground">
-                <HelpCircle className="h-5 w-5" />
-              </button>
-            </div>
+          {/* Bottom icon - help */}
+          <div className="flex flex-col items-center gap-1 px-3 py-2">
+            <button className="flex h-9 w-9 items-center justify-center text-muted-foreground">
+              <ChellIcon className="h-5 w-5" />
+            </button>
           </div>
         </div>
 
         {/* Main content area */}
-        <div className="flex-1 flex overflow-hidden">
+        <div className="flex-1 flex gap-1 overflow-hidden px-2 pb-2 pt-9">
           {/* Git Panel */}
           <motion.div
-            className="h-full flex flex-col overflow-hidden shrink-0"
+            className="h-full flex flex-col overflow-hidden shrink-0 rounded-2xl border border-border/70 bg-card/70"
             style={{ width: 280 }}
             animate={{
               opacity: step.highlight === "git" || !step.highlight ? 1 : 0.3,
@@ -396,12 +405,9 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
             />
           </motion.div>
 
-          {/* Resize handle */}
-          <div className="w-1 bg-border shrink-0" />
-
           {/* Assistant Panel */}
           <motion.div
-            className="flex-1 h-full overflow-hidden min-w-0"
+            className="flex-1 h-full overflow-hidden min-w-0 rounded-2xl border border-border/70 bg-card/70"
             animate={{
               opacity: step.highlight === "assistant" || !step.highlight ? 1 : 0.3,
             }}
@@ -410,12 +416,9 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
             <MockAssistantPanel />
           </motion.div>
 
-          {/* Resize handle */}
-          <div className="w-1 bg-border shrink-0" />
-
           {/* Shell Panel */}
           <motion.div
-            className="h-full flex flex-col overflow-hidden shrink-0"
+            className="h-full flex flex-col overflow-hidden shrink-0 rounded-2xl border border-border/70 bg-card/70"
             style={{ width: 400 }}
             animate={{
               opacity: step.highlight === "shell" || !step.highlight ? 1 : 0.3,
@@ -435,12 +438,13 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             style={{
-              left: step.highlight === "git" ? 48 : step.highlight === "assistant" ? 329 : undefined,
-              right: step.highlight === "shell" ? 0 : step.highlight === "assistant" ? 401 : undefined,
-              top: 0,
-              bottom: 0,
+              left: step.highlight === "git" ? 56 : step.highlight === "assistant" ? 345 : undefined,
+              right: step.highlight === "shell" ? 8 : step.highlight === "assistant" ? 409 : undefined,
+              top: 36,
+              bottom: 8,
               width: step.highlight === "git" ? 281 : step.highlight === "shell" ? 401 : undefined,
               boxShadow: "0 0 0 9999px rgba(0, 0, 0, 0.85)",
+              borderRadius: "1rem",
             }}
           />
         </div>
@@ -448,7 +452,7 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
 
       {/* Dim overlay behind modal - only when not highlighting a panel */}
       {!step.highlight && (
-        <div className="absolute inset-0 bg-black/50 z-[5]" />
+        <div className="absolute inset-0 bg-black/60 z-[5]" />
       )}
 
       {/* Main content card */}

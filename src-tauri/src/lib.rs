@@ -3343,12 +3343,34 @@ pub fn run() {
         .run(|_app_handle, _event| {
             // Handle dock icon click on macOS when no windows are visible
             #[cfg(target_os = "macos")]
-            if let tauri::RunEvent::Reopen { has_visible_windows, .. } = _event {
+            if let tauri::RunEvent::Reopen { has_visible_windows, .. } = &_event {
                 if !has_visible_windows {
                     if let Some(window) = _app_handle.get_webview_window("main") {
                         let _ = window.emit("navigate-home", ());
                         let _ = window.show();
                         let _ = window.set_focus();
+                    }
+                }
+            }
+
+            // Handle file associations - when a .chell file is double-clicked
+            if let tauri::RunEvent::Opened { urls } = _event {
+                for url in urls {
+                    // Convert URL to file path
+                    if let Ok(path) = url.to_file_path() {
+                        if let Some(ext) = path.extension() {
+                            if ext == "chell" {
+                                if let Some(path_str) = path.to_str() {
+                                    // Show and focus the main window
+                                    if let Some(window) = _app_handle.get_webview_window("main") {
+                                        let _ = window.show();
+                                        let _ = window.set_focus();
+                                        // Emit event to frontend to open the workspace file
+                                        let _ = window.emit("open-workspace-file", path_str);
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
