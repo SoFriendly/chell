@@ -18,6 +18,7 @@
     "frontendDist": "../dist"
   },
   "app": {
+    "macOSPrivateApi": true,
     "windows": [
       {
         "title": "Chell",
@@ -29,7 +30,8 @@
         "fullscreen": false,
         "titleBarStyle": "Overlay",
         "hiddenTitle": true,
-        "visible": false
+        "visible": false,
+        "transparent": true
       }
     ],
     "security": {

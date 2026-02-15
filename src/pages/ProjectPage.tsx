@@ -441,10 +441,10 @@ export default function ProjectPage() {
         setGitPanelWidth(0);
         await window.setSize(new LogicalSize(logicalWidth - panelWidth, logicalHeight));
       } else {
-        // Showing: show panel, then resize window
-        setGitPanelWidth(savedGitWidth.current);
-        setShowGitPanel(true);
+        // Showing: resize window first, brief delay, then show panel
         await window.setSize(new LogicalSize(logicalWidth + panelWidth, logicalHeight));
+                setGitPanelWidth(savedGitWidth.current);
+        setShowGitPanel(true);
       }
       setTimeout(() => { isPanelResizing.current = false; }, 100);
     } catch (err) {
@@ -470,10 +470,10 @@ export default function ProjectPage() {
         setShowAssistantPanel(false);
         await window.setSize(new LogicalSize(logicalWidth - panelWidth, logicalHeight));
       } else {
-        // Showing: show panel, then resize window
-        setAssistantPanelWidth(savedAssistantWidth.current);
-        setShowAssistantPanel(true);
+        // Showing: resize window first, brief delay, then show panel
         await window.setSize(new LogicalSize(logicalWidth + panelWidth, logicalHeight));
+                setAssistantPanelWidth(savedAssistantWidth.current);
+        setShowAssistantPanel(true);
       }
       setTimeout(() => { isPanelResizing.current = false; }, 100);
     } catch (err) {
@@ -500,10 +500,10 @@ export default function ProjectPage() {
         setShellPanelWidth(0);
         await window.setSize(new LogicalSize(logicalWidth - panelWidth, logicalHeight));
       } else {
-        // Showing: show panel, then resize window
-        setShellPanelWidth(savedShellWidth.current);
-        setShowShellPanel(true);
+        // Showing: resize window first, brief delay, then show panel
         await window.setSize(new LogicalSize(logicalWidth + panelWidth, logicalHeight));
+                setShellPanelWidth(savedShellWidth.current);
+        setShowShellPanel(true);
       }
       setTimeout(() => { isPanelResizing.current = false; }, 100);
     } catch (err) {
@@ -530,10 +530,10 @@ export default function ProjectPage() {
         setNotesPanelWidth(0);
         await window.setSize(new LogicalSize(logicalWidth - panelWidth, logicalHeight));
       } else {
-        // Showing: show panel, then resize window
-        setNotesPanelWidth(savedNotesWidth.current);
-        setShowNotesPanel(true);
+        // Showing: resize window first, brief delay, then show panel
         await window.setSize(new LogicalSize(logicalWidth + panelWidth, logicalHeight));
+                setNotesPanelWidth(savedNotesWidth.current);
+        setShowNotesPanel(true);
       }
       setTimeout(() => { isPanelResizing.current = false; }, 100);
     } catch (err) {
@@ -1548,7 +1548,7 @@ export default function ProjectPage() {
 
   return (
     <div
-      className="relative flex h-full"
+      className="relative flex h-full bg-background"
       onMouseDown={(e) => {
         // Only start dragging if clicking in the top 40px and not on interactive elements
         if (e.clientY <= 40) {
