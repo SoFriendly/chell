@@ -4,12 +4,13 @@ import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import Terminal from "@/components/Terminal";
 import { useSettingsStore } from "@/stores/settingsStore";
+import { hslToHex, THEME_DEFAULTS } from "@/lib/colorUtils";
 
 export default function TerminalWindow() {
   const [searchParams] = useSearchParams();
   const cwd = searchParams.get("cwd") || "";
   const title = searchParams.get("title") || "Terminal";
-  const { theme } = useSettingsStore();
+  const { theme, customTheme } = useSettingsStore();
 
   // Support both direct command and editor+file params
   const directCommand = searchParams.get("command") || "";
@@ -57,13 +58,11 @@ export default function TerminalWindow() {
     return () => { unlisten.then(fn => fn()); };
   }, []);
 
-  // Terminal background colors per theme (matches CSS --card values)
-  const terminalBgColors: Record<string, string> = {
-    dark: "#171717",
-    tokyo: "#1f2130",
-    light: "#ffffff",
-  };
-  const terminalBg = terminalBgColors[theme] || terminalBgColors.dark;
+  // Terminal background colors per theme (computed from CSS --card values)
+  const terminalBg =
+    theme === "custom" && customTheme
+      ? customTheme.colors.card
+      : hslToHex(THEME_DEFAULTS[theme as keyof typeof THEME_DEFAULTS]?.card || THEME_DEFAULTS.dark.card);
 
   useEffect(() => {
     // Set window title

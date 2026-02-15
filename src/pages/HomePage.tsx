@@ -39,6 +39,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { useProjectStore, ensureFolders } from "@/stores/projectStore";
 import { useSettingsStore } from "@/stores/settingsStore";
 import { cn } from "@/lib/utils";
+import { hslToHex, THEME_DEFAULTS } from "@/lib/colorUtils";
 import type { Project, ProjectFileData } from "@/types";
 import SettingsSheet from "@/components/SettingsSheet";
 import Onboarding from "@/components/Onboarding";
@@ -98,16 +99,11 @@ export default function HomePage() {
     return () => observer.disconnect();
   }, []);
 
-  // App background colors per theme (matches CSS --background values)
-  const appBgColors: Record<string, string> = {
-    dark: "#121212",
-    tokyo: "#191b24",
-    light: "#ffffff",
-  };
+  // App background colors per theme (computed from CSS --background values)
   const appBgColor =
     theme === "custom" && customTheme
       ? customTheme.colors.background
-      : appBgColors[theme] || appBgColors.dark;
+      : hslToHex(THEME_DEFAULTS[theme as keyof typeof THEME_DEFAULTS]?.background || THEME_DEFAULTS.dark.background);
 
   // Keep webview background aligned with app background to avoid edge tint differences
   useEffect(() => {

@@ -11,7 +11,15 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { useSettingsStore } from "@/stores/settingsStore";
 import { FilePathLinkProvider } from "@/utils/terminalLinkProvider";
+import { hslToHex, THEME_DEFAULTS } from "@/lib/colorUtils";
 import "@xterm/xterm/css/xterm.css";
+
+// Compute background colors from CSS variables to ensure they match
+const THEME_BACKGROUNDS = {
+  dark: hslToHex(THEME_DEFAULTS.dark.card),
+  tokyo: hslToHex(THEME_DEFAULTS.tokyo.card),
+  light: hslToHex(THEME_DEFAULTS.light.card),
+};
 
 interface TerminalProps {
   id?: string;  // Optional - if not provided, Terminal will spawn its own
@@ -28,10 +36,10 @@ interface TerminalProps {
 // Terminal themes matching app themes (backgrounds match --card CSS variable)
 const TERMINAL_THEMES: Record<string, ITheme> = {
   dark: {
-    background: "#171717",
+    background: THEME_BACKGROUNDS.dark,
     foreground: "#e0e0e0",
     cursor: "#FF6B00",
-    cursorAccent: "#171717",
+    cursorAccent: THEME_BACKGROUNDS.dark,
     selectionBackground: "#FF6B0040",
     black: "#000000",
     red: "#ff5555",
@@ -51,10 +59,10 @@ const TERMINAL_THEMES: Record<string, ITheme> = {
     brightWhite: "#ffffff",
   },
   tokyo: {
-    background: "#1f2130",
+    background: THEME_BACKGROUNDS.tokyo,
     foreground: "#c0caf5",
     cursor: "#7aa2f7",
-    cursorAccent: "#1f2130",
+    cursorAccent: THEME_BACKGROUNDS.tokyo,
     selectionBackground: "#7aa2f740",
     black: "#15161e",
     red: "#f7768e",
@@ -74,10 +82,10 @@ const TERMINAL_THEMES: Record<string, ITheme> = {
     brightWhite: "#c0caf5",
   },
   light: {
-    background: "#ffffff",
+    background: THEME_BACKGROUNDS.light,
     foreground: "#383a42",
     cursor: "#526eff",
-    cursorAccent: "#ffffff",
+    cursorAccent: THEME_BACKGROUNDS.light,
     selectionBackground: "#526eff30",
     black: "#383a42",
     red: "#e45649",
@@ -107,7 +115,22 @@ export default function Terminal({ id, command = "", args, cwd, onTerminalReady,
   const [terminalId, setTerminalId] = useState<string | null>(id || null);
   const [initialDimensions, setInitialDimensions] = useState<{ cols: number; rows: number } | null>(null);
   const theme = useSettingsStore((state) => state.theme);
+  const customTheme = useSettingsStore((state) => state.customTheme);
   const hasSpawnedRef = useRef(false);
+
+  // Get the appropriate terminal theme, handling custom themes
+  const getTerminalTheme = (): ITheme => {
+    if (theme === "custom" && customTheme) {
+      // Build a custom terminal theme based on the user's custom theme colors
+      const baseTheme = TERMINAL_THEMES[customTheme.baseTheme] || TERMINAL_THEMES.dark;
+      return {
+        ...baseTheme,
+        background: customTheme.colors.card,
+        cursorAccent: customTheme.colors.card,
+      };
+    }
+    return TERMINAL_THEMES[theme] || TERMINAL_THEMES.dark;
+  };
   const savedScrollTopRef = useRef(0);
 
   // Keep ref in sync with terminalId state for use in key handler
@@ -204,16 +227,16 @@ export default function Terminal({ id, command = "", args, cwd, onTerminalReady,
   // Update terminal theme when app theme changes
   useEffect(() => {
     if (terminalRef.current) {
-      terminalRef.current.options.theme = TERMINAL_THEMES[theme] || TERMINAL_THEMES.dark;
+      terminalRef.current.options.theme = getTerminalTheme();
     }
-  }, [theme]);
+  }, [theme, customTheme]);
 
   // Phase 2: Create xterm and calculate dimensions (but don't connect to PTY yet)
   useEffect(() => {
     if (!containerRef.current || !isContainerReady || terminalRef.current) return;
 
     const terminal = new XTerm({
-      theme: TERMINAL_THEMES[theme] || TERMINAL_THEMES.dark,
+      theme: getTerminalTheme(),
       fontFamily: '"MesloLGS NF", "Hack Nerd Font", "FiraCode Nerd Font", "JetBrains Mono", "Fira Code", "SF Mono", "Menlo", monospace',
       fontSize: 13,
       lineHeight: 1.2,
@@ -726,7 +749,7 @@ export default function Terminal({ id, command = "", args, cwd, onTerminalReady,
   };
 
   // Get background color from current theme
-  const bgColor = TERMINAL_THEMES[theme]?.background || TERMINAL_THEMES.dark.background;
+  const bgColor = getTerminalTheme().background;
 
   // Prevent drag events from causing canvas to black out
   const handleDragOver = (e: React.DragEvent) => {

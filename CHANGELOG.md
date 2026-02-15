@@ -2,6 +2,15 @@
 
 All notable changes to Chell will be documented in this file.
 
+## [0.1.81]
+
+### Bug Fixes
+- Fix terminal background color mismatch on Chell Blue and custom themes
+  - Active tabs, shell panel header, and terminal now all use the same computed color
+  - Theme colors are now derived from `THEME_DEFAULTS` using `hslToHex()` instead of hardcoded hex values
+  - Custom themes properly apply their card color to the terminal background
+  - Terminal xterm theme updates when custom theme colors change
+
 ## [0.1.80]
 
 - Overhauled the entire user interface

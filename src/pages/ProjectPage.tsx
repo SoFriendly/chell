@@ -84,6 +84,7 @@ import { useProjectStore, ensureFolders } from "@/stores/projectStore";
 import { useGitStore } from "@/stores/gitStore";
 import { useSettingsStore } from "@/stores/settingsStore";
 import { cn } from "@/lib/utils";
+import { hslToHex, THEME_DEFAULTS } from "@/lib/colorUtils";
 import { getAllAssistants, getAllAssistantCommands } from "@/lib/assistants";
 import type { Project, GitStatus, FileDiff, Branch, Commit, CustomThemeColors, ProjectFolder, ProjectFileData } from "@/types";
 
@@ -124,6 +125,13 @@ const getMonacoLanguage = (filePath: string): string => {
   return languageMap[ext] || 'plaintext';
 };
 
+// Compute Monaco background colors from CSS variables
+const MONACO_BACKGROUNDS = {
+  dark: hslToHex(THEME_DEFAULTS.dark.card),
+  tokyo: hslToHex(THEME_DEFAULTS.tokyo.card),
+  light: hslToHex(THEME_DEFAULTS.light.card),
+};
+
 // Define custom Monaco themes matching app themes
 const defineMonacoThemes = (
   monaco: Parameters<NonNullable<Parameters<typeof Editor>[0]['beforeMount']>>[0],
@@ -145,7 +153,7 @@ const defineMonacoThemes = (
       { token: 'operator', foreground: 'ff79c6' },
     ],
     colors: {
-      'editor.background': '#171717',
+      'editor.background': MONACO_BACKGROUNDS.dark,
       'editor.foreground': '#e0e0e0',
       'editor.lineHighlightBackground': '#1f1f1f',
       'editor.selectionBackground': '#FF6B0040',
@@ -173,7 +181,7 @@ const defineMonacoThemes = (
       { token: 'operator', foreground: '89ddff' },
     ],
     colors: {
-      'editor.background': '#1f2130',
+      'editor.background': MONACO_BACKGROUNDS.tokyo,
       'editor.foreground': '#c0caf5',
       'editor.lineHighlightBackground': '#282a3a',
       'editor.selectionBackground': '#7aa2f740',
@@ -201,7 +209,7 @@ const defineMonacoThemes = (
       { token: 'operator', foreground: 'a626a4' },
     ],
     colors: {
-      'editor.background': '#ffffff',
+      'editor.background': MONACO_BACKGROUNDS.light,
       'editor.foreground': '#383a42',
       'editor.lineHighlightBackground': '#f5f5f5',
       'editor.selectionBackground': '#526eff30',
@@ -304,24 +312,17 @@ export default function ProjectPage() {
   const { branches, setStatus, setDiffs, setBranches, setHistory, setLoading } = useGitStore();
   const { assistantArgs, defaultAssistant, autoFetchRemote, theme, customTheme, customAssistants, hiddenAssistantIds, hasSeenOnboarding, setHasSeenOnboarding } = useSettingsStore();
 
-  // Terminal background colors per theme (matches --card CSS variable)
-  const terminalBgColors: Record<string, string> = {
-    dark: "#171717",
-    tokyo: "#1f2130",
-    light: "#ffffff",
-  };
-  const terminalBg = terminalBgColors[theme] || terminalBgColors.dark;
+  // Terminal background colors per theme (computed from --card CSS variable)
+  const terminalBg =
+    theme === "custom" && customTheme
+      ? customTheme.colors.card
+      : hslToHex(THEME_DEFAULTS[theme as keyof typeof THEME_DEFAULTS]?.card || THEME_DEFAULTS.dark.card);
 
-  // App background colors per theme (matches CSS --background values)
-  const appBgColors: Record<string, string> = {
-    dark: "#121212",
-    tokyo: "#191b24",
-    light: "#ffffff",
-  };
+  // App background colors per theme (computed from CSS --background values)
   const appBgColor =
     theme === "custom" && customTheme
       ? customTheme.colors.background
-      : appBgColors[theme] || appBgColors.dark;
+      : hslToHex(THEME_DEFAULTS[theme as keyof typeof THEME_DEFAULTS]?.background || THEME_DEFAULTS.dark.background);
 
   // Set webview background color to match app surface (prevents edge tint mismatch)
   useEffect(() => {
@@ -1957,13 +1958,13 @@ export default function ProjectPage() {
             panelShellClass,
             !showAssistantPanel && "hidden"
           )}
-          style={{ flex: `1 1 ${assistantPanelWidth}px`, minWidth: 200 }}
+          style={{ flex: `1 1 ${assistantPanelWidth}px`, minWidth: 200, backgroundColor: terminalBg }}
           onDragOver={handlePanelDragOver}
           onDrop={handleAssistantPanelDrop}
         >
           <div className="flex h-full flex-col select-none overflow-hidden">
           {/* Tab bar */}
-          <div className="flex h-10 items-center border-b border-border" style={{ backgroundColor: terminalBg }}>
+          <div className="flex h-10 items-center border-b border-border">
             <div
               ref={tabListRef}
               role="tablist"
@@ -1985,12 +1986,13 @@ export default function ProjectPage() {
                     className={cn(
                       "group relative flex h-10 shrink-0 cursor-grab items-center gap-1.5 px-3 text-sm font-medium transition-colors",
                       activeTabId === tab.id
-                        ? "bg-card text-foreground border-r border-border/70"
+                        ? "text-foreground border-r border-border/70"
                         : "text-muted-foreground hover:bg-card/50 hover:text-foreground",
                       index > 0 && "border-l border-border/70",
                       draggingTabId === tab.id && "opacity-60 cursor-grabbing",
                       dragOverTabId === tab.id && draggingTabId !== tab.id && "bg-card/30"
                     )}
+                    style={activeTabId === tab.id ? { backgroundColor: terminalBg } : undefined}
                     onClick={() => !draggingTabId && setActiveTabId(tab.id)}
                     onMouseDown={(event) => handleTabMouseDown(event, tab.id)}
                   >
@@ -2026,7 +2028,8 @@ export default function ProjectPage() {
                       closeTab(tab.id);
                     }}
                     aria-label={`Close ${tab.name} tab`}
-                    className="absolute right-1 rounded p-0.5 opacity-0 group-hover:opacity-100 hover:bg-muted transition-opacity bg-card"
+                    className="absolute right-1 rounded p-0.5 opacity-0 group-hover:opacity-100 hover:bg-muted transition-opacity"
+                    style={{ backgroundColor: terminalBg }}
                   >
                     <X className="h-3 w-3" />
                   </button>
