@@ -441,10 +441,10 @@ export default function ProjectPage() {
         setGitPanelWidth(0);
         await window.setSize(new LogicalSize(logicalWidth - panelWidth, logicalHeight));
       } else {
-        // Showing: resize window first, brief delay, then show panel
-        await window.setSize(new LogicalSize(logicalWidth + panelWidth, logicalHeight));
-                setGitPanelWidth(savedGitWidth.current);
+        // Showing: show panel first (clipped), then resize window to reveal it
+        setGitPanelWidth(savedGitWidth.current);
         setShowGitPanel(true);
+        await window.setSize(new LogicalSize(logicalWidth + panelWidth, logicalHeight));
       }
       setTimeout(() => { isPanelResizing.current = false; }, 100);
     } catch (err) {
@@ -470,10 +470,10 @@ export default function ProjectPage() {
         setShowAssistantPanel(false);
         await window.setSize(new LogicalSize(logicalWidth - panelWidth, logicalHeight));
       } else {
-        // Showing: resize window first, brief delay, then show panel
-        await window.setSize(new LogicalSize(logicalWidth + panelWidth, logicalHeight));
-                setAssistantPanelWidth(savedAssistantWidth.current);
+        // Showing: show panel first (clipped), then resize window to reveal it
+        setAssistantPanelWidth(savedAssistantWidth.current);
         setShowAssistantPanel(true);
+        await window.setSize(new LogicalSize(logicalWidth + panelWidth, logicalHeight));
       }
       setTimeout(() => { isPanelResizing.current = false; }, 100);
     } catch (err) {
@@ -500,10 +500,10 @@ export default function ProjectPage() {
         setShellPanelWidth(0);
         await window.setSize(new LogicalSize(logicalWidth - panelWidth, logicalHeight));
       } else {
-        // Showing: resize window first, brief delay, then show panel
-        await window.setSize(new LogicalSize(logicalWidth + panelWidth, logicalHeight));
-                setShellPanelWidth(savedShellWidth.current);
+        // Showing: show panel first (clipped), then resize window to reveal it
+        setShellPanelWidth(savedShellWidth.current);
         setShowShellPanel(true);
+        await window.setSize(new LogicalSize(logicalWidth + panelWidth, logicalHeight));
       }
       setTimeout(() => { isPanelResizing.current = false; }, 100);
     } catch (err) {
@@ -530,10 +530,10 @@ export default function ProjectPage() {
         setNotesPanelWidth(0);
         await window.setSize(new LogicalSize(logicalWidth - panelWidth, logicalHeight));
       } else {
-        // Showing: resize window first, brief delay, then show panel
-        await window.setSize(new LogicalSize(logicalWidth + panelWidth, logicalHeight));
-                setNotesPanelWidth(savedNotesWidth.current);
+        // Showing: show panel first (clipped), then resize window to reveal it
+        setNotesPanelWidth(savedNotesWidth.current);
         setShowNotesPanel(true);
+        await window.setSize(new LogicalSize(logicalWidth + panelWidth, logicalHeight));
       }
       setTimeout(() => { isPanelResizing.current = false; }, 100);
     } catch (err) {
