@@ -2,6 +2,10 @@
 
 All notable changes to Chell will be documented in this file.
 
+## [0.1.80]
+
+- Overhauled the entire user interface
+
 ## [0.1.79]
 
 ### Git
