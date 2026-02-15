@@ -16,13 +16,15 @@ import {
   Folder,
   FolderOpen,
   ChevronDown,
+  Check,
+  Loader2,
   Search,
   Sparkles,
   FileText,
   Pencil,
   Save,
   Eye,
-  StickyNote,
+  LetterText,
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -32,9 +34,18 @@ import { ChellIcon } from "@/components/icons/ChellIcon";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
@@ -280,7 +291,7 @@ export default function ProjectPage() {
   const { projectId } = useParams<{ projectId: string }>();
   const navigate = useNavigate();
   const { projects, openTab, addFolderToProject, removeFolderFromProject, updateProject, addProject } = useProjectStore();
-  const { setStatus, setDiffs, setBranches, setHistory, setLoading } = useGitStore();
+  const { branches, setStatus, setDiffs, setBranches, setHistory, setLoading } = useGitStore();
   const { assistantArgs, defaultAssistant, autoFetchRemote, theme, customTheme, customAssistants, hiddenAssistantIds } = useSettingsStore();
 
   // Terminal background colors per theme (matches --card CSS variable)
@@ -338,6 +349,11 @@ export default function ProjectPage() {
   const [draggingTabId, setDraggingTabId] = useState<string | null>(null);
   const [dragOverTabId, setDragOverTabId] = useState<string | null>(null);
   const [dragPosition, setDragPosition] = useState<{ x: number; y: number } | null>(null);
+  const [activeFolderId, setActiveFolderId] = useState<string | null>(null);
+  const [isSwitchingBranch, setIsSwitchingBranch] = useState(false);
+  const [showBranchDialog, setShowBranchDialog] = useState(false);
+  const [newBranchName, setNewBranchName] = useState("");
+  const [isCreatingBranch, setIsCreatingBranch] = useState(false);
   const tabListRef = useRef<HTMLDivElement | null>(null);
   const sidebarNavRef = useRef<HTMLElement | null>(null);
   const tabRefs = useRef<Map<string, HTMLDivElement>>(new Map());
@@ -361,6 +377,49 @@ export default function ProjectPage() {
 
   // Count visible panels - must always have at least one
   const visiblePanelCount = [showGitPanel, showAssistantPanel, showShellPanel, showNotesPanel, showMarkdownPanel].filter(Boolean).length;
+
+  // Derived values for header: active folder, current branch, branch lists
+  const activeFolder = currentProject?.folders?.find(f => f.id === activeFolderId) || currentProject?.folders?.[0];
+  const gitRepoPath = activeFolder?.path ?? currentProject?.path ?? "";
+  const currentBranch = branches.find(b => b.isHead);
+  const localBranches = branches.filter(b => !b.isRemote);
+  const remoteBranches = branches.filter(b => b.isRemote);
+
+  // Handle branch switching
+  const handleSwitchBranch = async (branchName: string) => {
+    if (branchName === currentBranch?.name || !gitRepoPath) return;
+    setIsSwitchingBranch(true);
+    try {
+      await invoke("checkout_branch", { repoPath: gitRepoPath, branch: branchName });
+      toast.success(`Switched to ${branchName}`);
+      refreshGitData(gitRepoPath);
+    } catch (error) {
+      toast.error("Failed to switch branch");
+      console.error(error);
+    } finally {
+      setIsSwitchingBranch(false);
+    }
+  };
+
+  // Handle creating a new branch
+  const handleCreateBranch = async () => {
+    if (!newBranchName.trim() || !gitRepoPath) return;
+    setIsCreatingBranch(true);
+    try {
+      await invoke("create_branch", { repoPath: gitRepoPath, name: newBranchName });
+      toast.success(`Created branch ${newBranchName}`);
+      await invoke("checkout_branch", { repoPath: gitRepoPath, branch: newBranchName });
+      toast.success(`Switched to ${newBranchName}`);
+      refreshGitData(gitRepoPath);
+      setShowBranchDialog(false);
+      setNewBranchName("");
+    } catch (error) {
+      toast.error("Failed to create branch");
+      console.error(error);
+    } finally {
+      setIsCreatingBranch(false);
+    }
+  };
 
   // Toggle handlers - resize window when adding/removing panels
   const toggleGitPanel = async () => {
@@ -1473,8 +1532,6 @@ export default function ProjectPage() {
     "flex h-9 w-9 items-center justify-center rounded-xl border border-transparent text-muted-foreground transition-all";
   const panelShellClass =
     "rounded-2xl border border-border/70 bg-card/70 shadow-[8px_14px_36px_rgba(0,0,0,0.35)] backdrop-blur-xl";
-  const navShellClass =
-    "rounded-2xl border border-border/70 bg-card/40 shadow-none";
 
   return (
     <div
@@ -1490,14 +1547,120 @@ export default function ProjectPage() {
         }
       }}
     >
+      {/* Centered header with project/folder name and branch selector */}
+      <div className="absolute top-0 left-1/2 -translate-x-1/2 z-30 flex items-center gap-1.5 h-12 mt-0.5">
+        {currentProject?.folders && currentProject.folders.length > 1 ? (
+          /* Multi-folder: active folder name with dropdown */
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-6 gap-1 px-2 text-sm font-medium hover:bg-muted/50"
+              >
+                <span className="truncate max-w-[150px]">{activeFolder?.name || currentProject.name}</span>
+                <ChevronDown className="h-3 w-3 text-muted-foreground shrink-0" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="center" className="w-56 max-h-80 overflow-y-auto">
+              <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground">
+                Folders
+              </div>
+              {currentProject.folders.map((folder) => (
+                <DropdownMenuItem
+                  key={folder.id}
+                  onClick={() => setActiveFolderId(folder.id)}
+                  className="flex items-center justify-between"
+                >
+                  <span className="truncate">{folder.name}</span>
+                  {folder.id === (activeFolderId || currentProject.folders?.[0]?.id) && (
+                    <Check className="h-3 w-3 text-primary" />
+                  )}
+                </DropdownMenuItem>
+              ))}
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={handleAddFolder}>
+                <Plus className="mr-2 h-3 w-3" />
+                Add Folder to Workspace
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        ) : (
+          /* Single folder: just show project name */
+          <span className="text-sm font-medium px-2">{currentProject?.name}</span>
+        )}
+        {isGitRepo && (
+          <>
+            <span className="text-muted-foreground text-sm">/</span>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 gap-1 px-2 text-xs font-normal text-muted-foreground hover:text-foreground"
+                  disabled={isSwitchingBranch}
+                >
+                  <GitBranch className="h-3 w-3" />
+                  <span className="max-w-[100px] truncate">{currentBranch?.name || "main"}</span>
+                  {isSwitchingBranch ? (
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                  ) : (
+                    <ChevronDown className="h-3 w-3" />
+                  )}
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="center" className="w-56 max-h-80 overflow-y-auto">
+                <DropdownMenuItem onClick={() => setShowBranchDialog(true)}>
+                  <Plus className="mr-2 h-3 w-3" />
+                  New branch
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                {localBranches.length > 0 && (
+                  <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground">
+                    Local
+                  </div>
+                )}
+                {localBranches.map((branch) => (
+                  <DropdownMenuItem
+                    key={branch.name}
+                    onClick={() => handleSwitchBranch(branch.name)}
+                    className="flex items-center justify-between"
+                  >
+                    <span className="truncate">{branch.name}</span>
+                    {branch.isHead && <Check className="h-3 w-3 text-primary" />}
+                  </DropdownMenuItem>
+                ))}
+                {remoteBranches.length > 0 && (
+                  <>
+                    <DropdownMenuSeparator />
+                    <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground">
+                      Remote
+                    </div>
+                    {remoteBranches.map((branch) => (
+                      <DropdownMenuItem
+                        key={branch.name}
+                        onClick={() => handleSwitchBranch(branch.name.replace(/^origin\//, ""))}
+                        className="flex items-center justify-between text-muted-foreground"
+                      >
+                        <span className="truncate">{branch.name}</span>
+                      </DropdownMenuItem>
+                    ))}
+                  </>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </>
+        )}
+      </div>
+
       {/* Left icon sidebar */}
       <nav
         ref={sidebarNavRef}
         aria-label="Sidebar"
-        className="relative z-20 flex w-14 flex-col pl-2 pb-2 pt-9"
+        className="relative z-20 flex w-14 flex-col pl-2 pb-2 pt-12"
       >
         {/* Top icon container */}
-        <div className={cn("flex flex-col items-center gap-1 px-3 py-1", navShellClass)}>
+        <div className="flex flex-col items-center gap-1 px-3 py-1">
           <Tooltip delayDuration={0}>
             <TooltipTrigger asChild>
               <button
@@ -1591,7 +1754,7 @@ export default function ProjectPage() {
         <div className="flex-1" />
 
         {/* Bottom icon container */}
-        <div className={cn("flex flex-col items-center gap-1 px-3 py-2", navShellClass)}>
+        <div className="flex flex-col items-center gap-1 px-3 py-2">
           {/* Panel toggle icons */}
           <div className="flex flex-col items-center gap-1">
             <Tooltip delayDuration={0}>
@@ -1680,7 +1843,7 @@ export default function ProjectPage() {
                   showNotesPanel && visiblePanelCount <= 1 && "cursor-not-allowed"
                 )}
               >
-                <StickyNote className="h-5 w-5" />
+                <LetterText className="h-5 w-5" />
               </button>
               </TooltipTrigger>
               <TooltipContent side="right">
@@ -1713,7 +1876,7 @@ export default function ProjectPage() {
       {/* Main content area */}
       <main
         ref={containerRef}
-        className="relative z-10 flex flex-1 overflow-hidden px-2 pb-2 pt-9"
+        className="relative z-10 flex flex-1 overflow-hidden px-2 pb-2 pt-12"
       >
         <h1 className="sr-only">{currentProject.name} - Chell</h1>
         {/* Left sidebar - Git panel */}
@@ -1737,6 +1900,7 @@ export default function ProjectPage() {
             workspaceName={currentProject.name}
             onRenameWorkspace={handleRenameWorkspace}
             onSaveWorkspace={handleSaveProject}
+            hideHeader
           />
         </div>
         {/* Resize handle for git panel */}
@@ -2068,7 +2232,6 @@ export default function ProjectPage() {
           {/* Header */}
           <div className="flex h-10 items-center justify-between border-b border-border/70 bg-card/45 px-2">
             <div className="flex items-center gap-2 min-w-0 flex-1">
-              <TerminalIcon className="h-4 w-4 shrink-0 text-primary" />
               {shellCwd && (
                 <DropdownMenu onOpenChange={(open) => open && loadShellDirectories(shellCwd)}>
                   <DropdownMenuTrigger asChild>
@@ -2507,6 +2670,33 @@ export default function ProjectPage() {
           </CommandGroup>
         </CommandList>
       </CommandDialog>
+
+      {/* New Branch Dialog */}
+      <Dialog open={showBranchDialog} onOpenChange={setShowBranchDialog}>
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogHeader>
+            <DialogTitle>Create new branch</DialogTitle>
+            <DialogDescription>
+              Create a new branch from {currentBranch?.name || "current branch"}
+            </DialogDescription>
+          </DialogHeader>
+          <Input
+            placeholder="Branch name"
+            value={newBranchName}
+            onChange={(e) => setNewBranchName(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && newBranchName.trim()) {
+                handleCreateBranch();
+              }
+            }}
+          />
+          <DialogFooter>
+            <Button onClick={handleCreateBranch} disabled={!newBranchName.trim() || isCreatingBranch}>
+              {isCreatingBranch ? "Creating..." : "Create branch"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -382,8 +382,6 @@ export default function HomePage() {
     "flex h-9 w-9 items-center justify-center rounded-xl border border-transparent text-muted-foreground transition-all";
   const panelShellClass =
     "rounded-2xl border border-border/70 bg-card/70 shadow-[8px_14px_36px_rgba(0,0,0,0.35)] backdrop-blur-xl";
-  const navShellClass =
-    "rounded-2xl border border-border/70 bg-card/40 shadow-none";
 
   return (
     <div
@@ -405,7 +403,7 @@ export default function HomePage() {
         className="relative z-20 flex w-14 flex-col pl-2 pb-2 pt-9"
       >
         {/* Top icon container */}
-        <div className={cn("flex flex-col items-center gap-1 px-3 py-1", navShellClass)}>
+        <div className="flex flex-col items-center gap-1 px-3 py-1">
           <div className="flex flex-col items-center gap-1">
           <Tooltip delayDuration={0}>
             <TooltipTrigger asChild>
@@ -460,7 +458,7 @@ export default function HomePage() {
         <div className="flex-1" />
 
         {/* Bottom icon container */}
-        <div className={cn("flex flex-col items-center gap-1 px-3 py-2", navShellClass)}>
+        <div className="flex flex-col items-center gap-1 px-3 py-2">
           <div className="flex flex-col items-center gap-1">
             <Tooltip delayDuration={0}>
               <TooltipTrigger asChild>

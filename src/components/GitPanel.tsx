@@ -95,6 +95,7 @@ interface GitPanelProps {
   workspaceName?: string; // Custom workspace name (Issue #6)
   onRenameWorkspace?: (name: string) => void; // Callback to rename workspace
   onSaveWorkspace?: () => void; // Callback to save workspace file
+  hideHeader?: boolean; // Hide the project name/branch UI (shown in main window header instead)
 }
 
 interface CommitSuggestion {
@@ -156,7 +157,7 @@ const isPreviewable = (path: string): boolean => {
   return !binaryExtensions.some(ext => lower.endsWith(ext));
 };
 
-export default function GitPanel({ projectPath, projectName, isGitRepo, onRefresh, onInitRepo, onOpenMarkdown, shellCwd, folders, onAddFolder, onRemoveFolder, workspaceName, onRenameWorkspace, onSaveWorkspace }: GitPanelProps) {
+export default function GitPanel({ projectPath, projectName, isGitRepo, onRefresh, onInitRepo, onOpenMarkdown, shellCwd, folders, onAddFolder, onRemoveFolder, workspaceName, onRenameWorkspace, onSaveWorkspace, hideHeader }: GitPanelProps) {
   const { diffs, branches, loading, status, history } = useGitStore();
   const { autoCommitMessage, groqApiKey, preferredEditor, showHiddenFiles } = useSettingsStore();
   // Track the current root path for the file tree (can be changed by cd command)
@@ -1937,8 +1938,8 @@ export default function GitPanel({ projectPath, projectName, isGitRepo, onRefres
       <ContextMenuTrigger asChild>
       <ScrollArea className="flex-1">
         <div className="px-4 pb-4 pt-4">
-          {/* Project name (with folder selector chevron if multiple folders) and branch - hidden in files view */}
-          {viewMode !== "files" && (
+          {/* Project name (with folder selector chevron if multiple folders) and branch - hidden in files view or when header is shown */}
+          {viewMode !== "files" && !hideHeader && (
             <div className="flex items-center gap-1.5 mb-4 flex-wrap">
               {folders && folders.length > 1 ? (
                 /* Multi-folder: active folder name with chevron dropdown */
