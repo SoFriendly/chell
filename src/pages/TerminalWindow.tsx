@@ -57,11 +57,11 @@ export default function TerminalWindow() {
     return () => { unlisten.then(fn => fn()); };
   }, []);
 
-  // Terminal background colors per theme
+  // Terminal background colors per theme (matches CSS --card values)
   const terminalBgColors: Record<string, string> = {
-    dark: "#0d0d0d",
-    tokyo: "#1a1b26",
-    light: "#fafafa",
+    dark: "#171717",
+    tokyo: "#1f2130",
+    light: "#ffffff",
   };
   const terminalBg = terminalBgColors[theme] || terminalBgColors.dark;
 

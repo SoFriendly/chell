@@ -10,7 +10,6 @@ import {
   Settings,
   Terminal as TerminalIcon,
   X,
-  HelpCircle,
   Plus,
   Bot,
   GitBranch,
@@ -125,9 +124,9 @@ const defineMonacoThemes = (
       { token: 'operator', foreground: 'ff79c6' },
     ],
     colors: {
-      'editor.background': '#0d0d0d',
+      'editor.background': '#171717',
       'editor.foreground': '#e0e0e0',
-      'editor.lineHighlightBackground': '#1a1a1a',
+      'editor.lineHighlightBackground': '#1f1f1f',
       'editor.selectionBackground': '#FF6B0040',
       'editorCursor.foreground': '#FF6B00',
       'editorLineNumber.foreground': '#6272a4',
@@ -153,9 +152,9 @@ const defineMonacoThemes = (
       { token: 'operator', foreground: '89ddff' },
     ],
     colors: {
-      'editor.background': '#1a1b26',
+      'editor.background': '#1f2130',
       'editor.foreground': '#c0caf5',
-      'editor.lineHighlightBackground': '#24283b',
+      'editor.lineHighlightBackground': '#282a3a',
       'editor.selectionBackground': '#7aa2f740',
       'editorCursor.foreground': '#7aa2f7',
       'editorLineNumber.foreground': '#414868',
@@ -181,9 +180,9 @@ const defineMonacoThemes = (
       { token: 'operator', foreground: 'a626a4' },
     ],
     colors: {
-      'editor.background': '#fafafa',
+      'editor.background': '#ffffff',
       'editor.foreground': '#383a42',
-      'editor.lineHighlightBackground': '#f0f0f0',
+      'editor.lineHighlightBackground': '#f5f5f5',
       'editor.selectionBackground': '#526eff30',
       'editorCursor.foreground': '#526eff',
       'editorLineNumber.foreground': '#a0a1a7',
@@ -284,19 +283,29 @@ export default function ProjectPage() {
   const { setStatus, setDiffs, setBranches, setHistory, setLoading } = useGitStore();
   const { assistantArgs, defaultAssistant, autoFetchRemote, theme, customTheme, customAssistants, hiddenAssistantIds } = useSettingsStore();
 
-  // Terminal background colors per theme
+  // Terminal background colors per theme (matches --card CSS variable)
   const terminalBgColors: Record<string, string> = {
-    dark: "#0d0d0d",
-    tokyo: "#1a1b26",
-    light: "#fafafa",
+    dark: "#171717",
+    tokyo: "#1f2130",
+    light: "#ffffff",
   };
   const terminalBg = terminalBgColors[theme] || terminalBgColors.dark;
 
-  // Set webview background color to match theme (prevents white flash on resize)
+  // App background colors per theme (matches CSS --background values)
+  const appBgColors: Record<string, string> = {
+    dark: "#121212",
+    tokyo: "#191b24",
+    light: "#ffffff",
+  };
+  const appBgColor =
+    theme === "custom" && customTheme
+      ? customTheme.colors.background
+      : appBgColors[theme] || appBgColors.dark;
+
+  // Set webview background color to match app surface (prevents edge tint mismatch)
   useEffect(() => {
-    const bgColor = terminalBgColors[theme] || terminalBgColors.dark;
-    getCurrentWebview().setBackgroundColor(bgColor).catch(() => {});
-  }, [theme]);
+    getCurrentWebview().setBackgroundColor(appBgColor).catch(() => {});
+  }, [appBgColor]);
 
   const [currentProject, setCurrentProject] = useState<Project | null>(null);
   const [showSettings, setShowSettings] = useState(false);
@@ -330,6 +339,7 @@ export default function ProjectPage() {
   const [dragOverTabId, setDragOverTabId] = useState<string | null>(null);
   const [dragPosition, setDragPosition] = useState<{ x: number; y: number } | null>(null);
   const tabListRef = useRef<HTMLDivElement | null>(null);
+  const sidebarNavRef = useRef<HTMLElement | null>(null);
   const tabRefs = useRef<Map<string, HTMLDivElement>>(new Map());
 
   // Kill all terminal sessions when the window is closed
@@ -352,43 +362,112 @@ export default function ProjectPage() {
   // Count visible panels - must always have at least one
   const visiblePanelCount = [showGitPanel, showAssistantPanel, showShellPanel, showNotesPanel, showMarkdownPanel].filter(Boolean).length;
 
-  // Toggle handlers
-  const toggleGitPanel = () => {
+  // Toggle handlers - resize window when adding/removing panels
+  const toggleGitPanel = async () => {
     if (showGitPanel && visiblePanelCount <= 1) return;
-    if (showGitPanel) {
-      savedGitWidth.current = gitPanelWidth;
-      setGitPanelWidth(0);
-    } else {
-      setGitPanelWidth(savedGitWidth.current);
+    try {
+      isPanelResizing.current = true;
+      const window = getCurrentWindow();
+      const scaleFactor = await window.scaleFactor();
+      const physicalSize = await window.innerSize();
+      const logicalWidth = physicalSize.width / scaleFactor;
+      const logicalHeight = physicalSize.height / scaleFactor;
+      const panelWidth = showGitPanel ? gitPanelWidth + 8 : savedGitWidth.current + 8;
+
+      if (showGitPanel) {
+        savedGitWidth.current = gitPanelWidth;
+        setGitPanelWidth(0);
+        await window.setSize(new LogicalSize(logicalWidth - panelWidth, logicalHeight));
+      } else {
+        setGitPanelWidth(savedGitWidth.current);
+        await window.setSize(new LogicalSize(logicalWidth + panelWidth, logicalHeight));
+      }
+      setShowGitPanel(!showGitPanel);
+      setTimeout(() => { isPanelResizing.current = false; }, 100);
+    } catch (err) {
+      console.error("Failed to resize window:", err);
+      isPanelResizing.current = false;
     }
-    setShowGitPanel(!showGitPanel);
   };
 
-  const toggleAssistantPanel = () => {
+  const toggleAssistantPanel = async () => {
     if (showAssistantPanel && visiblePanelCount <= 1) return;
-    setShowAssistantPanel(!showAssistantPanel);
+    try {
+      isPanelResizing.current = true;
+      const window = getCurrentWindow();
+      const scaleFactor = await window.scaleFactor();
+      const physicalSize = await window.innerSize();
+      const logicalWidth = physicalSize.width / scaleFactor;
+      const logicalHeight = physicalSize.height / scaleFactor;
+      const panelWidth = showAssistantPanel ? assistantPanelWidth + 8 : savedAssistantWidth.current + 8;
+
+      if (showAssistantPanel) {
+        savedAssistantWidth.current = assistantPanelWidth;
+        await window.setSize(new LogicalSize(logicalWidth - panelWidth, logicalHeight));
+      } else {
+        setAssistantPanelWidth(savedAssistantWidth.current);
+        await window.setSize(new LogicalSize(logicalWidth + panelWidth, logicalHeight));
+      }
+      setShowAssistantPanel(!showAssistantPanel);
+      setTimeout(() => { isPanelResizing.current = false; }, 100);
+    } catch (err) {
+      console.error("Failed to resize window:", err);
+      isPanelResizing.current = false;
+    }
   };
 
-  const toggleShellPanel = () => {
+  const toggleShellPanel = async () => {
     if (showShellPanel && visiblePanelCount <= 1) return;
-    if (showShellPanel) {
-      savedShellWidth.current = shellPanelWidth;
-      setShellPanelWidth(0);
-    } else {
-      setShellPanelWidth(savedShellWidth.current);
+    try {
+      isPanelResizing.current = true;
+      const window = getCurrentWindow();
+      const scaleFactor = await window.scaleFactor();
+      const physicalSize = await window.innerSize();
+      const logicalWidth = physicalSize.width / scaleFactor;
+      const logicalHeight = physicalSize.height / scaleFactor;
+      const panelWidth = showShellPanel ? shellPanelWidth + 8 : savedShellWidth.current + 8;
+
+      if (showShellPanel) {
+        savedShellWidth.current = shellPanelWidth;
+        setShellPanelWidth(0);
+        await window.setSize(new LogicalSize(logicalWidth - panelWidth, logicalHeight));
+      } else {
+        setShellPanelWidth(savedShellWidth.current);
+        await window.setSize(new LogicalSize(logicalWidth + panelWidth, logicalHeight));
+      }
+      setShowShellPanel(!showShellPanel);
+      setTimeout(() => { isPanelResizing.current = false; }, 100);
+    } catch (err) {
+      console.error("Failed to resize window:", err);
+      isPanelResizing.current = false;
     }
-    setShowShellPanel(!showShellPanel);
   };
 
-  const toggleNotesPanel = () => {
+  const toggleNotesPanel = async () => {
     if (showNotesPanel && visiblePanelCount <= 1) return;
-    if (showNotesPanel) {
-      savedNotesWidth.current = notesPanelWidth;
-      setNotesPanelWidth(0);
-    } else {
-      setNotesPanelWidth(savedNotesWidth.current);
+    try {
+      isPanelResizing.current = true;
+      const window = getCurrentWindow();
+      const scaleFactor = await window.scaleFactor();
+      const physicalSize = await window.innerSize();
+      const logicalWidth = physicalSize.width / scaleFactor;
+      const logicalHeight = physicalSize.height / scaleFactor;
+      const panelWidth = showNotesPanel ? notesPanelWidth + 8 : savedNotesWidth.current + 8;
+
+      if (showNotesPanel) {
+        savedNotesWidth.current = notesPanelWidth;
+        setNotesPanelWidth(0);
+        await window.setSize(new LogicalSize(logicalWidth - panelWidth, logicalHeight));
+      } else {
+        setNotesPanelWidth(savedNotesWidth.current);
+        await window.setSize(new LogicalSize(logicalWidth + panelWidth, logicalHeight));
+      }
+      setShowNotesPanel(!showNotesPanel);
+      setTimeout(() => { isPanelResizing.current = false; }, 100);
+    } catch (err) {
+      console.error("Failed to resize window:", err);
+      isPanelResizing.current = false;
     }
-    setShowNotesPanel(!showNotesPanel);
   };
 
   const handleSaveMarkdownRef = useRef<() => void>(() => {});
@@ -401,16 +480,16 @@ export default function ProjectPage() {
 
       // Expand window to accommodate the panel if not already showing
       if (!showMarkdownPanel) {
-        isMarkdownResizing.current = true;
+        isPanelResizing.current = true;
         const window = getCurrentWindow();
         const scaleFactor = await window.scaleFactor();
         const physicalSize = await window.innerSize();
         const logicalWidth = physicalSize.width / scaleFactor;
         const logicalHeight = physicalSize.height / scaleFactor;
-        const panelWidth = savedMarkdownWidth.current + 5; // +5 for resize handle
+        const panelWidth = savedMarkdownWidth.current + 8; // +5 for resize handle
         await window.setSize(new LogicalSize(logicalWidth + panelWidth, logicalHeight));
         // Clear the flag after layout settles
-        setTimeout(() => { isMarkdownResizing.current = false; }, 100);
+        setTimeout(() => { isPanelResizing.current = false; }, 100);
       }
 
       setShowMarkdownPanel(true);
@@ -484,19 +563,19 @@ export default function ProjectPage() {
 
     // Then shrink window (don't block on this)
     try {
-      isMarkdownResizing.current = true;
+      isPanelResizing.current = true;
       const window = getCurrentWindow();
       const scaleFactor = await window.scaleFactor();
       const physicalSize = await window.innerSize();
       const logicalWidth = physicalSize.width / scaleFactor;
       const logicalHeight = physicalSize.height / scaleFactor;
-      const panelWidth = markdownPanelWidth + 5; // +5 for resize handle
+      const panelWidth = markdownPanelWidth + 8; // +5 for resize handle
       await window.setSize(new LogicalSize(logicalWidth - panelWidth, logicalHeight));
       // Clear the flag after layout settles
-      setTimeout(() => { isMarkdownResizing.current = false; }, 100);
+      setTimeout(() => { isPanelResizing.current = false; }, 100);
     } catch (err) {
       console.error("Failed to resize window:", err);
-      isMarkdownResizing.current = false;
+      isPanelResizing.current = false;
     }
   };
 
@@ -514,7 +593,7 @@ export default function ProjectPage() {
         titleBarStyle: "overlay",
         hiddenTitle: true,
         visible: false,
-        backgroundColor: "#121212",
+        backgroundColor: appBgColor,
       });
       webview.once("tauri://created", () => {
         webview.show();
@@ -695,7 +774,7 @@ export default function ProjectPage() {
   const savedMarkdownWidth = useRef(400);
   const savedNotesWidth = useRef(320);
   const lastContainerWidth = useRef<number | null>(null);
-  const isMarkdownResizing = useRef(false);
+  const isPanelResizing = useRef(false);
 
   // Proportionally resize all panels when window is resized
   useEffect(() => {
@@ -712,8 +791,8 @@ export default function ProjectPage() {
         return;
       }
 
-      // Skip proportional resize when the window change is from opening/closing the markdown panel
-      if (isMarkdownResizing.current) {
+      // Skip proportional resize when the window change is from opening/closing a panel
+      if (isPanelResizing.current) {
         lastContainerWidth.current = newWidth;
         return;
       }
@@ -752,6 +831,27 @@ export default function ProjectPage() {
     }, 50);
     return () => clearTimeout(timer);
   }, [showGitPanel, showAssistantPanel, showShellPanel, showNotesPanel]);
+
+  // Enforce intended sidebar width in case external styles inject inline overrides.
+  useEffect(() => {
+    const nav = sidebarNavRef.current;
+    if (!nav) return;
+    const enforceSidebarStyle = () => {
+      nav.style.setProperty("width", "56px", "important");
+      nav.style.setProperty("min-width", "56px", "important");
+      nav.style.setProperty("max-width", "56px", "important");
+    };
+    enforceSidebarStyle();
+    const observer = new MutationObserver((mutations) => {
+      for (const mutation of mutations) {
+        if (mutation.type === "attributes" && mutation.attributeName === "style") {
+          enforceSidebarStyle();
+        }
+      }
+    });
+    observer.observe(nav, { attributes: true, attributeFilter: ["style"] });
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => {
     // Skip if we already have this project loaded
@@ -1369,10 +1469,16 @@ export default function ProjectPage() {
   }
 
   const assistantOptions = getAssistantOptions();
+  const navButtonBase =
+    "flex h-9 w-9 items-center justify-center rounded-xl border border-transparent text-muted-foreground transition-all";
+  const panelShellClass =
+    "rounded-2xl border border-border/70 bg-card/70 shadow-[8px_14px_36px_rgba(0,0,0,0.35)] backdrop-blur-xl";
+  const navShellClass =
+    "rounded-2xl border border-border/70 bg-card/40 shadow-none";
 
   return (
     <div
-      className="relative flex h-full bg-background"
+      className="relative flex h-full"
       onMouseDown={(e) => {
         // Only start dragging if clicking in the top 40px and not on interactive elements
         if (e.clientY <= 40) {
@@ -1384,44 +1490,20 @@ export default function ProjectPage() {
         }
       }}
     >
-      {/* Single horizontal divider line spanning full width */}
-      <div className="absolute left-0 right-0 top-10 h-px bg-border" />
-      {/* Vertical divider for sidebar */}
-      <div className="absolute left-12 top-10 bottom-0 w-px bg-border" />
-
       {/* Left icon sidebar */}
       <nav
+        ref={sidebarNavRef}
         aria-label="Sidebar"
-        className="flex w-12 flex-col bg-background pt-8 pb-3"
+        className="relative z-20 flex w-14 flex-col pl-2 pb-2 pt-9"
       >
-        {/* Inner container */}
-        <div className="flex flex-1 flex-col items-center mt-[9px] pt-3">
-          {/* Top icons */}
-          <div className="flex flex-col items-center gap-1">
-          <Tooltip delayDuration={0}>
-            <TooltipTrigger asChild>
-              <button
-                onClick={() => setActiveSidebarItem("terminal")}
-                aria-label="Home"
-                className={cn(
-                  "flex h-9 w-9 items-center justify-center rounded-lg transition-colors",
-                  activeSidebarItem === "terminal"
-                    ? "bg-primary/20 text-primary"
-                    : "text-muted-foreground hover:bg-muted hover:text-foreground"
-                )}
-              >
-                <ChellIcon className="h-5 w-5" />
-              </button>
-            </TooltipTrigger>
-            <TooltipContent side="right">{currentProject?.name}</TooltipContent>
-          </Tooltip>
-
+        {/* Top icon container */}
+        <div className={cn("flex flex-col items-center gap-1 px-3 py-1", navShellClass)}>
           <Tooltip delayDuration={0}>
             <TooltipTrigger asChild>
               <button
                 onClick={handleNewWindow}
                 aria-label="New window"
-                className="flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                className={cn(navButtonBase, "hover:border-border/60 hover:bg-muted/40 hover:text-foreground")}
               >
                 <Plus className="h-5 w-5" />
               </button>
@@ -1475,7 +1557,7 @@ export default function ProjectPage() {
                   }
                 }}
                 aria-label="Open workspace"
-                className="flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                className={cn(navButtonBase, "hover:border-border/60 hover:bg-muted/40 hover:text-foreground")}
               >
                 <FolderOpen className="h-5 w-5" />
               </button>
@@ -1492,10 +1574,10 @@ export default function ProjectPage() {
                 }}
                 aria-label="Settings"
                 className={cn(
-                  "flex h-9 w-9 items-center justify-center rounded-lg transition-colors",
+                  navButtonBase,
                   activeSidebarItem === "settings"
-                    ? "bg-primary/20 text-primary"
-                    : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                    ? "border-border bg-muted/70 text-foreground shadow-[0_0_0_1px_hsl(var(--primary)/0.3)]"
+                    : "hover:border-border/60 hover:bg-muted/40 hover:text-foreground"
                 )}
               >
                 <Settings className="h-5 w-5" />
@@ -1508,130 +1590,137 @@ export default function ProjectPage() {
         {/* Spacer */}
         <div className="flex-1" />
 
-        {/* Panel toggle icons */}
-        <div className="flex flex-col items-center gap-1">
-          <Tooltip delayDuration={0}>
-            <TooltipTrigger asChild>
-              <button
-                onClick={toggleGitPanel}
-                aria-label={showGitPanel ? "Hide git panel" : "Show git panel"}
+        {/* Bottom icon container */}
+        <div className={cn("flex flex-col items-center gap-1 px-3 py-2", navShellClass)}>
+          {/* Panel toggle icons */}
+          <div className="flex flex-col items-center gap-1">
+            <Tooltip delayDuration={0}>
+              <TooltipTrigger asChild>
+                <button
+                  onClick={toggleGitPanel}
+                  aria-label={showGitPanel ? "Hide git panel" : "Show git panel"}
                 className={cn(
-                  "flex h-9 w-9 items-center justify-center rounded-lg transition-colors",
+                  navButtonBase,
+                  "text-foreground",
                   showGitPanel
-                    ? "text-foreground"
-                    : "text-muted-foreground/50 hover:text-muted-foreground",
-                  // Dim the button if it's the last visible panel
-                  showGitPanel && visiblePanelCount <= 1 && "opacity-50 cursor-not-allowed"
+                    ? "border-border/60 bg-muted/40 hover:border-border hover:bg-muted/60"
+                    : "hover:border-border/60 hover:bg-muted/40",
+                  showGitPanel && visiblePanelCount <= 1 && "cursor-not-allowed"
                 )}
               >
                 <GitBranch className="h-5 w-5" />
               </button>
-            </TooltipTrigger>
-            <TooltipContent side="right">
-              {showGitPanel && visiblePanelCount <= 1
-                ? "Can't hide last panel"
-                : showGitPanel ? "Hide Git Panel" : "Show Git Panel"}
-            </TooltipContent>
-          </Tooltip>
+              </TooltipTrigger>
+              <TooltipContent side="right">
+                {showGitPanel && visiblePanelCount <= 1
+                  ? "Can't hide last panel"
+                  : showGitPanel ? "Hide Git Panel" : "Show Git Panel"}
+              </TooltipContent>
+            </Tooltip>
 
-          <Tooltip delayDuration={0}>
-            <TooltipTrigger asChild>
-              <button
-                onClick={toggleAssistantPanel}
-                aria-label={showAssistantPanel ? "Hide assistant" : "Show assistant"}
+            <Tooltip delayDuration={0}>
+              <TooltipTrigger asChild>
+                <button
+                  onClick={toggleAssistantPanel}
+                  aria-label={showAssistantPanel ? "Hide assistant" : "Show assistant"}
                 className={cn(
-                  "flex h-9 w-9 items-center justify-center rounded-lg transition-colors",
+                  navButtonBase,
+                  "text-foreground",
                   showAssistantPanel
-                    ? "text-foreground"
-                    : "text-muted-foreground/50 hover:text-muted-foreground",
-                  showAssistantPanel && visiblePanelCount <= 1 && "opacity-50 cursor-not-allowed"
+                    ? "border-border/60 bg-muted/40 hover:border-border hover:bg-muted/60"
+                    : "hover:border-border/60 hover:bg-muted/40",
+                  showAssistantPanel && visiblePanelCount <= 1 && "cursor-not-allowed"
                 )}
               >
                 <Bot className="h-5 w-5" />
               </button>
-            </TooltipTrigger>
-            <TooltipContent side="right">
-              {showAssistantPanel && visiblePanelCount <= 1
-                ? "Can't hide last panel"
-                : showAssistantPanel ? "Hide Assistant" : "Show Assistant"}
-            </TooltipContent>
-          </Tooltip>
+              </TooltipTrigger>
+              <TooltipContent side="right">
+                {showAssistantPanel && visiblePanelCount <= 1
+                  ? "Can't hide last panel"
+                  : showAssistantPanel ? "Hide Assistant" : "Show Assistant"}
+              </TooltipContent>
+            </Tooltip>
 
-          <Tooltip delayDuration={0}>
-            <TooltipTrigger asChild>
-              <button
-                onClick={toggleShellPanel}
-                aria-label={showShellPanel ? "Hide shell" : "Show shell"}
+            <Tooltip delayDuration={0}>
+              <TooltipTrigger asChild>
+                <button
+                  onClick={toggleShellPanel}
+                  aria-label={showShellPanel ? "Hide shell" : "Show shell"}
                 className={cn(
-                  "flex h-9 w-9 items-center justify-center rounded-lg transition-colors",
+                  navButtonBase,
+                  "text-foreground",
                   showShellPanel
-                    ? "text-foreground"
-                    : "text-muted-foreground/50 hover:text-muted-foreground",
-                  showShellPanel && visiblePanelCount <= 1 && "opacity-50 cursor-not-allowed"
+                    ? "border-border/60 bg-muted/40 hover:border-border hover:bg-muted/60"
+                    : "hover:border-border/60 hover:bg-muted/40",
+                  showShellPanel && visiblePanelCount <= 1 && "cursor-not-allowed"
                 )}
               >
                 <TerminalIcon className="h-5 w-5" />
               </button>
-            </TooltipTrigger>
-            <TooltipContent side="right">
-              {showShellPanel && visiblePanelCount <= 1
-                ? "Can't hide last panel"
-                : showShellPanel ? "Hide Shell" : "Show Shell"}
-            </TooltipContent>
-          </Tooltip>
+              </TooltipTrigger>
+              <TooltipContent side="right">
+                {showShellPanel && visiblePanelCount <= 1
+                  ? "Can't hide last panel"
+                  : showShellPanel ? "Hide Shell" : "Show Shell"}
+              </TooltipContent>
+            </Tooltip>
 
-          <Tooltip delayDuration={0}>
-            <TooltipTrigger asChild>
-              <button
-                onClick={toggleNotesPanel}
-                aria-label={showNotesPanel ? "Hide notes" : "Show notes"}
+            <Tooltip delayDuration={0}>
+              <TooltipTrigger asChild>
+                <button
+                  onClick={toggleNotesPanel}
+                  aria-label={showNotesPanel ? "Hide notes" : "Show notes"}
                 className={cn(
-                  "flex h-9 w-9 items-center justify-center rounded-lg transition-colors",
+                  navButtonBase,
+                  "text-foreground",
                   showNotesPanel
-                    ? "text-foreground"
-                    : "text-muted-foreground/50 hover:text-muted-foreground",
-                  showNotesPanel && visiblePanelCount <= 1 && "opacity-50 cursor-not-allowed"
+                    ? "border-border/60 bg-muted/40 hover:border-border hover:bg-muted/60"
+                    : "hover:border-border/60 hover:bg-muted/40",
+                  showNotesPanel && visiblePanelCount <= 1 && "cursor-not-allowed"
                 )}
               >
                 <StickyNote className="h-5 w-5" />
               </button>
-            </TooltipTrigger>
-            <TooltipContent side="right">
-              {showNotesPanel && visiblePanelCount <= 1
-                ? "Can't hide last panel"
-                : showNotesPanel ? "Hide Notes" : "Show Notes"}
-            </TooltipContent>
-          </Tooltip>
-        </div>
+              </TooltipTrigger>
+              <TooltipContent side="right">
+                {showNotesPanel && visiblePanelCount <= 1
+                  ? "Can't hide last panel"
+                  : showNotesPanel ? "Hide Notes" : "Show Notes"}
+              </TooltipContent>
+            </Tooltip>
+          </div>
 
-        {/* Bottom icons */}
-        <div className="flex flex-col items-center gap-1 mt-2">
-          <Tooltip delayDuration={0}>
-            <TooltipTrigger asChild>
-              <button
-                aria-label="Help"
-                className="flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-              >
-                <HelpCircle className="h-5 w-5" />
-              </button>
-            </TooltipTrigger>
-            <TooltipContent side="right">Help</TooltipContent>
-          </Tooltip>
-        </div>
+          <div className="my-1 h-px w-7 bg-border/65" />
+
+          {/* Bottom icons */}
+          <div className="flex flex-col items-center gap-1">
+            <Tooltip delayDuration={0}>
+              <TooltipTrigger asChild>
+                <button
+                  aria-label="Help"
+                  className={cn(navButtonBase, "hover:border-border/60 hover:bg-muted/40 hover:text-foreground")}
+                >
+                  <ChellIcon className="h-5 w-5" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="right">Help</TooltipContent>
+            </Tooltip>
+          </div>
         </div>
       </nav>
 
       {/* Main content area */}
       <main
         ref={containerRef}
-        className="flex-1 flex overflow-hidden"
+        className="relative z-10 flex flex-1 overflow-hidden px-2 pb-2 pt-9"
       >
         <h1 className="sr-only">{currentProject.name} - Chell</h1>
         {/* Left sidebar - Git panel */}
         <div
           role="region"
           aria-label="Git panel"
-          className={cn("h-full flex flex-col overflow-hidden", !showGitPanel && "hidden")}
+          className={cn("h-full flex flex-col overflow-hidden", panelShellClass, !showGitPanel && "hidden")}
           style={{ width: gitPanelWidth, minWidth: 200 }}
         >
           <GitPanel
@@ -1653,7 +1742,7 @@ export default function ProjectPage() {
         {/* Resize handle for git panel */}
         {showGitPanel && (
           <div
-            className="w-1 bg-border hover:bg-primary/50 cursor-col-resize shrink-0"
+            className="w-2 shrink-0 cursor-col-resize bg-transparent hover:bg-border/80"
             onMouseDown={(e) => handleResizeStart(e, 'git')}
           />
         )}
@@ -1665,6 +1754,7 @@ export default function ProjectPage() {
           aria-label="Assistant panel"
           className={cn(
             "h-full overflow-hidden",
+            panelShellClass,
             !showAssistantPanel && "hidden"
           )}
           style={{ flex: `1 1 ${assistantPanelWidth}px`, minWidth: 200 }}
@@ -1673,7 +1763,7 @@ export default function ProjectPage() {
         >
           <div className="flex h-full flex-col select-none overflow-hidden">
           {/* Tab bar */}
-          <div className="flex h-10 items-center border-b border-border">
+          <div className="flex h-10 items-center border-b border-border" style={{ backgroundColor: terminalBg }}>
             <div
               ref={tabListRef}
               role="tablist"
@@ -1682,7 +1772,7 @@ export default function ProjectPage() {
               onWheel={handleTabWheel}
             >
               <div className="flex min-w-max items-center">
-                {terminalTabs.map((tab) => (
+                {terminalTabs.map((tab, index) => (
                   <div
                     key={tab.id}
                     data-tab-item
@@ -1693,12 +1783,13 @@ export default function ProjectPage() {
                       else tabRefs.current.delete(tab.id);
                     }}
                     className={cn(
-                      "group flex items-center gap-1 border-r border-border px-3 py-2 text-sm font-medium transition-colors cursor-grab shrink-0",
+                      "group relative flex h-10 shrink-0 cursor-grab items-center gap-1.5 px-3 text-sm font-medium transition-colors",
                       activeTabId === tab.id
-                        ? "border-b-2 border-b-primary bg-muted/50 text-foreground"
-                        : "text-muted-foreground hover:bg-muted/30 hover:text-foreground",
+                        ? "bg-card text-foreground border-r border-border/70"
+                        : "text-muted-foreground hover:bg-card/50 hover:text-foreground",
+                      index > 0 && "border-l border-border/70",
                       draggingTabId === tab.id && "opacity-60 cursor-grabbing",
-                      dragOverTabId === tab.id && draggingTabId !== tab.id && "bg-muted/40"
+                      dragOverTabId === tab.id && draggingTabId !== tab.id && "bg-card/30"
                     )}
                     onClick={() => !draggingTabId && setActiveTabId(tab.id)}
                     onMouseDown={(event) => handleTabMouseDown(event, tab.id)}
@@ -1735,7 +1826,7 @@ export default function ProjectPage() {
                       closeTab(tab.id);
                     }}
                     aria-label={`Close ${tab.name} tab`}
-                    className="ml-1 rounded p-0.5 opacity-0 group-hover:opacity-100 hover:bg-muted transition-opacity"
+                    className="absolute right-1 rounded p-0.5 opacity-0 group-hover:opacity-100 hover:bg-muted transition-opacity bg-card"
                   >
                     <X className="h-3 w-3" />
                   </button>
@@ -1747,7 +1838,7 @@ export default function ProjectPage() {
               <DropdownMenuTrigger asChild>
                 <button
                   aria-label="New tab"
-                  className="flex h-full items-center px-3 py-2 text-muted-foreground transition-colors hover:bg-muted/30 hover:text-foreground"
+                  className="flex h-10 items-center px-3 text-muted-foreground transition-colors hover:bg-card/50 hover:text-foreground"
                 >
                   <Plus className="h-4 w-4" />
                 </button>
@@ -1954,7 +2045,7 @@ export default function ProjectPage() {
         {/* Resize handle for shell panel */}
         {showShellPanel && (
           <div
-            className="w-1 bg-border hover:bg-primary/50 cursor-col-resize shrink-0"
+            className="w-2 shrink-0 cursor-col-resize bg-transparent hover:bg-border/80"
             onMouseDown={(e) => handleResizeStart(e, 'shell')}
           />
         )}
@@ -1966,6 +2057,7 @@ export default function ProjectPage() {
           aria-label="Shell panel"
           className={cn(
             "h-full flex flex-col overflow-hidden",
+            panelShellClass,
             !showShellPanel && "hidden",
             !showAssistantPanel && "flex-1 min-w-0"
           )}
@@ -1974,7 +2066,7 @@ export default function ProjectPage() {
           onDrop={handleShellPanelDrop}
         >
           {/* Header */}
-          <div className="flex h-10 items-center justify-between px-2 border-b border-border">
+          <div className="flex h-10 items-center justify-between border-b border-border/70 bg-card/45 px-2">
             <div className="flex items-center gap-2 min-w-0 flex-1">
               <TerminalIcon className="h-4 w-4 shrink-0 text-primary" />
               {shellCwd && (
@@ -2204,7 +2296,7 @@ export default function ProjectPage() {
         {/* Resize handle for notes panel */}
         {showNotesPanel && (
           <div
-            className="w-1 bg-border hover:bg-primary/50 cursor-col-resize shrink-0"
+            className="w-2 shrink-0 cursor-col-resize bg-transparent hover:bg-border/80"
             onMouseDown={(e) => handleResizeStart(e, 'notes')}
           />
         )}
@@ -2215,6 +2307,7 @@ export default function ProjectPage() {
           aria-label="Notes panel"
           className={cn(
             "h-full flex flex-col overflow-hidden shrink-0",
+            panelShellClass,
             !showNotesPanel && "hidden"
           )}
           style={{ width: notesPanelWidth, minWidth: 250 }}
@@ -2225,7 +2318,7 @@ export default function ProjectPage() {
         {/* Resize handle for markdown panel */}
         {showMarkdownPanel && (
           <div
-            className="w-1 bg-border hover:bg-primary/50 cursor-col-resize shrink-0"
+            className="w-2 shrink-0 cursor-col-resize bg-transparent hover:bg-border/80"
             onMouseDown={(e) => handleResizeStart(e, 'markdown')}
           />
         )}
@@ -2234,13 +2327,14 @@ export default function ProjectPage() {
         <div
           className={cn(
             "h-full flex flex-col overflow-hidden",
+            panelShellClass,
             !showMarkdownPanel && "hidden",
             !showAssistantPanel && !showShellPanel && "flex-1 min-w-0"
           )}
           style={showAssistantPanel || showShellPanel ? { width: markdownPanelWidth, minWidth: 300 } : undefined}
         >
           {/* Header - z-50 to stay above Monaco find widget */}
-          <div className="flex h-10 items-center justify-between px-2 border-b border-border relative z-50 bg-background">
+          <div className="relative z-50 flex h-10 items-center justify-between border-b border-border/70 bg-card/45 px-2">
             <div className="flex items-center gap-2 min-w-0 flex-1">
               <FileText className="h-4 w-4 shrink-0 text-primary" />
               <span className="text-xs truncate">
