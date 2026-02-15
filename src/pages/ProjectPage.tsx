@@ -435,14 +435,17 @@ export default function ProjectPage() {
       const panelWidth = showGitPanel ? gitPanelWidth + 8 : savedGitWidth.current + 8;
 
       if (showGitPanel) {
+        // Hiding: hide panel, then resize window
         savedGitWidth.current = gitPanelWidth;
+        setShowGitPanel(false);
         setGitPanelWidth(0);
         await window.setSize(new LogicalSize(logicalWidth - panelWidth, logicalHeight));
       } else {
+        // Showing: show panel, then resize window
         setGitPanelWidth(savedGitWidth.current);
+        setShowGitPanel(true);
         await window.setSize(new LogicalSize(logicalWidth + panelWidth, logicalHeight));
       }
-      setShowGitPanel(!showGitPanel);
       setTimeout(() => { isPanelResizing.current = false; }, 100);
     } catch (err) {
       console.error("Failed to resize window:", err);
@@ -462,13 +465,16 @@ export default function ProjectPage() {
       const panelWidth = showAssistantPanel ? assistantPanelWidth + 8 : savedAssistantWidth.current + 8;
 
       if (showAssistantPanel) {
+        // Hiding: hide panel, then resize window
         savedAssistantWidth.current = assistantPanelWidth;
+        setShowAssistantPanel(false);
         await window.setSize(new LogicalSize(logicalWidth - panelWidth, logicalHeight));
       } else {
+        // Showing: show panel, then resize window
         setAssistantPanelWidth(savedAssistantWidth.current);
+        setShowAssistantPanel(true);
         await window.setSize(new LogicalSize(logicalWidth + panelWidth, logicalHeight));
       }
-      setShowAssistantPanel(!showAssistantPanel);
       setTimeout(() => { isPanelResizing.current = false; }, 100);
     } catch (err) {
       console.error("Failed to resize window:", err);
@@ -488,14 +494,17 @@ export default function ProjectPage() {
       const panelWidth = showShellPanel ? shellPanelWidth + 8 : savedShellWidth.current + 8;
 
       if (showShellPanel) {
+        // Hiding: hide panel, then resize window
         savedShellWidth.current = shellPanelWidth;
+        setShowShellPanel(false);
         setShellPanelWidth(0);
         await window.setSize(new LogicalSize(logicalWidth - panelWidth, logicalHeight));
       } else {
+        // Showing: show panel, then resize window
         setShellPanelWidth(savedShellWidth.current);
+        setShowShellPanel(true);
         await window.setSize(new LogicalSize(logicalWidth + panelWidth, logicalHeight));
       }
-      setShowShellPanel(!showShellPanel);
       setTimeout(() => { isPanelResizing.current = false; }, 100);
     } catch (err) {
       console.error("Failed to resize window:", err);
@@ -515,14 +524,17 @@ export default function ProjectPage() {
       const panelWidth = showNotesPanel ? notesPanelWidth + 8 : savedNotesWidth.current + 8;
 
       if (showNotesPanel) {
+        // Hiding: hide panel, then resize window
         savedNotesWidth.current = notesPanelWidth;
+        setShowNotesPanel(false);
         setNotesPanelWidth(0);
         await window.setSize(new LogicalSize(logicalWidth - panelWidth, logicalHeight));
       } else {
+        // Showing: show panel, then resize window
         setNotesPanelWidth(savedNotesWidth.current);
+        setShowNotesPanel(true);
         await window.setSize(new LogicalSize(logicalWidth + panelWidth, logicalHeight));
       }
-      setShowNotesPanel(!showNotesPanel);
       setTimeout(() => { isPanelResizing.current = false; }, 100);
     } catch (err) {
       console.error("Failed to resize window:", err);
@@ -1532,7 +1544,7 @@ export default function ProjectPage() {
   const navButtonBase =
     "flex h-9 w-9 items-center justify-center rounded-xl border border-transparent text-muted-foreground transition-all";
   const panelShellClass =
-    "rounded-2xl border border-border bg-card";
+    "rounded-2xl border border-border bg-card transition-opacity duration-150";
 
   return (
     <div
