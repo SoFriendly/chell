@@ -57,8 +57,28 @@ export default function SmartShell({
   const [historyIndex, setHistoryIndex] = useState(-1);
   const [projectContext, setProjectContext] = useState<ProjectContext | null>(null);
   const [internalTerminalId, setInternalTerminalId] = useState<string | null>(terminalId || null);
+  const [placeholderIndex, setPlaceholderIndex] = useState(0);
 
   const inputRef = useRef<HTMLInputElement>(null);
+
+  const placeholderSuggestions = [
+    "run this project...",
+    "start dev server...",
+    "build for production...",
+    "run tests...",
+    "install dependencies...",
+    "lint and fix...",
+    "format code...",
+    "run type check...",
+  ];
+
+  // Rotate placeholder suggestions
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setPlaceholderIndex((i) => (i + 1) % placeholderSuggestions.length);
+    }, 15000);
+    return () => clearInterval(interval);
+  }, []);
   const { groqApiKey } = useSettingsStore();
 
   // Listen for NLT progress events
@@ -203,14 +223,14 @@ export default function SmartShell({
     <div className={cn("flex h-full flex-col", className)}>
       {/* NLT Input Bar */}
       {showNlt && (
-        <div className="border-b border-border bg-background px-2 py-2">
+        <div className="border-b border-border px-2 py-2">
           <div className="flex items-center gap-2">
             <Input
               ref={inputRef}
               value={aiInput}
               onChange={(e) => setAiInput(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="Try the Natural Language Terminal..."
+              placeholder={placeholderSuggestions[placeholderIndex]}
               disabled={isLoading}
               className="h-8 text-sm"
             />

@@ -1395,7 +1395,7 @@ export default function GitPanel({ projectPath, projectName, isGitRepo, onRefres
 
     return (
       <div
-        className="group cursor-grab active:cursor-grabbing"
+        className="group min-w-0 cursor-grab active:cursor-grabbing"
         onMouseDown={(e) => handleFileDragStart(e, diff.path)}
       >
         {/* File row with context menu */}
@@ -1510,7 +1510,7 @@ export default function GitPanel({ projectPath, projectName, isGitRepo, onRefres
 
         {/* Inline diff view / image preview / binary indicator */}
         {isExpanded && (
-          <div className="ml-5 mt-1 overflow-hidden rounded bg-[#0d0d0d]">
+          <div className="ml-5 mt-1 min-w-0 overflow-hidden rounded bg-[#0d0d0d]">
             <div className="p-2 select-text">
               {isImage ? (
                 /* Image preview */
@@ -1551,7 +1551,7 @@ export default function GitPanel({ projectPath, projectName, isGitRepo, onRefres
                               <div
                                 key={li}
                                 className={cn(
-                                  "whitespace-pre-wrap break-words group/line",
+                                  "whitespace-pre-wrap break-all group/line",
                                   line.type === "addition" && "bg-green-500/10 text-green-400",
                                   line.type === "deletion" && "bg-red-500/10 text-red-400 cursor-not-allowed",
                                   line.type === "context" && "text-muted-foreground",
@@ -1957,8 +1957,8 @@ export default function GitPanel({ projectPath, projectName, isGitRepo, onRefres
       {/* Scrollable content */}
       <ContextMenu>
       <ContextMenuTrigger asChild>
-      <ScrollArea className="flex-1">
-        <div className="px-4 pb-4 pt-4">
+      <ScrollArea className="flex-1 min-w-0">
+        <div className="px-4 pb-4 pt-4 min-w-0">
           {/* Project name (with folder selector chevron if multiple folders) and branch - hidden in files view or when header is shown */}
           {viewMode !== "files" && !hideHeader && (
             <div className="flex items-center gap-1.5 mb-4 flex-wrap">
@@ -2254,7 +2254,7 @@ export default function GitPanel({ projectPath, projectName, isGitRepo, onRefres
 
                       {/* Expanded commit file list */}
                       {isExpanded && fileDiffs && (
-                        <div className="ml-5 mt-1 mb-2 space-y-0.5">
+                        <div className="ml-5 mt-1 mb-2 min-w-0 space-y-0.5">
                           {fileDiffs.length === 0 ? (
                             <div className="text-[10px] text-muted-foreground px-2 py-1">No file changes</div>
                           ) : (
@@ -2265,7 +2265,7 @@ export default function GitPanel({ projectPath, projectName, isGitRepo, onRefres
                               const fileExists = diff.status !== "deleted";
 
                               return (
-                                <div key={diff.path}>
+                                <div key={diff.path} className="min-w-0">
                                   <ContextMenu>
                                     <ContextMenuTrigger asChild>
                                       <div
@@ -2323,7 +2323,7 @@ export default function GitPanel({ projectPath, projectName, isGitRepo, onRefres
 
                                   {/* Inline diff for expanded file */}
                                   {isFileExpanded && diff.hunks.length > 0 && (
-                                    <div className="ml-5 mt-1 overflow-hidden rounded bg-[#0d0d0d]">
+                                    <div className="ml-5 mt-1 min-w-0 overflow-hidden rounded bg-[#0d0d0d]">
                                       <div className="p-2 select-text">
                                         <div className="font-mono text-[10px] leading-relaxed">
                                           {diff.hunks.map((hunk, hi) => (
@@ -2335,7 +2335,7 @@ export default function GitPanel({ projectPath, projectName, isGitRepo, onRefres
                                                 <div
                                                   key={li}
                                                   className={cn(
-                                                    "whitespace-pre-wrap break-words",
+                                                    "whitespace-pre-wrap break-all",
                                                     line.type === "addition" && "bg-green-500/10 text-green-400",
                                                     line.type === "deletion" && "bg-red-500/10 text-red-400",
                                                     line.type === "context" && "text-muted-foreground"

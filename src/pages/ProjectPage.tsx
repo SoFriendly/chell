@@ -10,6 +10,7 @@ import {
   Settings,
   Terminal as TerminalIcon,
   X,
+  Trash2,
   Plus,
   Bot,
   GitBranch,
@@ -341,7 +342,7 @@ export default function ProjectPage() {
   const [shellDirs, setShellDirs] = useState<string[]>([]);
   const [showHistorySearch, setShowHistorySearch] = useState(false);
   const [shellHistory, setShellHistory] = useState<string[]>([]);
-  const [showNlt, setShowNlt] = useState(true);
+  const [showNlt, setShowNlt] = useState(false);
   // Track selected folders for tabs pending folder selection (Issue #6)
   const [pendingTabFolders, setPendingTabFolders] = useState<Record<string, string>>({});
   const [pendingShellFolder, setPendingShellFolder] = useState<string>("");
@@ -1531,7 +1532,7 @@ export default function ProjectPage() {
   const navButtonBase =
     "flex h-9 w-9 items-center justify-center rounded-xl border border-transparent text-muted-foreground transition-all";
   const panelShellClass =
-    "rounded-2xl bg-card shadow-[var(--panel-shadow)]";
+    "rounded-2xl border border-border bg-card shadow-[var(--panel-shadow)]";
 
   return (
     <div
@@ -1906,7 +1907,7 @@ export default function ProjectPage() {
         {/* Resize handle for git panel */}
         {showGitPanel && (
           <div
-            className="w-2 shrink-0 cursor-col-resize bg-transparent hover:bg-border/80"
+            className="w-2 shrink-0 cursor-col-resize"
             onMouseDown={(e) => handleResizeStart(e, 'git')}
           />
         )}
@@ -2206,10 +2207,10 @@ export default function ProjectPage() {
           )}
           </div>
         </div>
-        {/* Resize handle for shell panel */}
-        {showShellPanel && (
+        {/* Resize handle for shell panel - only show when assistant is visible */}
+        {showShellPanel && showAssistantPanel && (
           <div
-            className="w-2 shrink-0 cursor-col-resize bg-transparent hover:bg-border/80"
+            className="w-2 shrink-0 cursor-col-resize"
             onMouseDown={(e) => handleResizeStart(e, 'shell')}
           />
         )}
@@ -2308,7 +2309,7 @@ export default function ProjectPage() {
                 <Button
                   variant="ghost"
                   size="icon"
-                  aria-label="Close shell"
+                  aria-label="Kill shell"
                   className="h-6 w-6 shrink-0"
                   onClick={() => {
                     if (utilityTerminalId) {
@@ -2317,7 +2318,7 @@ export default function ProjectPage() {
                     setUtilityTerminalId("closed");
                   }}
                 >
-                  <X className="h-3 w-3" />
+                  <Trash2 className="h-3 w-3" />
                 </Button>
               )}
             </div>
@@ -2459,7 +2460,7 @@ export default function ProjectPage() {
         {/* Resize handle for notes panel */}
         {showNotesPanel && (
           <div
-            className="w-2 shrink-0 cursor-col-resize bg-transparent hover:bg-border/80"
+            className="w-2 shrink-0 cursor-col-resize"
             onMouseDown={(e) => handleResizeStart(e, 'notes')}
           />
         )}
@@ -2481,7 +2482,7 @@ export default function ProjectPage() {
         {/* Resize handle for markdown panel */}
         {showMarkdownPanel && (
           <div
-            className="w-2 shrink-0 cursor-col-resize bg-transparent hover:bg-border/80"
+            className="w-2 shrink-0 cursor-col-resize"
             onMouseDown={(e) => handleResizeStart(e, 'markdown')}
           />
         )}

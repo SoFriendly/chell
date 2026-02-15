@@ -52,11 +52,11 @@
     --accent-foreground: 222.2 47.4% 11.2%;
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 210 40% 98%;
-    --border: 220 13% 86%;
-    --input: 220 13% 86%;
+    --border: 220 10% 75%;
+    --input: 220 10% 75%;
     --ring: 222.2 84% 4.9%;
     --radius: 0.375rem;
-    --panel-shadow: 0 0 0 1px rgba(0,0,0,0.06), 0 1px 3px rgba(0,0,0,0.06), 0 2px 8px rgba(0,0,0,0.04);
+    --panel-shadow: 0 1px 3px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.03);
     --nav-bg: 0 0% 97%;
   }
 
