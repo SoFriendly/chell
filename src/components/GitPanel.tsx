@@ -1445,6 +1445,14 @@ export default function GitPanel({ projectPath, isGitRepo, onRefresh, onInitRepo
             </div>
           </ContextMenuTrigger>
           <ContextMenuContent>
+            <ContextMenuItem
+              className="text-destructive focus:text-destructive"
+              onClick={() => handleDiscardFile(diff.path)}
+            >
+              <Undo2 className="mr-2 h-4 w-4" />
+              Discard changes
+            </ContextMenuItem>
+            <ContextMenuSeparator />
             <ContextMenuItem onClick={() => handleOpenFile(diff.path)}>
               <ExternalLink className="mr-2 h-4 w-4" />
               Open
@@ -1468,14 +1476,6 @@ export default function GitPanel({ projectPath, isGitRepo, onRefresh, onInitRepo
             <ContextMenuItem onClick={() => handleStartCreateFile("")}>
               <FilePlus className="mr-2 h-4 w-4" />
               New File
-            </ContextMenuItem>
-            <ContextMenuSeparator />
-            <ContextMenuItem
-              className="text-destructive focus:text-destructive"
-              onClick={() => setFileToDiscard(diff.path)}
-            >
-              <Undo2 className="mr-2 h-4 w-4" />
-              Discard changes
             </ContextMenuItem>
             <ContextMenuSeparator />
             <ContextMenuItem onClick={() => handleAddToGitignore(diff.path)}>
@@ -1574,14 +1574,14 @@ export default function GitPanel({ projectPath, isGitRepo, onRefresh, onInitRepo
                       <ContextMenuContent>
                         <ContextMenuItem
                           className="text-destructive focus:text-destructive"
-                          onClick={() => setHunkToDiscard({ filePath: diff.path, hunk })}
+                          onClick={() => handleDiscardHunk(diff.path, hunk)}
                         >
                           <Undo2 className="mr-2 h-4 w-4" />
                           Discard this change
                         </ContextMenuItem>
                         <ContextMenuItem
                           className="text-destructive focus:text-destructive"
-                          onClick={() => setFileToDiscard(diff.path)}
+                          onClick={() => handleDiscardFile(diff.path)}
                         >
                           <Undo2 className="mr-2 h-4 w-4" />
                           Discard all changes to file
