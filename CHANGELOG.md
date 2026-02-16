@@ -11,6 +11,9 @@ All notable changes to Chell will be documented in this file.
 - Fix git panel re-checking files after git refresh
   - Unchecked files now stay unchecked when the diff list refreshes
   - Only newly added files default to checked
+- Fix shell panel race condition on window open
+  - Terminal now retries container dimension checks when visibility changes
+  - Added recovery polling to handle late layout settling
 
 ### UI
 - Remove notes icon from Notes panel header

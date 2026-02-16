@@ -165,6 +165,8 @@ export default function Terminal({ id, command = "", args, cwd, onTerminalReady,
   // Phase 1: Wait for container to have stable dimensions
   // This is critical - ResizablePanelGroup takes time to calculate final layout
   useEffect(() => {
+    // Skip if already ready or not visible
+    if (isContainerReady || !visible) return;
     if (!containerRef.current) return;
 
     let lastWidth = 0;
@@ -222,7 +224,24 @@ export default function Terminal({ id, command = "", args, cwd, onTerminalReady,
       if (stabilityTimer) clearTimeout(stabilityTimer);
       if (fallbackTimer) clearTimeout(fallbackTimer);
     };
-  }, []);
+  }, [visible, isContainerReady]);
+
+  // Recovery: if container wasn't ready after initial checks, keep polling slowly
+  useEffect(() => {
+    if (isContainerReady || !visible) return;
+
+    const recoveryInterval = setInterval(() => {
+      if (containerRef.current) {
+        const width = containerRef.current.offsetWidth;
+        const height = containerRef.current.offsetHeight;
+        if (width > 0 && height > 0) {
+          setIsContainerReady(true);
+        }
+      }
+    }, 500);
+
+    return () => clearInterval(recoveryInterval);
+  }, [visible, isContainerReady]);
 
   // Update terminal theme when app theme changes
   useEffect(() => {
