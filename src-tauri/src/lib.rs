@@ -3353,7 +3353,8 @@ pub fn run() {
                 }
             }
 
-            // Handle file associations - when a .chell file is double-clicked
+            // Handle file associations - when a .chell file is double-clicked (macOS only)
+            #[cfg(target_os = "macos")]
             if let tauri::RunEvent::Opened { urls } = _event {
                 for url in urls {
                     // Convert URL to file path

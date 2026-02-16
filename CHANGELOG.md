@@ -2,6 +2,15 @@
 
 All notable changes to Chell will be documented in this file.
 
+## [0.1.85]
+
+### Bug Fixes
+- Fix shell panel race condition on window open
+  - Terminal now continuously checks for container dimensions until ready
+  - Removed artificial delays that could cause initialization to fail
+- Fix Linux build error with `RunEvent::Opened`
+  - Wrapped macOS-only file association handler in `#[cfg(target_os = "macos")]`
+
 ## [0.1.84]
 
 ### Bug Fixes
@@ -11,9 +20,6 @@ All notable changes to Chell will be documented in this file.
 - Fix git panel re-checking files after git refresh
   - Unchecked files now stay unchecked when the diff list refreshes
   - Only newly added files default to checked
-- Fix shell panel race condition on window open
-  - Terminal now retries container dimension checks when visibility changes
-  - Added recovery polling to handle late layout settling
 
 ### UI
 - Remove notes icon from Notes panel header

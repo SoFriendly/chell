@@ -167,18 +167,18 @@ export default function Terminal({ id, command = "", args, cwd, onTerminalReady,
   useEffect(() => {
     // Skip if already ready or not visible
     if (isContainerReady || !visible) return;
-    if (!containerRef.current) return;
 
     let lastWidth = 0;
     let lastHeight = 0;
     let stableCount = 0;
-    let checkCount = 0;
     let stabilityTimer: ReturnType<typeof setTimeout> | null = null;
-    let fallbackTimer: ReturnType<typeof setTimeout> | null = null;
 
     const checkStability = () => {
-      if (!containerRef.current) return;
-      checkCount++;
+      // Keep checking even if ref isn't ready yet (it may become available)
+      if (!containerRef.current) {
+        stabilityTimer = setTimeout(checkStability, 50);
+        return;
+      }
 
       const width = containerRef.current.offsetWidth;
       const height = containerRef.current.offsetHeight;
@@ -186,10 +186,8 @@ export default function Terminal({ id, command = "", args, cwd, onTerminalReady,
       if (width > 0 && height > 0) {
         if (width === lastWidth && height === lastHeight) {
           stableCount++;
-          // Require dimensions to be stable for 8 consecutive checks (400ms)
-          // This gives ResizablePanelGroup plenty of time to finish layout
-          if (stableCount >= 8) {
-            if (fallbackTimer) clearTimeout(fallbackTimer);
+          // Require dimensions to be stable for 4 consecutive checks (200ms)
+          if (stableCount >= 4) {
             setIsContainerReady(true);
             return;
           }
@@ -200,47 +198,16 @@ export default function Terminal({ id, command = "", args, cwd, onTerminalReady,
         }
       }
 
-      // Safety: stop checking after 60 attempts (3 seconds) to prevent infinite loop
-      if (checkCount < 60) {
-        stabilityTimer = setTimeout(checkStability, 50);
-      }
+      // Keep checking until ready
+      stabilityTimer = setTimeout(checkStability, 50);
     };
 
-    // Start checking after significant delay to let ResizablePanelGroup fully settle
-    stabilityTimer = setTimeout(checkStability, 200);
-
-    // Fallback: force ready after 2 seconds even if not stable
-    fallbackTimer = setTimeout(() => {
-      if (!isContainerReady && containerRef.current) {
-        const width = containerRef.current.offsetWidth;
-        const height = containerRef.current.offsetHeight;
-        if (width > 0 && height > 0) {
-          setIsContainerReady(true);
-        }
-      }
-    }, 2000);
+    // Start checking immediately
+    stabilityTimer = setTimeout(checkStability, 0);
 
     return () => {
       if (stabilityTimer) clearTimeout(stabilityTimer);
-      if (fallbackTimer) clearTimeout(fallbackTimer);
     };
-  }, [visible, isContainerReady]);
-
-  // Recovery: if container wasn't ready after initial checks, keep polling slowly
-  useEffect(() => {
-    if (isContainerReady || !visible) return;
-
-    const recoveryInterval = setInterval(() => {
-      if (containerRef.current) {
-        const width = containerRef.current.offsetWidth;
-        const height = containerRef.current.offsetHeight;
-        if (width > 0 && height > 0) {
-          setIsContainerReady(true);
-        }
-      }
-    }, 500);
-
-    return () => clearInterval(recoveryInterval);
   }, [visible, isContainerReady]);
 
   // Update terminal theme when app theme changes
