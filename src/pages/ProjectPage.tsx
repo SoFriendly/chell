@@ -2582,8 +2582,8 @@ export default function ProjectPage() {
           )}
           style={showAssistantPanel || showShellPanel ? { width: markdownPanelWidth, minWidth: 300 } : undefined}
         >
-          {/* Header - z-50 to stay above Monaco find widget */}
-          <div className="relative z-50 flex h-10 items-center justify-between border-b border-border/70 bg-card/45 px-2">
+          {/* Header */}
+          <div className="relative flex h-10 items-center justify-between border-b border-border/70 bg-card/45 px-2">
             <div className="flex items-center gap-2 min-w-0 flex-1">
               <FileText className="h-4 w-4 shrink-0 text-primary" />
               <span className="text-xs truncate">
@@ -2690,6 +2690,7 @@ export default function ProjectPage() {
                     wordWrap: 'on',
                     scrollBeyondLastLine: false,
                     automaticLayout: true,
+                    fixedOverflowWidgets: true,
                   }}
                 />
               ) : markdownFile.path.endsWith('.md') ? (
@@ -2714,6 +2715,7 @@ export default function ProjectPage() {
                     wordWrap: 'on',
                     scrollBeyondLastLine: false,
                     automaticLayout: true,
+                    fixedOverflowWidgets: true,
                   }}
                 />
               )

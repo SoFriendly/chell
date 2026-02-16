@@ -1487,7 +1487,10 @@ export default function GitPanel({ projectPath, isGitRepo, onRefresh, onInitRepo
 
         {/* Inline diff view / image preview / binary indicator */}
         {isExpanded && (
-          <div className="ml-5 mt-1 min-w-0 overflow-hidden rounded bg-[#0d0d0d]">
+          <div
+            className="ml-5 mt-1 min-w-0 overflow-hidden rounded bg-[#0d0d0d]"
+            onMouseDown={(e) => e.stopPropagation()}
+          >
             <div className="p-2 select-text">
               {isImage ? (
                 /* Image preview */
@@ -1528,13 +1531,13 @@ export default function GitPanel({ projectPath, isGitRepo, onRefresh, onInitRepo
                               <div
                                 key={li}
                                 className={cn(
-                                  "whitespace-pre-wrap break-all group/line",
+                                  "whitespace-pre-wrap break-all group/line select-text",
                                   line.type === "addition" && "bg-green-500/10 text-green-400",
-                                  line.type === "deletion" && "bg-red-500/10 text-red-400 cursor-not-allowed",
+                                  line.type === "deletion" && "bg-red-500/10 text-red-400",
                                   line.type === "context" && "text-muted-foreground",
                                   isEditable && !isEditing && "cursor-text hover:bg-white/5"
                                 )}
-                                onClick={() => {
+                                onDoubleClick={() => {
                                   if (isEditable && !isEditing && line.newLineNo) {
                                     setEditingLine({ filePath: diff.path, lineNo: line.newLineNo, content: line.content });
                                   }
@@ -2184,7 +2187,7 @@ export default function GitPanel({ projectPath, isGitRepo, onRefresh, onInitRepo
                                                 <div
                                                   key={li}
                                                   className={cn(
-                                                    "whitespace-pre-wrap break-all",
+                                                    "whitespace-pre-wrap break-all select-text",
                                                     line.type === "addition" && "bg-green-500/10 text-green-400",
                                                     line.type === "deletion" && "bg-red-500/10 text-red-400",
                                                     line.type === "context" && "text-muted-foreground"

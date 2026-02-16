@@ -359,9 +359,14 @@
   --tw-prose-td-borders: hsl(var(--border));
 }
 
-/* Monaco editor find widget - ensure it appears above window chrome */
+/* Monaco editor find widget - ensure it appears above everything and is clickable */
 .monaco-editor .find-widget {
-  z-index: 100 !important;
+  z-index: 9999 !important;
+}
+
+.monaco-editor .find-widget,
+.monaco-editor .find-widget * {
+  pointer-events: auto !important;
 }
 
 .monaco-editor .find-widget .monaco-inputbox .input {
@@ -375,6 +380,12 @@
 
 .monaco-editor .find-widget .button:hover {
   background-color: hsl(var(--muted)) !important;
+}
+
+/* Ensure overflow widgets container is above other elements */
+.monaco-editor .overflowingContentWidgets {
+  z-index: 9999 !important;
+  pointer-events: auto !important;
 }
 
 /* ========================================

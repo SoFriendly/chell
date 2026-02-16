@@ -2,6 +2,14 @@
 
 All notable changes to Chell will be documented in this file.
 
+## [0.1.88]
+- Fix Monaco editor find bar close button not working
+  - Removed z-index on panel header that was blocking the find widget
+  - Added `fixedOverflowWidgets` option to Monaco for proper widget rendering
+- Fix diff view preventing text selection
+  - Changed line edit trigger from single-click to double-click
+  - Text can now be selected and copied in diff views
+
 ## [0.1.87]
 
 ### Bug Fixes
