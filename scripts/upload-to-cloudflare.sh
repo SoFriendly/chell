@@ -191,23 +191,23 @@ JQ_FILTER=""
 
 if [ -n "$MAC_SIG" ]; then
   echo "Updating macOS entries..."
-  JQ_FILTER="$JQ_FILTER | .platforms[\"darwin-aarch64\"] = {\"signature\": \$mac_sig, \"url\": \"https://releases.chell.app/v\($ver)/Chell_\($ver)_darwin-aarch64.app.tar.gz\"}"
-  JQ_FILTER="$JQ_FILTER | .platforms[\"darwin-x86_64\"] = {\"signature\": \$mac_sig, \"url\": \"https://releases.chell.app/v\($ver)/Chell_\($ver)_darwin-x86_64.app.tar.gz\"}"
+  JQ_FILTER="$JQ_FILTER | .platforms[\"darwin-aarch64\"] = {\"signature\": \$mac_sig, \"url\": \"https://releases.chell.app/v\(\$ver)/Chell_\(\$ver)_darwin-aarch64.app.tar.gz\"}"
+  JQ_FILTER="$JQ_FILTER | .platforms[\"darwin-x86_64\"] = {\"signature\": \$mac_sig, \"url\": \"https://releases.chell.app/v\(\$ver)/Chell_\(\$ver)_darwin-x86_64.app.tar.gz\"}"
 fi
 
 if [ -n "$LINUX_SIG" ]; then
   echo "Updating Linux x64 entry..."
-  JQ_FILTER="$JQ_FILTER | .platforms[\"linux-x86_64\"] = {\"signature\": \$linux_sig, \"url\": \"https://releases.chell.app/v\($ver)/Chell_\($ver)_amd64.AppImage\"}"
+  JQ_FILTER="$JQ_FILTER | .platforms[\"linux-x86_64\"] = {\"signature\": \$linux_sig, \"url\": \"https://releases.chell.app/v\(\$ver)/Chell_\(\$ver)_amd64.AppImage\"}"
 fi
 
 if [ -n "$LINUX_ARM_SIG" ]; then
   echo "Updating Linux ARM entry..."
-  JQ_FILTER="$JQ_FILTER | .platforms[\"linux-aarch64\"] = {\"signature\": \$linux_arm_sig, \"url\": \"https://releases.chell.app/v\($ver)/Chell_\($ver)_arm64.AppImage\"}"
+  JQ_FILTER="$JQ_FILTER | .platforms[\"linux-aarch64\"] = {\"signature\": \$linux_arm_sig, \"url\": \"https://releases.chell.app/v\(\$ver)/Chell_\(\$ver)_arm64.AppImage\"}"
 fi
 
 if [ -n "$WIN_SIG" ]; then
   echo "Updating Windows entry..."
-  JQ_FILTER="$JQ_FILTER | .platforms[\"windows-x86_64\"] = {\"signature\": \$win_sig, \"url\": \"https://releases.chell.app/v\($ver)/Chell_\($ver)_x64-setup.msi\"}"
+  JQ_FILTER="$JQ_FILTER | .platforms[\"windows-x86_64\"] = {\"signature\": \$win_sig, \"url\": \"https://releases.chell.app/v\(\$ver)/Chell_\(\$ver)_x64-setup.msi\"}"
 fi
 
 if [ -n "$JQ_FILTER" ]; then
