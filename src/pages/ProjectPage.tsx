@@ -1624,7 +1624,7 @@ export default function ProjectPage() {
           /* Single folder: just show project name */
           <ContextMenu>
             <ContextMenuTrigger asChild>
-              <span className="text-sm font-medium px-2 cursor-default">{currentProject?.name}</span>
+              <span className="text-sm font-medium px-2 cursor-default h-6 inline-flex items-center">{currentProject?.name}</span>
             </ContextMenuTrigger>
             {isGitRepo && (
               <ContextMenuContent>
@@ -1638,7 +1638,7 @@ export default function ProjectPage() {
         )}
         {isGitRepo && (
           <>
-            <span className="text-muted-foreground text-sm">/</span>
+            <span className="text-muted-foreground text-sm h-6 inline-flex items-center">/</span>
             <ContextMenu>
               <ContextMenuTrigger asChild>
                 <div>
@@ -1647,15 +1647,15 @@ export default function ProjectPage() {
                       <Button
                         variant="ghost"
                         size="sm"
-                        className="h-6 gap-1 px-2 text-xs font-normal text-muted-foreground hover:text-foreground"
+                        className="h-6 gap-1 px-2 text-sm font-normal text-muted-foreground hover:text-foreground translate-y-px"
                         disabled={isSwitchingBranch}
                       >
-                        <GitBranch className="h-3 w-3" />
+                        <GitBranch className="h-3.5 w-3.5" />
                         <span className="max-w-[100px] truncate">{currentBranch?.name || "main"}</span>
                         {isSwitchingBranch ? (
-                          <Loader2 className="h-3 w-3 animate-spin" />
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
                         ) : (
-                          <ChevronDown className="h-3 w-3" />
+                          <ChevronDown className="h-3.5 w-3.5" />
                         )}
                       </Button>
                     </DropdownMenuTrigger>
