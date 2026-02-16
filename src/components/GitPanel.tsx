@@ -2,7 +2,6 @@ import { useState, useEffect, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
-import { openUrl } from "@tauri-apps/plugin-opener";
 import {
   GitCommit,
   RefreshCw,
@@ -83,7 +82,6 @@ import type { FileDiff, DiffHunk, ProjectFolder } from "@/types";
 
 interface GitPanelProps {
   projectPath: string;
-  projectName: string;
   isGitRepo: boolean;
   onRefresh: (path?: string) => void;
   onInitRepo: () => Promise<void>;
@@ -95,7 +93,6 @@ interface GitPanelProps {
   workspaceName?: string; // Custom workspace name (Issue #6)
   onRenameWorkspace?: (name: string) => void; // Callback to rename workspace
   onSaveWorkspace?: () => void; // Callback to save workspace file
-  hideHeader?: boolean; // Hide the project name/branch UI (shown in main window header instead)
 }
 
 interface CommitSuggestion {
@@ -157,7 +154,7 @@ const isPreviewable = (path: string): boolean => {
   return !binaryExtensions.some(ext => lower.endsWith(ext));
 };
 
-export default function GitPanel({ projectPath, projectName, isGitRepo, onRefresh, onInitRepo, onOpenMarkdown, shellCwd, folders, onAddFolder, onRemoveFolder, workspaceName, onRenameWorkspace, onSaveWorkspace, hideHeader }: GitPanelProps) {
+export default function GitPanel({ projectPath, isGitRepo, onRefresh, onInitRepo, onOpenMarkdown, shellCwd, folders, onAddFolder, onRemoveFolder, workspaceName, onRenameWorkspace, onSaveWorkspace }: GitPanelProps) {
   const { diffs, branches, loading, status, history } = useGitStore();
   const { autoCommitMessage, groqApiKey, preferredEditor, showHiddenFiles } = useSettingsStore();
   // Track the current root path for the file tree (can be changed by cd command)
@@ -180,7 +177,6 @@ export default function GitPanel({ projectPath, projectName, isGitRepo, onRefres
   const [showBranchDialog, setShowBranchDialog] = useState(false);
   const [newBranchName, setNewBranchName] = useState("");
   const [isCreatingBranch, setIsCreatingBranch] = useState(false);
-  const [isSwitchingBranch, setIsSwitchingBranch] = useState(false);
   const [expandedFiles, setExpandedFiles] = useState<Set<string>>(new Set());
   const [selectedFiles, setSelectedFiles] = useState<Set<string>>(new Set());
   const [filesToCommit, setFilesToCommit] = useState<Set<string>>(new Set());
@@ -222,8 +218,6 @@ export default function GitPanel({ projectPath, projectName, isGitRepo, onRefres
   const justDraggedRef = useRef(false);
 
   const currentBranch = branches.find((b) => b.isHead);
-  const localBranches = branches.filter((b) => !b.isRemote);
-  const remoteBranches = branches.filter((b) => b.isRemote && !b.name.includes("HEAD"));
 
   // Separate staged and unstaged changes (for now, treating all as unstaged)
   const unstagedChanges = diffs;
@@ -1193,16 +1187,6 @@ export default function GitPanel({ projectPath, projectName, isGitRepo, onRefres
     }
   };
 
-  const handleOpenRemoteUrl = async () => {
-    try {
-      const url = await invoke<string>("get_remote_url", { repoPath: gitRepoPath });
-      await openUrl(url);
-    } catch (error) {
-      toast.error("Failed to open remote URL");
-      console.error(error);
-    }
-  };
-
   const handleDiscardSelected = async () => {
     if (selectedFiles.size === 0) return;
     setIsDiscardingSelected(true);
@@ -1282,21 +1266,6 @@ export default function GitPanel({ projectPath, projectName, isGitRepo, onRefres
       console.error(error);
     } finally {
       setIsCreatingBranch(false);
-    }
-  };
-
-  const handleSwitchBranch = async (branchName: string) => {
-    if (branchName === currentBranch?.name) return;
-    setIsSwitchingBranch(true);
-    try {
-      await invoke("checkout_branch", { repoPath: gitRepoPath, branch: branchName });
-      toast.success(`Switched to ${branchName}`);
-      onRefresh();
-    } catch (error) {
-      toast.error("Failed to switch branch");
-      console.error(error);
-    } finally {
-      setIsSwitchingBranch(false);
     }
   };
 

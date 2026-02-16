@@ -1509,6 +1509,13 @@ export default function ProjectPage() {
     return () => clearInterval(interval);
   }, [autoFetchRemote, currentProject?.path, refreshGitData]);
 
+  // Refresh git data when active folder changes
+  useEffect(() => {
+    if (gitRepoPath) {
+      refreshGitData(gitRepoPath);
+    }
+  }, [gitRepoPath, refreshGitData]);
+
   // File watcher for git status updates (replaces polling)
   useEffect(() => {
     if (!currentProject?.path) return;
@@ -1925,7 +1932,6 @@ export default function ProjectPage() {
         >
           <GitPanel
             projectPath={currentProject.path}
-            projectName={currentProject.name}
             isGitRepo={isGitRepo}
             onRefresh={refreshGitData}
             onInitRepo={initGitRepo}
@@ -1937,7 +1943,6 @@ export default function ProjectPage() {
             workspaceName={currentProject.name}
             onRenameWorkspace={handleRenameWorkspace}
             onSaveWorkspace={handleSaveProject}
-            hideHeader
           />
         </div>
         {/* Resize handle for git panel */}
