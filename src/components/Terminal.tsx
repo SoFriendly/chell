@@ -248,10 +248,17 @@ export default function Terminal({ id, command = "", args, cwd, onTerminalReady,
       }
     };
 
-    // Start checking immediately
-    stabilityTimer = setTimeout(checkStability, 0);
+    // Use double requestAnimationFrame to ensure browser has completed layout
+    // This is critical for production builds where CSS may not be applied immediately
+    let rafId: number | null = null;
+    rafId = requestAnimationFrame(() => {
+      rafId = requestAnimationFrame(() => {
+        stabilityTimer = setTimeout(checkStability, 0);
+      });
+    });
 
     return () => {
+      if (rafId) cancelAnimationFrame(rafId);
       if (stabilityTimer) clearTimeout(stabilityTimer);
       if (resizeObserver) resizeObserver.disconnect();
     };
@@ -411,16 +418,40 @@ export default function Terminal({ id, command = "", args, cwd, onTerminalReady,
     });
 
     // Do initial fit to calculate dimensions
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        try {
-          fitAddon.fit();
-          const { cols, rows } = terminal;
+    // Keep trying until we get valid dimensions (at least 10x5)
+    let fitAttempts = 0;
+    const maxFitAttempts = 30; // 1.5 seconds at 50ms intervals
+
+    const tryFit = () => {
+      fitAttempts++;
+      try {
+        fitAddon.fit();
+        const { cols, rows } = terminal;
+        // Validate dimensions are reasonable (not 0 or too small)
+        if (cols >= 10 && rows >= 5) {
           setInitialDimensions({ cols, rows });
-        } catch {
-          // Fallback dimensions
+          return;
+        }
+        // Dimensions too small, retry
+        if (fitAttempts < maxFitAttempts) {
+          setTimeout(tryFit, 50);
+        } else {
+          console.warn(`[Terminal] Could not get valid dimensions after ${fitAttempts} attempts, using fallback`);
           setInitialDimensions({ cols: 80, rows: 24 });
         }
+      } catch {
+        // fit() threw an error, retry
+        if (fitAttempts < maxFitAttempts) {
+          setTimeout(tryFit, 50);
+        } else {
+          setInitialDimensions({ cols: 80, rows: 24 });
+        }
+      }
+    };
+
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        tryFit();
       });
     });
 
@@ -533,6 +564,15 @@ export default function Terminal({ id, command = "", args, cwd, onTerminalReady,
       if (fitDebounceTimer) clearTimeout(fitDebounceTimer);
       fitDebounceTimer = setTimeout(() => safeFit(), 50);
     };
+
+    // Immediately try to fit in case dimensions are now available
+    // This handles the case where Phase 2/3 used fallback dimensions
+    // but the container now has proper dimensions
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        safeFit();
+      });
+    });
 
     // Handle terminal input - send directly without batching
     const dataDisposable = terminal.onData((data) => {
