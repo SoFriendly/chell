@@ -117,6 +117,24 @@ export default function Terminal({ id, command = "", args, cwd, onTerminalReady,
   const theme = useSettingsStore((state) => state.theme);
   const customTheme = useSettingsStore((state) => state.customTheme);
   const hasSpawnedRef = useRef(false);
+  const prevCwdRef = useRef(cwd);
+
+  // Reset spawn state when cwd changes (for project switches)
+  // This allows the terminal to respawn with the new working directory
+  useEffect(() => {
+    if (prevCwdRef.current !== cwd) {
+      // Only reset if we're managing our own terminal (id not provided externally)
+      if (!id && hasSpawnedRef.current) {
+        // Kill the old terminal if we have one
+        if (terminalId) {
+          invoke("kill_terminal", { id: terminalId }).catch(() => {});
+        }
+        hasSpawnedRef.current = false;
+        setTerminalId(null);
+      }
+      prevCwdRef.current = cwd;
+    }
+  }, [cwd, id, terminalId]);
 
   // Get the appropriate terminal theme, handling custom themes
   const getTerminalTheme = (): ITheme => {
@@ -218,10 +236,15 @@ export default function Terminal({ id, command = "", args, cwd, onTerminalReady,
       }
     };
 
-    // Start checking immediately
-    stabilityTimer = setTimeout(checkStability, 0);
+    // Start checking after a brief delay to allow initial layout to settle
+    // This helps with flex layouts that need a frame to compute dimensions
+    let rafId: number | null = requestAnimationFrame(() => {
+      rafId = null;
+      stabilityTimer = setTimeout(checkStability, 0);
+    });
 
     return () => {
+      if (rafId) cancelAnimationFrame(rafId);
       if (stabilityTimer) clearTimeout(stabilityTimer);
     };
   }, [visible, isContainerReady]);

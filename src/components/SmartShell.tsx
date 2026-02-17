@@ -176,14 +176,27 @@ export default function SmartShell({
     }
   };
 
-  const handleExecute = async () => {
-    if (!internalTerminalId || !preview) return;
+  const handleExecute = useCallback(async () => {
+    console.log("[NLT] handleExecute called", { preview, internalTerminalId });
+
+    if (!preview) {
+      console.log("[NLT] No preview, returning");
+      return;
+    }
+
+    if (!internalTerminalId) {
+      console.log("[NLT] No terminal ID");
+      setError("Terminal not ready. Please wait for it to initialize.");
+      return;
+    }
 
     try {
+      console.log("[NLT] Writing command to terminal:", preview.command);
       // Write command to terminal
       await invoke("write_terminal", { id: internalTerminalId, data: preview.command });
       // Send Enter to execute
       await invoke("write_terminal", { id: internalTerminalId, data: "\r" });
+      console.log("[NLT] Command sent successfully");
 
       // Clear state
       setPreview(null);
@@ -192,7 +205,7 @@ export default function SmartShell({
     } catch (err) {
       setError("Failed to execute command: " + String(err));
     }
-  };
+  }, [internalTerminalId, preview]);
 
   const handleCancel = () => {
     setPreview(null);
@@ -203,7 +216,12 @@ export default function SmartShell({
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
-      handleSubmit();
+      // If there's a preview, execute it; otherwise submit new query
+      if (preview) {
+        handleExecute();
+      } else {
+        handleSubmit();
+      }
     } else if (e.key === "Escape") {
       if (preview) {
         handleCancel();
@@ -307,16 +325,18 @@ export default function SmartShell({
         </div>
       )}
 
-      {/* Terminal */}
-      <div className="flex-1 overflow-hidden">
-        <Terminal
-          id={internalTerminalId || undefined}
-          command=""
-          cwd={cwd}
-          onTerminalReady={handleTerminalReady}
-          onCwdChange={onCwdChange}
-          visible={visible}
-        />
+      {/* Terminal - use relative/absolute for reliable dimensions like assistant panel */}
+      <div className="relative flex-1 overflow-hidden">
+        <div className="absolute inset-0">
+          <Terminal
+            id={internalTerminalId || undefined}
+            command=""
+            cwd={cwd}
+            onTerminalReady={handleTerminalReady}
+            onCwdChange={onCwdChange}
+            visible={visible}
+          />
+        </div>
       </div>
     </div>
   );

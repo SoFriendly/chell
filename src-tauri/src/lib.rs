@@ -199,6 +199,64 @@ fn get_home_dir() -> Result<String, String> {
     { std::env::var("HOME").map_err(|_| "Could not find HOME directory".to_string()) }
 }
 
+/// Request microphone permission on macOS.
+/// This triggers the system permission dialog if not already granted.
+#[cfg(target_os = "macos")]
+#[tauri::command]
+fn request_microphone_permission() -> Result<String, String> {
+    use std::process::Command;
+
+    // Use AppleScript to trigger the microphone permission dialog
+    // This is more reliable than using objc directly
+    let script = r#"
+        tell application "System Events"
+            -- This triggers the microphone permission check
+            set frontApp to name of first application process whose frontmost is true
+        end tell
+
+        -- Use osascript to check/request microphone access via a helper
+        do shell script "osascript -e 'tell application \"System Events\" to return (get volume settings)'"
+    "#;
+
+    // Alternative: Use tccutil or direct TCC database check
+    // For now, just try to trigger the permission by accessing audio
+    let output = Command::new("osascript")
+        .arg("-e")
+        .arg(r#"
+            use framework "AVFoundation"
+            set authStatus to current application's AVCaptureDevice's authorizationStatusForMediaType:(current application's AVMediaTypeAudio)
+            if authStatus = 0 then
+                -- Not determined, request access
+                current application's AVCaptureDevice's requestAccessForMediaType:(current application's AVMediaTypeAudio) completionHandler:(missing value)
+                return "requested"
+            else if authStatus = 3 then
+                return "authorized"
+            else if authStatus = 2 then
+                return "denied"
+            else if authStatus = 1 then
+                return "restricted"
+            else
+                return "unknown"
+            end if
+        "#)
+        .output()
+        .map_err(|e| format!("Failed to run osascript: {}", e))?;
+
+    if output.status.success() {
+        let result = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        Ok(result)
+    } else {
+        let err = String::from_utf8_lossy(&output.stderr);
+        Err(format!("osascript failed: {}", err))
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+#[tauri::command]
+fn request_microphone_permission() -> Result<String, String> {
+    Ok("not_applicable".to_string())
+}
+
 /// Fetch secrets from macOS Keychain for environment variables.
 /// Automatically discovers Keychain items with service names starting with "env/"
 /// and exports them as environment variables (stripping the "env/" prefix).
@@ -3098,6 +3156,7 @@ pub fn run() {
             // Debug
             debug_log,
             get_home_dir,
+            request_microphone_permission,
             // Terminal
             spawn_terminal,
             write_terminal,

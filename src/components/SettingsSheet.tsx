@@ -20,6 +20,7 @@ import {
   EyeOff,
   Trash2,
   Plus,
+  Mic,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -106,6 +107,7 @@ export default function SettingsSheet({ open, onOpenChange }: SettingsSheetProps
   const [showAddForm, setShowAddForm] = useState(false);
   const [newAssistant, setNewAssistant] = useState({ name: "", command: "", description: "", installCommand: "", docsUrl: "" });
   const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [micPermission, setMicPermission] = useState<string | null>(null);
 
   const allAssistants = getAllAssistants(customAssistants);
 
@@ -135,6 +137,15 @@ export default function SettingsSheet({ open, onOpenChange }: SettingsSheetProps
   useEffect(() => {
     setAssistantArgsState(buildArgsState());
   }, [assistantArgs, customAssistants]);
+
+  // Check microphone permission status when dialog opens
+  useEffect(() => {
+    if (open && activeTab === "general") {
+      invoke<string>("request_microphone_permission")
+        .then(setMicPermission)
+        .catch(() => setMicPermission(null));
+    }
+  }, [open, activeTab]);
 
   const checkInstalledAssistants = useCallback(async () => {
     try {
@@ -431,6 +442,62 @@ export default function SettingsSheet({ open, onOpenChange }: SettingsSheetProps
                       </div>
                     </div>
                   </section>
+
+                  {/* Permissions Section - macOS only */}
+                  {navigator.platform.toUpperCase().indexOf("MAC") >= 0 && (
+                    <section>
+                      <h3 className="text-lg font-semibold">Permissions</h3>
+                      <p className="text-sm text-muted-foreground mb-6">
+                        Grant system permissions needed by terminal applications.
+                      </p>
+
+                      <div className="space-y-6">
+                        {/* Microphone Permission */}
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="text-sm font-medium">Microphone Access</p>
+                            <p className="text-xs text-muted-foreground">
+                              Required for voice input in the terminal.
+                            </p>
+                          </div>
+                          {micPermission === "authorized" ? (
+                            <div className="flex items-center gap-1.5 text-sm text-green-500">
+                              <Check className="h-4 w-4" />
+                              Granted
+                            </div>
+                          ) : (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={async () => {
+                                try {
+                                  const result = await invoke<string>("request_microphone_permission");
+                                  setMicPermission(result);
+                                  if (result === "authorized") {
+                                    toast.success("Microphone access granted");
+                                  } else if (result === "denied") {
+                                    toast.error("Microphone access denied. Enable in System Settings > Privacy & Security > Microphone");
+                                  } else if (result === "requested") {
+                                    toast.success("Permission requested. Check the system dialog.");
+                                  } else if (result === "restricted") {
+                                    toast.error("Microphone access is restricted by system policy");
+                                  } else if (result === "not_applicable") {
+                                    toast.info("Microphone permissions are managed by the system on this platform");
+                                  }
+                                } catch (error) {
+                                  console.error("Failed to request microphone permission:", error);
+                                  toast.error("Failed to request permission");
+                                }
+                              }}
+                            >
+                              <Mic className="h-3 w-3 mr-1" />
+                              Request Access
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    </section>
+                  )}
                 </div>
               )}
 

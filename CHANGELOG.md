@@ -2,6 +2,19 @@
 
 All notable changes to Chell will be documented in this file.
 
+## [0.1.90]
+
+### Features
+- Add microphone permissions button for macOS
+  - Settings now includes a button to request microphone access for voice input features
+  - Permissions section only shown on macOS where system permission prompts are required
+
+### Bug Fixes
+- Fix NLT execute button not sending commands to terminal
+  - Wrapped `handleExecute` in `useCallback` to prevent stale closure issues
+  - Added proper error message when terminal is not ready
+  - Pressing Enter with a command preview now executes it instead of submitting a new query
+
 ## [0.1.89]
 
 ### Bug Fixes
