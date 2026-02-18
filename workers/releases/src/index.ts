@@ -43,23 +43,8 @@ export default {
           const arch = latestFileMatch[1]; // arm64, amd64, or undefined
           const ext = latestFileMatch[2];
 
-          // Map extension + arch to platform key
-          const getPlatformKey = (ext: string, arch?: string): string => {
-            if (ext === "dmg") return "darwin-aarch64";
-            if (ext === "AppImage" || ext === "deb") {
-              return arch === "arm64" ? "linux-aarch64" : "linux-x86_64";
-            }
-            return "windows-x86_64";
-          };
-
-          const platformKey = getPlatformKey(ext, arch);
-          const platform = latest.platforms?.[platformKey];
-
-          if (platform?.url) {
-            return Response.redirect(platform.url, 302);
-          }
-
-          // Fallback: construct URL from version
+          // Always construct URL from version directly.
+          // latest.json platform URLs are for Tauri auto-updates (AppImage), not for direct downloads.
           const version = latest.version;
           const archSuffix = arch === "arm64" ? "arm64" : "amd64";
           const fileMap: Record<string, string> = {
