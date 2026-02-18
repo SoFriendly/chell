@@ -9,9 +9,12 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { openUrl } from "@tauri-apps/plugin-opener";
+import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { useSettingsStore } from "@/stores/settingsStore";
-import { FilePathLinkProvider } from "@/utils/terminalLinkProvider";
+import { FilePathLinkProvider, HoveredLinkInfo } from "@/utils/terminalLinkProvider";
 import { hslToHex, THEME_DEFAULTS } from "@/lib/colorUtils";
+import { toast } from "sonner";
+import { ExternalLink, FolderOpen, Copy, SquareTerminal } from "lucide-react";
 import "@xterm/xterm/css/xterm.css";
 
 // Compute background colors from CSS variables to ensure they match
@@ -110,11 +113,18 @@ export default function Terminal({ id, command = "", args, cwd, onTerminalReady,
   const terminalRef = useRef<XTerm | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
   const cleanupRef = useRef<(() => void) | null>(null);
+  const linkProviderRef = useRef<FilePathLinkProvider | null>(null);
   const [terminalId, setTerminalId] = useState<string | null>(null);
   const hasInitializedRef = useRef(false);
   const theme = useSettingsStore((state) => state.theme);
   const customTheme = useSettingsStore((state) => state.customTheme);
+  const preferredEditor = useSettingsStore((state) => state.preferredEditor);
   const savedScrollTopRef = useRef(0);
+  const [contextMenu, setContextMenu] = useState<{
+    x: number;
+    y: number;
+    link: HoveredLinkInfo;
+  } | null>(null);
 
   const onCwdChangeRef = useRef(onCwdChange);
   useEffect(() => { onCwdChangeRef.current = onCwdChange; }, [onCwdChange]);
@@ -133,6 +143,88 @@ export default function Terminal({ id, command = "", args, cwd, onTerminalReady,
       try { return decodeURIComponent(match[1]); } catch { return match[1]; }
     }
     return null;
+  }, []);
+
+  // Context menu handlers
+  const handleContextMenu = useCallback((e: MouseEvent) => {
+    const link = linkProviderRef.current?.getHoveredLink();
+    if (link) {
+      e.preventDefault();
+      setContextMenu({ x: e.clientX, y: e.clientY, link });
+    }
+  }, []);
+
+  const closeContextMenu = useCallback(() => setContextMenu(null), []);
+
+  const handleOpenFile = useCallback((link: HoveredLinkInfo) => {
+    invoke("open_file_in_editor", {
+      path: link.fullPath,
+      line: link.line ?? null,
+      column: link.column ?? null,
+    }).catch((err) => {
+      console.error("Failed to open file in editor:", err);
+      invoke("reveal_in_file_manager", { path: link.fullPath }).catch(console.error);
+    });
+    closeContextMenu();
+  }, [closeContextMenu]);
+
+  const handleRevealInFileManager = useCallback((link: HoveredLinkInfo) => {
+    invoke("reveal_in_file_manager", { path: link.fullPath }).catch(console.error);
+    closeContextMenu();
+  }, [closeContextMenu]);
+
+  const handleCopyPath = useCallback((link: HoveredLinkInfo) => {
+    navigator.clipboard.writeText(link.fullPath);
+    toast.success("Path copied to clipboard");
+    closeContextMenu();
+  }, [closeContextMenu]);
+
+  const handleOpenInEditor = useCallback((link: HoveredLinkInfo) => {
+    if (!preferredEditor) {
+      toast.error("No preferred editor set. Configure it in Settings.");
+      closeContextMenu();
+      return;
+    }
+
+    const fileName = link.fullPath.split("/").pop() || link.fullPath;
+    const title = `${preferredEditor} - ${fileName}`;
+    const editorCwd = link.fullPath.substring(0, link.fullPath.lastIndexOf("/"));
+
+    try {
+      const params = new URLSearchParams({
+        editor: preferredEditor,
+        file: link.fullPath,
+        cwd: editorCwd,
+        title,
+      });
+
+      const webview = new WebviewWindow(`editor-${Date.now()}`, {
+        url: `/terminal?${params.toString()}`,
+        title,
+        width: 900,
+        height: 600,
+        center: true,
+        titleBarStyle: "overlay",
+        hiddenTitle: true,
+        visible: true,
+      });
+
+      webview.once("tauri://error", (e) => {
+        console.error("Failed to create editor window:", e);
+        toast.error(`Failed to open ${preferredEditor}`);
+      });
+    } catch (err) {
+      toast.error(`Failed to open ${preferredEditor}: ${err}`);
+    }
+    closeContextMenu();
+  }, [preferredEditor, closeContextMenu]);
+
+  // Platform-specific label
+  const getRevealLabel = useCallback(() => {
+    const platform = navigator.platform.toUpperCase();
+    if (platform.indexOf('MAC') >= 0) return 'Reveal in Finder';
+    if (platform.indexOf('WIN') >= 0) return 'Show in Explorer';
+    return 'Show in File Manager';
   }, []);
 
   // Initialize terminal - once when first visible
@@ -174,7 +266,9 @@ export default function Terminal({ id, command = "", args, cwd, onTerminalReady,
       terminal.loadAddon(new Unicode11Addon());
       terminal.unicode.activeVersion = "11";
       terminal.open(container);
-      terminal.registerLinkProvider(new FilePathLinkProvider(terminal, cwd));
+      const linkProvider = new FilePathLinkProvider(terminal, cwd);
+      linkProviderRef.current = linkProvider;
+      terminal.registerLinkProvider(linkProvider);
       terminal.parser.registerCsiHandler({ prefix: "?", final: "h" }, (params) => {
         for (const p of params) if (p === 1004 || (Array.isArray(p) && p.includes(1004))) return true;
         return false;
@@ -274,6 +368,7 @@ export default function Terminal({ id, command = "", args, cwd, onTerminalReady,
 
       const handlePaste = (e: ClipboardEvent) => { e.preventDefault(); const t = e.clipboardData?.getData("text"); if (t) invoke("write_terminal", { id: activeId, data: t }).catch(() => {}); };
       container.addEventListener('paste', handlePaste);
+      container.addEventListener('contextmenu', handleContextMenu as EventListener);
 
       const vp = container.querySelector('.xterm-viewport') as HTMLElement;
       const handleScroll = () => { if (vp?.scrollTop > 0) savedScrollTopRef.current = vp.scrollTop; };
@@ -284,6 +379,7 @@ export default function Terminal({ id, command = "", args, cwd, onTerminalReady,
         dataDisposable.dispose(); resizeDisposable.dispose(); ro.disconnect();
         window.removeEventListener("resize", debouncedFit);
         container.removeEventListener('paste', handlePaste);
+        container.removeEventListener('contextmenu', handleContextMenu as EventListener);
         vp?.removeEventListener('scroll', handleScroll);
         unlisten();
         terminal.dispose();
@@ -338,14 +434,59 @@ export default function Terminal({ id, command = "", args, cwd, onTerminalReady,
   const bgColor = getTerminalTheme().background;
 
   return (
-    <div className="h-full w-full p-1" style={{ backgroundColor: bgColor, transform: "translateZ(0)" }}
-      onClick={() => terminalRef.current?.focus()}
-      onMouseUp={() => {
-        const p = (window as any).__draggedFilePath;
-        if (p && terminalId) { invoke("write_terminal", { id: terminalId, data: p + " " }); (window as any).__draggedFilePath = undefined; terminalRef.current?.focus(); }
-      }}
-      onDragOver={e => e.preventDefault()} onDragEnter={e => e.preventDefault()}>
-      <div ref={containerRef} className="h-full w-full" style={{ transform: "translateZ(0)" }} />
-    </div>
+    <>
+      <div className="h-full w-full p-1" style={{ backgroundColor: bgColor, transform: "translateZ(0)" }}
+        onClick={() => { closeContextMenu(); terminalRef.current?.focus(); }}
+        onMouseUp={() => {
+          const p = (window as any).__draggedFilePath;
+          if (p && terminalId) { invoke("write_terminal", { id: terminalId, data: p + " " }); (window as any).__draggedFilePath = undefined; terminalRef.current?.focus(); }
+        }}
+        onDragOver={e => e.preventDefault()} onDragEnter={e => e.preventDefault()}>
+        <div ref={containerRef} className="h-full w-full" style={{ transform: "translateZ(0)" }} />
+      </div>
+
+      {/* Context menu for file links */}
+      {contextMenu && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={closeContextMenu} onContextMenu={(e) => { e.preventDefault(); closeContextMenu(); }} />
+          <div
+            className="fixed z-50 min-w-[8rem] overflow-hidden rounded-md border bg-popover p-1 text-popover-foreground shadow-md animate-in fade-in-80 zoom-in-95"
+            style={{ left: contextMenu.x, top: contextMenu.y }}
+          >
+            <button
+              onClick={() => handleOpenFile(contextMenu.link)}
+              className="relative flex w-full cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-accent hover:text-accent-foreground"
+            >
+              <ExternalLink className="mr-2 h-4 w-4" />
+              Open
+            </button>
+            <button
+              onClick={() => handleRevealInFileManager(contextMenu.link)}
+              className="relative flex w-full cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-accent hover:text-accent-foreground"
+            >
+              <FolderOpen className="mr-2 h-4 w-4" />
+              {getRevealLabel()}
+            </button>
+            {preferredEditor && (
+              <button
+                onClick={() => handleOpenInEditor(contextMenu.link)}
+                className="relative flex w-full cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-accent hover:text-accent-foreground"
+              >
+                <SquareTerminal className="mr-2 h-4 w-4" />
+                Open in {preferredEditor}
+              </button>
+            )}
+            <div className="-mx-1 my-1 h-px bg-border" />
+            <button
+              onClick={() => handleCopyPath(contextMenu.link)}
+              className="relative flex w-full cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-accent hover:text-accent-foreground"
+            >
+              <Copy className="mr-2 h-4 w-4" />
+              Copy Path
+            </button>
+          </div>
+        </>
+      )}
+    </>
   );
 }

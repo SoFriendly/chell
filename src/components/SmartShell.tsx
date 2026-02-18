@@ -198,6 +198,14 @@ export default function SmartShell({
       await invoke("write_terminal", { id: internalTerminalId, data: "\r" });
       console.log("[NLT] Command sent successfully");
 
+      // Record command to project history
+      if (cwd && preview.command.trim()) {
+        invoke("record_project_command", {
+          command: preview.command.trim(),
+          projectPath: cwd
+        }).catch(() => {}); // Fire and forget
+      }
+
       // Clear state
       setPreview(null);
       setAiInput("");
@@ -205,7 +213,7 @@ export default function SmartShell({
     } catch (err) {
       setError("Failed to execute command: " + String(err));
     }
-  }, [internalTerminalId, preview]);
+  }, [internalTerminalId, preview, cwd]);
 
   const handleCancel = () => {
     setPreview(null);

@@ -123,6 +123,7 @@ pub struct FileTreeNode {
     #[serde(rename = "isDir")]
     pub is_dir: bool,
     pub children: Option<Vec<FileTreeNode>>,
+    pub modified: Option<f64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -959,6 +960,11 @@ fn get_file_tree(path: String, show_hidden: bool) -> Result<Vec<FileTreeNode>, S
                 .unwrap_or_else(|_| name.clone());
 
             let is_dir = path.is_dir();
+            let modified = fs::metadata(&path)
+                .and_then(|m| m.modified())
+                .ok()
+                .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+                .map(|d| d.as_secs_f64());
             let children = if is_dir {
                 Some(build_tree(&path, base_path, depth + 1, show_hidden)?)
             } else {
@@ -970,6 +976,7 @@ fn get_file_tree(path: String, show_hidden: bool) -> Result<Vec<FileTreeNode>, S
                 path: relative_path,
                 is_dir,
                 children,
+                modified,
             });
         }
 
@@ -1804,6 +1811,96 @@ fn get_shell_history(limit: Option<usize>) -> Result<Vec<String>, String> {
     }
 
     Ok(Vec::new())
+}
+
+// Per-project shell history entry
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct ShellHistoryEntry {
+    command: String,
+    project_path: String,
+    timestamp: i64,
+}
+
+// Get the path to Chell's shell history file
+fn get_chell_history_path() -> Option<PathBuf> {
+    dirs::home_dir().map(|home| home.join(".claude").join("shell_history.json"))
+}
+
+// Record a command to project-specific history
+#[tauri::command]
+fn record_project_command(command: String, project_path: String) -> Result<(), String> {
+    let command = command.trim().to_string();
+    if command.is_empty() {
+        return Ok(());
+    }
+
+    let history_path = get_chell_history_path().ok_or("Could not determine history path")?;
+
+    // Ensure directory exists
+    if let Some(parent) = history_path.parent() {
+        std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    }
+
+    // Load existing history
+    let mut entries: Vec<ShellHistoryEntry> = if history_path.exists() {
+        let content = std::fs::read_to_string(&history_path).unwrap_or_default();
+        serde_json::from_str(&content).unwrap_or_default()
+    } else {
+        Vec::new()
+    };
+
+    // Add new entry
+    let entry = ShellHistoryEntry {
+        command: command.clone(),
+        project_path: project_path.clone(),
+        timestamp: std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_secs() as i64)
+            .unwrap_or(0),
+    };
+    entries.push(entry);
+
+    // Keep only last 5000 entries total to prevent unbounded growth
+    if entries.len() > 5000 {
+        entries = entries.split_off(entries.len() - 5000);
+    }
+
+    // Save back
+    let content = serde_json::to_string(&entries).map_err(|e| e.to_string())?;
+    std::fs::write(&history_path, content).map_err(|e| e.to_string())?;
+
+    Ok(())
+}
+
+// Get project-specific shell history
+#[tauri::command]
+fn get_project_shell_history(project_path: String, limit: Option<usize>) -> Result<Vec<String>, String> {
+    let limit = limit.unwrap_or(500);
+    let history_path = get_chell_history_path().ok_or("Could not determine history path")?;
+
+    if !history_path.exists() {
+        return Ok(Vec::new());
+    }
+
+    let content = std::fs::read_to_string(&history_path).map_err(|e| e.to_string())?;
+    let entries: Vec<ShellHistoryEntry> = serde_json::from_str(&content).unwrap_or_default();
+
+    // Filter by project path and extract commands
+    let mut commands: Vec<String> = entries
+        .into_iter()
+        .filter(|e| e.project_path == project_path || e.project_path.starts_with(&format!("{}/", project_path)))
+        .map(|e| e.command)
+        .collect();
+
+    // Remove duplicates while preserving order (keep last occurrence)
+    let mut seen = std::collections::HashSet::new();
+    commands.reverse();
+    commands.retain(|cmd| seen.insert(cmd.clone()));
+    commands.reverse();
+
+    // Return most recent commands (up to limit)
+    let start = commands.len().saturating_sub(limit);
+    Ok(commands[start..].to_vec())
 }
 
 // Helper function to find the full path of a command
@@ -3206,6 +3303,8 @@ pub fn run() {
             open_in_terminal_editor,
             list_directories,
             get_shell_history,
+            record_project_command,
+            get_project_shell_history,
             get_file_tree,
             search_file_contents,
             delete_file,

@@ -88,6 +88,35 @@ import { hslToHex, THEME_DEFAULTS } from "@/lib/colorUtils";
 import { getAllAssistants, getAllAssistantCommands } from "@/lib/assistants";
 import type { Project, GitStatus, FileDiff, Branch, Commit, CustomThemeColors, ProjectFolder, ProjectFileData } from "@/types";
 
+// Types for global file search
+interface FileTreeNode {
+  name: string;
+  path: string;
+  isDir: boolean;
+  children?: FileTreeNode[];
+  modified?: number;
+}
+
+interface FileNameMatch {
+  name: string;
+  path: string;
+  isDir: boolean;
+  basePath: string;
+  modified?: number;
+}
+
+interface ContentMatch {
+  path: string;
+  lineNumber: number;
+  line: string;
+  absolutePath: string;
+}
+
+interface ContentSearchResult {
+  matches: ContentMatch[];
+  truncated: boolean;
+}
+
 // Map file extensions to Monaco language IDs
 const getMonacoLanguage = (filePath: string): string => {
   const ext = filePath.split('.').pop()?.toLowerCase() || '';
@@ -352,6 +381,15 @@ export default function ProjectPage() {
   const [shellDirs, setShellDirs] = useState<string[]>([]);
   const [showHistorySearch, setShowHistorySearch] = useState(false);
   const [shellHistory, setShellHistory] = useState<string[]>([]);
+  // Global file search state
+  const [showFileSearch, setShowFileSearch] = useState(false);
+  const [fileSearchQuery, setFileSearchQuery] = useState("");
+  const [fileTree, setFileTree] = useState<FileTreeNode[]>([]);
+  const [fileNameMatches, setFileNameMatches] = useState<FileNameMatch[]>([]);
+  const [contentSearchResults, setContentSearchResults] = useState<ContentMatch[]>([]);
+  const [isSearchingContent, setIsSearchingContent] = useState(false);
+  const [contentSearchTruncated, setContentSearchTruncated] = useState(false);
+  const fileSearchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [showNlt, setShowNlt] = useState(false);
   // Track selected folders for tabs pending folder selection (Issue #6)
   const [pendingTabFolders, setPendingTabFolders] = useState<Record<string, string>>({});
@@ -385,6 +423,28 @@ export default function ProjectPage() {
     });
     return () => { unlisten.then(fn => fn()); };
   }, [terminalTabs, utilityTerminalId]);
+
+  // Preload file list when search dialog opens
+  useEffect(() => {
+    if (showFileSearch && fileTree.length > 0 && !fileSearchQuery.trim()) {
+      setFileNameMatches(collectFileNameMatches(""));
+    }
+  }, [showFileSearch, fileTree]);
+
+  // Global file search keyboard shortcut (Cmd+P / Ctrl+P / Cmd+F / Ctrl+F)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const isMac = navigator.platform.toUpperCase().includes('MAC');
+      const modifier = isMac ? e.metaKey : e.ctrlKey;
+      if (modifier && (e.key === 'p' || e.key === 'f')) {
+        e.preventDefault();
+        loadFileTree();
+        setShowFileSearch(true);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   // Count visible panels - must always have at least one
   const visiblePanelCount = [showGitPanel, showAssistantPanel, showShellPanel, showNotesPanel, showMarkdownPanel].filter(Boolean).length;
@@ -1038,19 +1098,163 @@ export default function ProjectPage() {
   };
 
   const loadShellHistory = async () => {
+    const projectPath = currentProject?.path;
+    if (!projectPath) return;
+
     try {
-      const history = await invoke<string[]>("get_shell_history", { limit: 500 });
-      setShellHistory(history.reverse()); // Most recent first
+      // First try project-specific history
+      const projectHistory = await invoke<string[]>("get_project_shell_history", {
+        projectPath,
+        limit: 500
+      });
+
+      if (projectHistory.length > 0) {
+        setShellHistory(projectHistory.reverse()); // Most recent first
+      } else {
+        // Fallback to global history if no project history exists yet
+        const globalHistory = await invoke<string[]>("get_shell_history", { limit: 500 });
+        setShellHistory(globalHistory.reverse());
+      }
     } catch (error) {
       console.error("Failed to load shell history:", error);
       setShellHistory([]);
     }
   };
 
+  const recordCommand = async (command: string) => {
+    const projectPath = currentProject?.path;
+    if (!projectPath || !command.trim()) return;
+
+    try {
+      await invoke("record_project_command", {
+        command: command.trim(),
+        projectPath
+      });
+    } catch (error) {
+      console.error("Failed to record command:", error);
+    }
+  };
+
   const handleHistorySelect = (command: string) => {
     if (!utilityTerminalId || utilityTerminalId === "closed") return;
     invoke("write_terminal", { id: utilityTerminalId, data: command });
+    recordCommand(command); // Record when selecting from history
     setShowHistorySearch(false);
+  };
+
+  // Global file search functions
+  const loadFileTree = async () => {
+    const projectPath = currentProject?.path;
+    if (!projectPath) return;
+    try {
+      const tree = await invoke<FileTreeNode[]>("get_file_tree", {
+        path: projectPath,
+        showHidden: false,
+      });
+      setFileTree(tree);
+    } catch (error) {
+      console.error("Failed to load file tree:", error);
+    }
+  };
+
+  const collectFileNameMatches = (query: string): FileNameMatch[] => {
+    const queryLower = query.toLowerCase();
+    const results: FileNameMatch[] = [];
+    const projectPath = currentProject?.path || "";
+
+    const walkTree = (nodes: FileTreeNode[]) => {
+      for (const node of nodes) {
+        if (!node.isDir && (!queryLower || node.name.toLowerCase().includes(queryLower))) {
+          results.push({
+            name: node.name,
+            path: node.path,
+            isDir: false,
+            basePath: projectPath,
+            modified: node.modified,
+          });
+        }
+        if (node.children) {
+          walkTree(node.children);
+        }
+      }
+    };
+
+    walkTree(fileTree);
+    results.sort((a, b) => (b.modified ?? 0) - (a.modified ?? 0));
+    return results.slice(0, 50); // Limit results
+  };
+
+  const triggerContentSearch = async (query: string) => {
+    const projectPath = currentProject?.path;
+    if (!projectPath || query.length < 2) {
+      setContentSearchResults([]);
+      setContentSearchTruncated(false);
+      setIsSearchingContent(false);
+      return;
+    }
+
+    setIsSearchingContent(true);
+    try {
+      const result = await invoke<ContentSearchResult>("search_file_contents", {
+        path: projectPath,
+        query,
+        showHidden: false,
+        maxResults: 50,
+      });
+      setContentSearchResults(result.matches);
+      setContentSearchTruncated(result.truncated);
+    } catch (error) {
+      console.error("Content search failed:", error);
+    } finally {
+      setIsSearchingContent(false);
+    }
+  };
+
+  const handleFileSearchChange = (value: string) => {
+    setFileSearchQuery(value);
+
+    // Immediate file name search (show all files when query is empty)
+    setFileNameMatches(collectFileNameMatches(value.trim()));
+
+    // Debounced content search
+    if (fileSearchTimeoutRef.current) {
+      clearTimeout(fileSearchTimeoutRef.current);
+    }
+    if (value.trim().length >= 2) {
+      setIsSearchingContent(true);
+      fileSearchTimeoutRef.current = setTimeout(() => {
+        triggerContentSearch(value.trim());
+      }, 300);
+    } else {
+      setContentSearchResults([]);
+      setContentSearchTruncated(false);
+      setIsSearchingContent(false);
+    }
+  };
+
+  const handleCloseFileSearch = () => {
+    setShowFileSearch(false);
+    setFileSearchQuery("");
+    setFileNameMatches([]);
+    setContentSearchResults([]);
+    setContentSearchTruncated(false);
+    setIsSearchingContent(false);
+    if (fileSearchTimeoutRef.current) {
+      clearTimeout(fileSearchTimeoutRef.current);
+    }
+  };
+
+  const handleFileSearchResultClick = (match: FileNameMatch) => {
+    if (!match.isDir) {
+      const absolutePath = `${match.basePath}/${match.path}`;
+      handleOpenMarkdownInPanel(absolutePath);
+    }
+    handleCloseFileSearch();
+  };
+
+  const handleContentMatchClick = (match: ContentMatch) => {
+    handleOpenMarkdownInPanel(match.absolutePath, match.lineNumber);
+    handleCloseFileSearch();
   };
 
   const handleShellCd = async (dirName: string) => {
@@ -1619,6 +1823,22 @@ export default function ProjectPage() {
     >
       {/* Centered header with project/folder name and branch selector */}
       <div className="absolute top-0 left-1/2 -translate-x-1/2 z-30 flex items-center gap-1.5 h-12 mt-0.5">
+        <Tooltip delayDuration={0}>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-6 w-6 p-0 mr-1 text-muted-foreground hover:text-foreground"
+              onClick={() => {
+                loadFileTree();
+                setShowFileSearch(true);
+              }}
+            >
+              <Search className="h-3.5 w-3.5" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">Search Files (⌘P)</TooltipContent>
+        </Tooltip>
         {currentProject?.folders && currentProject.folders.length > 1 ? (
           /* Multi-folder: active folder name with dropdown */
           <ContextMenu>
@@ -2757,6 +2977,72 @@ export default function ProjectPage() {
               </CommandItem>
             ))}
           </CommandGroup>
+        </CommandList>
+      </CommandDialog>
+
+      {/* Global File Search */}
+      <CommandDialog open={showFileSearch} onOpenChange={(open) => {
+        if (!open) handleCloseFileSearch();
+        else setShowFileSearch(true);
+      }}>
+        <CommandInput
+          placeholder="Search files and content..."
+          value={fileSearchQuery}
+          onValueChange={handleFileSearchChange}
+        />
+        <CommandList className="max-h-[400px]">
+          <CommandEmpty>
+            {isSearchingContent ? "Searching..." : "No results found."}
+          </CommandEmpty>
+          {fileNameMatches.length > 0 && (
+            <CommandGroup heading={fileSearchQuery.trim() ? "File Names" : "Files"}>
+              {fileNameMatches.map((match, index) => (
+                <CommandItem
+                  key={`file-${match.path}-${index}`}
+                  value={`file:${match.path}`}
+                  onSelect={() => handleFileSearchResultClick(match)}
+                  className="flex items-center gap-2"
+                >
+                  {match.isDir ? (
+                    <Folder className="h-4 w-4 text-muted-foreground shrink-0" />
+                  ) : (
+                    <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
+                  )}
+                  <span className="truncate">{match.name}</span>
+                  <span className="text-xs text-muted-foreground truncate ml-auto">
+                    {match.path}
+                  </span>
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          )}
+          {contentSearchResults.length > 0 && (
+            <CommandGroup heading={`Content Matches${contentSearchTruncated ? " (50+)" : ""}`}>
+              {contentSearchResults.map((match, index) => (
+                <CommandItem
+                  key={`content-${match.absolutePath}-${match.lineNumber}-${index}`}
+                  value={`content:${match.absolutePath}:${match.lineNumber}`}
+                  onSelect={() => handleContentMatchClick(match)}
+                  className="flex flex-col items-start gap-0.5"
+                >
+                  <div className="flex items-center gap-2 w-full">
+                    <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
+                    <span className="text-xs truncate">{match.path}</span>
+                    <span className="text-xs text-muted-foreground">:{match.lineNumber}</span>
+                  </div>
+                  <span className="text-xs text-muted-foreground truncate w-full pl-6 font-mono">
+                    {match.line.trim()}
+                  </span>
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          )}
+          {isSearchingContent && fileSearchQuery.length >= 2 && (
+            <div className="py-2 px-4 text-sm text-muted-foreground flex items-center gap-2">
+              <Loader2 className="h-3 w-3 animate-spin" />
+              Searching content...
+            </div>
+          )}
         </CommandList>
       </CommandDialog>
 

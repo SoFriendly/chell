@@ -2,6 +2,25 @@
 
 All notable changes to Chell will be documented in this file.
 
+## [0.1.93]
+
+### Features
+- Add right-click context menu for file paths detected in terminal
+  - Right-click any file path to see options: Open, Reveal in Finder/Explorer, Open in [editor], Copy Path
+  - Same options as file tree context menu for consistent experience
+  - Tooltip updated to show "Right-click for options" hint
+- Add global file search in header (⌘P / Ctrl+P)
+  - Search icon appears to the right of git branch (or project name for non-git projects)
+  - Opens CommandDialog with file name and content search
+  - File name matches appear instantly, content search is debounced (300ms)
+  - Click results to open files in the preview panel
+  - Content matches show file path, line number, and matching text
+- Add per-project shell history
+  - Shell history search now shows commands from the current project first
+  - Falls back to global shell history if no project-specific history exists
+  - Commands are recorded with project path when executed via SmartShell or selected from history
+  - History stored in `~/.claude/shell_history.json` with 5000 entry limit
+
 ## [0.1.92]
 
 ### Bug Fixes

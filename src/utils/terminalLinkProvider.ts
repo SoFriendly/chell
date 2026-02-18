@@ -57,6 +57,13 @@ interface CachedLink {
   column?: number;
 }
 
+export interface HoveredLinkInfo {
+  path: string;
+  fullPath: string;
+  line?: number;
+  column?: number;
+}
+
 interface ParsedLineResult {
   lineContent: string;
   links: CachedLink[];
@@ -111,6 +118,7 @@ export class FilePathLinkProvider implements ILinkProvider {
   private cwd: string;
   private lastBufferLength = 0;
   private writeCount = 0;
+  private _hoveredLink: HoveredLinkInfo | null = null;
 
   constructor(terminal: Terminal, cwd: string, cacheSize = 100) {
     this.terminal = terminal;
@@ -307,8 +315,19 @@ export class FilePathLinkProvider implements ILinkProvider {
           if (target) {
             const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
             const modifier = isMac ? '⌘' : 'Ctrl';
-            target.title = `${modifier}+Click to open`;
+            target.title = `${modifier}+Click to open | Right-click for options`;
           }
+          // Track hovered link for context menu
+          const fullPath = cached.path.startsWith('/') ? cached.path : `${this.cwd}/${cached.path}`;
+          this._hoveredLink = {
+            path: cached.path,
+            fullPath,
+            line: cached.line,
+            column: cached.column,
+          };
+        },
+        leave: () => {
+          this._hoveredLink = null;
         },
       };
     });
@@ -346,5 +365,12 @@ export class FilePathLinkProvider implements ILinkProvider {
    */
   clearCache(): void {
     this.cache.clear();
+  }
+
+  /**
+   * Get the currently hovered link info (for context menu)
+   */
+  getHoveredLink(): HoveredLinkInfo | null {
+    return this._hoveredLink;
   }
 }
