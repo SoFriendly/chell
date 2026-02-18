@@ -2532,7 +2532,6 @@ export default function ProjectPage() {
                 <SmartShell
                   key={currentProject.path}
                   cwd={shellCwd || currentProject.path}
-                  projectPath={currentProject.path}
                   terminalId={utilityTerminalId}
                   onTerminalReady={(id) => setUtilityTerminalId(id)}
                   onCwdChange={handleShellCwdChange}
