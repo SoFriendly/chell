@@ -2,7 +2,7 @@
 
 All notable changes to Chell will be documented in this file.
 
-## [0.1.91]
+## [0.1.92]
 
 ### Bug Fixes
 - Fix terminal initialization race condition causing random blank panels
@@ -10,6 +10,19 @@ All notable changes to Chell will be documented in this file.
   - Eliminates race conditions between separate React effects that could cause terminals to fail to spawn
   - All initialization steps (dimension wait, xterm creation, PTY spawn, connection) now happen in order
   - Fixes intermittent blank shell and assistant panels on app launch
+- Fix shell not resetting when switching projects
+  - Shell panel now properly remounts with fresh terminal when opening a different project
+  - Uses React key prop on SmartShell to force clean remount on project change
+- Fix assistant tabs resetting when opening additional tabs
+  - Terminal cleanup now only runs on component unmount, not on visibility changes
+  - Switching between assistant tabs no longer disposes and recreates terminals
+- Fix cd menu in shell panel incorrectly resetting terminal
+  - Changing directory via the shell dropdown no longer restarts the terminal session
+
+## [0.1.91]
+
+### Features
+- Add microphone permissions button for macOS
 
 ## [0.1.90]
 

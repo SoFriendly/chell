@@ -29,6 +29,7 @@ interface ProjectContext {
 
 interface SmartShellProps {
   cwd: string;
+  projectPath?: string; // Project root - used as key to reset terminal on project change
   terminalId?: string | null;
   onTerminalReady?: (id: string) => void;
   onCwdChange?: (newCwd: string) => void;
@@ -40,6 +41,7 @@ interface SmartShellProps {
 
 export default function SmartShell({
   cwd,
+  projectPath,
   terminalId,
   onTerminalReady,
   onCwdChange,

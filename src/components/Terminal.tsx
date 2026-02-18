@@ -22,18 +22,17 @@ const THEME_BACKGROUNDS = {
 };
 
 interface TerminalProps {
-  id?: string;  // Optional - if not provided, Terminal will spawn its own
-  command?: string;  // Command to run (empty for default shell)
-  args?: string[];  // Args to pass to command (handles paths with spaces)
+  id?: string;
+  command?: string;
+  args?: string[];
   cwd: string;
-  onTerminalReady?: (terminalId: string) => void;  // Called when terminal is spawned
-  onCwdChange?: (newCwd: string) => void;  // Called when shell reports directory change via OSC 7
-  visible?: boolean;  // Trigger resize when visibility changes
-  autoFocusOnWindowFocus?: boolean;  // Auto-focus when app window gains focus
-  isAssistant?: boolean;  // Hint for terminal type detection in backend
+  onTerminalReady?: (terminalId: string) => void;
+  onCwdChange?: (newCwd: string) => void;
+  visible?: boolean;
+  autoFocusOnWindowFocus?: boolean;
+  isAssistant?: boolean;
 }
 
-// Terminal themes matching app themes (backgrounds match --card CSS variable)
 const TERMINAL_THEMES: Record<string, ITheme> = {
   dark: {
     background: THEME_BACKGROUNDS.dark,
@@ -110,490 +109,243 @@ export default function Terminal({ id, command = "", args, cwd, onTerminalReady,
   const containerRef = useRef<HTMLDivElement>(null);
   const terminalRef = useRef<XTerm | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
-  const [terminalId, setTerminalId] = useState<string | null>(id || null);
-  const [isInitialized, setIsInitialized] = useState(false);
+  const cleanupRef = useRef<(() => void) | null>(null);
+  const [terminalId, setTerminalId] = useState<string | null>(null);
+  const hasInitializedRef = useRef(false);
   const theme = useSettingsStore((state) => state.theme);
   const customTheme = useSettingsStore((state) => state.customTheme);
   const savedScrollTopRef = useRef(0);
-  const initAttemptRef = useRef(0);
 
-  // Keep ref in sync with onCwdChange callback
   const onCwdChangeRef = useRef(onCwdChange);
-  useEffect(() => {
-    onCwdChangeRef.current = onCwdChange;
-  }, [onCwdChange]);
+  useEffect(() => { onCwdChangeRef.current = onCwdChange; }, [onCwdChange]);
 
-  // Get the appropriate terminal theme, handling custom themes
   const getTerminalTheme = useCallback((): ITheme => {
     if (theme === "custom" && customTheme) {
       const baseTheme = TERMINAL_THEMES[customTheme.baseTheme] || TERMINAL_THEMES.dark;
-      return {
-        ...baseTheme,
-        background: customTheme.colors.card,
-        cursorAccent: customTheme.colors.card,
-      };
+      return { ...baseTheme, background: customTheme.colors.card, cursorAccent: customTheme.colors.card };
     }
     return TERMINAL_THEMES[theme] || TERMINAL_THEMES.dark;
   }, [theme, customTheme]);
 
-  // Extract path from OSC 7 sequence
-  const extractOsc7Path = (data: string): string | null => {
-    const osc7Regex = /\x1b\]7;file:\/\/[^/]*([^\x07\x1b]+)(?:\x07|\x1b\\)/;
-    const match = data.match(osc7Regex);
-    if (match && match[1]) {
-      try {
-        return decodeURIComponent(match[1]);
-      } catch {
-        return match[1];
-      }
+  const extractOsc7Path = useCallback((data: string): string | null => {
+    const match = data.match(/\x1b\]7;file:\/\/[^/]*([^\x07\x1b]+)(?:\x07|\x1b\\)/);
+    if (match?.[1]) {
+      try { return decodeURIComponent(match[1]); } catch { return match[1]; }
     }
     return null;
-  };
+  }, []);
 
-  // Single combined initialization effect
-  // This replaces the complex 4-phase system with a simpler sequential approach
+  // Initialize terminal - once when first visible
   useEffect(() => {
-    if (!visible || isInitialized) return;
+    // Already initialized? Don't re-init
+    if (hasInitializedRef.current) return;
 
-    const container = containerRef.current;
-    if (!container) return;
+    // Not visible yet? Wait until we become visible
+    if (!visible) return;
 
     let cancelled = false;
-    let terminal: XTerm | null = null;
-    let fitAddon: FitAddon | null = null;
-    let spawnedId: string | null = null;
-    let unlistenFn: (() => void) | null = null;
 
     const initialize = async () => {
-      initAttemptRef.current++;
-      const attemptId = initAttemptRef.current;
+      const container = containerRef.current;
+      if (!container || cancelled) return;
 
-      // Wait for container to have non-zero dimensions
-      // Poll until dimensions are available (up to 5 seconds)
-      let dims = { width: container.offsetWidth, height: container.offsetHeight };
+      // Wait for dimensions
       let waitCount = 0;
-      const maxWait = 100; // 5 seconds at 50ms intervals
-
-      while ((dims.width === 0 || dims.height === 0) && waitCount < maxWait && !cancelled) {
-        await new Promise(resolve => setTimeout(resolve, 50));
-        dims = { width: container.offsetWidth, height: container.offsetHeight };
+      while ((container.offsetWidth === 0 || container.offsetHeight === 0) && waitCount < 100 && !cancelled) {
+        await new Promise(r => setTimeout(r, 50));
         waitCount++;
       }
+      if (cancelled) return;
 
-      if (cancelled || attemptId !== initAttemptRef.current) return;
-
-      // If still no dimensions after waiting, use the container anyway
-      // xterm will use minimum dimensions and resize later
-
-      // Create xterm instance
-      terminal = new XTerm({
+      // Create xterm
+      const terminal = new XTerm({
         theme: getTerminalTheme(),
         fontFamily: '"MesloLGS NF", "Hack Nerd Font", "FiraCode Nerd Font", "JetBrains Mono", "Fira Code", "SF Mono", "Menlo", monospace',
-        fontSize: 13,
-        lineHeight: 1.2,
-        cursorBlink: false,
-        cursorStyle: "bar",
-        allowProposedApi: true,
-        scrollback: 5000,
-        fastScrollModifier: "alt",
-        fastScrollSensitivity: 5,
-        smoothScrollDuration: 0,
+        fontSize: 13, lineHeight: 1.2, cursorBlink: false, cursorStyle: "bar",
+        allowProposedApi: true, scrollback: 5000, fastScrollModifier: "alt",
+        fastScrollSensitivity: 5, smoothScrollDuration: 0,
       });
 
-      fitAddon = new FitAddon();
-      const webLinksAddon = new WebLinksAddon((event: MouseEvent, uri: string) => {
-        const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
-        const modifierPressed = isMac ? event.metaKey : event.ctrlKey;
-        if (modifierPressed) {
-          openUrl(uri).catch(console.error);
-        }
-      });
-      const unicode11Addon = new Unicode11Addon();
-
+      const fitAddon = new FitAddon();
       terminal.loadAddon(fitAddon);
-      terminal.loadAddon(webLinksAddon);
-      terminal.loadAddon(unicode11Addon);
+      terminal.loadAddon(new WebLinksAddon((e, uri) => {
+        if (navigator.platform.toUpperCase().includes('MAC') ? e.metaKey : e.ctrlKey) openUrl(uri).catch(() => {});
+      }));
+      terminal.loadAddon(new Unicode11Addon());
       terminal.unicode.activeVersion = "11";
-
-      // Open terminal in container
       terminal.open(container);
-
-      // Register custom file path link provider
-      const filePathLinkProvider = new FilePathLinkProvider(terminal, cwd);
-      terminal.registerLinkProvider(filePathLinkProvider);
-
-      // Block DEC mode 1004 (focus reporting)
+      terminal.registerLinkProvider(new FilePathLinkProvider(terminal, cwd));
       terminal.parser.registerCsiHandler({ prefix: "?", final: "h" }, (params) => {
-        for (let i = 0; i < params.length; i++) {
-          const param = params[i];
-          if (param === 1004 || (Array.isArray(param) && param.includes(1004))) {
-            return true;
-          }
-        }
+        for (const p of params) if (p === 1004 || (Array.isArray(p) && p.includes(1004))) return true;
         return false;
       });
+      try { terminal.loadAddon(new CanvasAddon()); } catch { try { terminal.loadAddon(new WebglAddon()); } catch {} }
 
-      // Use Canvas renderer
-      try {
-        terminal.loadAddon(new CanvasAddon());
-      } catch (e) {
-        console.warn("Canvas addon failed, trying WebGL:", e);
-        try {
-          terminal.loadAddon(new WebglAddon());
-        } catch (e2) {
-          console.warn("WebGL addon also failed, using DOM renderer:", e2);
-        }
-      }
-
-      // Setup keyboard shortcuts
-      terminal.attachCustomKeyEventHandler((event) => {
-        const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
-
-        if (event.type === 'keydown') {
-          if (event.shiftKey && event.key === 'Enter') {
-            event.preventDefault();
-            event.stopPropagation();
-            terminal!.input('\n');
-            return false;
-          }
-
-          if (!isMac && event.ctrlKey && event.key === 'c') {
-            const selection = terminal!.getSelection();
-            if (selection) {
-              navigator.clipboard.writeText(selection);
-              return false;
-            }
-            return true;
-          }
-
-          if (!isMac && event.ctrlKey && event.key === 'v') {
-            return true;
-          }
-
+      // Keyboard shortcuts
+      terminal.attachCustomKeyEventHandler((e) => {
+        const isMac = navigator.platform.toUpperCase().includes('MAC');
+        if (e.type === 'keydown') {
+          if (e.shiftKey && e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); terminal.input('\n'); return false; }
+          if (!isMac && e.ctrlKey && e.key === 'c') { const s = terminal.getSelection(); if (s) { navigator.clipboard.writeText(s); return false; } return true; }
+          if (!isMac && e.ctrlKey && e.key === 'v') return true;
           if (isMac) {
-            if (event.metaKey && event.key === 'Backspace') {
-              terminal!.input('\x15');
-              return false;
-            }
-            if (event.metaKey && event.key === 'ArrowLeft') {
-              terminal!.input('\x01');
-              return false;
-            }
-            if (event.metaKey && event.key === 'ArrowRight') {
-              terminal!.input('\x05');
-              return false;
-            }
-            if (event.altKey && event.key === 'Backspace') {
-              terminal!.input('\x17');
-              return false;
-            }
-            if (event.altKey && event.key === 'ArrowLeft') {
-              terminal!.input('\x1bb');
-              return false;
-            }
-            if (event.altKey && event.key === 'ArrowRight') {
-              terminal!.input('\x1bf');
-              return false;
-            }
-            if (event.metaKey && event.key === 'k') {
-              terminal!.clear();
-              return false;
-            }
-            if (event.metaKey && (event.key === 'c' || event.key === 'v')) {
-              return true;
-            }
+            if (e.metaKey && e.key === 'Backspace') { terminal.input('\x15'); return false; }
+            if (e.metaKey && e.key === 'ArrowLeft') { terminal.input('\x01'); return false; }
+            if (e.metaKey && e.key === 'ArrowRight') { terminal.input('\x05'); return false; }
+            if (e.altKey && e.key === 'Backspace') { terminal.input('\x17'); return false; }
+            if (e.altKey && e.key === 'ArrowLeft') { terminal.input('\x1bb'); return false; }
+            if (e.altKey && e.key === 'ArrowRight') { terminal.input('\x1bf'); return false; }
+            if (e.metaKey && e.key === 'k') { terminal.clear(); return false; }
+            if (e.metaKey && (e.key === 'c' || e.key === 'v')) return true;
           }
         }
         return true;
       });
 
-      if (cancelled || attemptId !== initAttemptRef.current) {
-        terminal.dispose();
-        return;
-      }
+      if (cancelled) { terminal.dispose(); return; }
 
-      // Store refs
       terminalRef.current = terminal;
       fitAddonRef.current = fitAddon;
+      hasInitializedRef.current = true;
 
-      // Fit to get dimensions
-      await new Promise(resolve => requestAnimationFrame(resolve));
-      await new Promise(resolve => requestAnimationFrame(resolve));
+      await new Promise(r => requestAnimationFrame(r));
+      await new Promise(r => requestAnimationFrame(r));
+      if (cancelled) { terminal.dispose(); terminalRef.current = null; fitAddonRef.current = null; return; }
 
-      if (cancelled || attemptId !== initAttemptRef.current) {
-        terminal.dispose();
-        terminalRef.current = null;
-        fitAddonRef.current = null;
-        return;
-      }
-
-      try {
-        fitAddon.fit();
-      } catch (e) {
-        console.warn("[Terminal] Initial fit failed:", e);
-      }
-
+      try { fitAddon.fit(); } catch {}
       const cols = terminal.cols >= 5 ? terminal.cols : 80;
       const rows = terminal.rows >= 2 ? terminal.rows : 24;
 
-      // Spawn PTY or use provided ID
-      let activeTerminalId: string;
+      // Spawn PTY
+      let activeId: string;
       if (id) {
-        activeTerminalId = id;
+        activeId = id;
       } else {
         try {
-          activeTerminalId = await invoke<string>("spawn_terminal", {
-            shell: command,
-            cwd,
-            cols,
-            rows,
-            args: args || null,
-            isAssistant: isAssistant || null,
-          });
-        } catch (error) {
-          console.error("[Terminal] Failed to spawn terminal:", error);
-          terminal.dispose();
-          terminalRef.current = null;
-          fitAddonRef.current = null;
+          activeId = await invoke<string>("spawn_terminal", { shell: command, cwd, cols, rows, args: args || null, isAssistant: isAssistant || null });
+        } catch (e) {
+          console.error("[Terminal] Spawn failed:", e);
+          terminal.dispose(); terminalRef.current = null; fitAddonRef.current = null;
           return;
         }
       }
 
-      if (cancelled || attemptId !== initAttemptRef.current) {
-        if (!id) {
-          invoke("kill_terminal", { id: activeTerminalId }).catch(() => {});
-        }
-        terminal.dispose();
-        terminalRef.current = null;
-        fitAddonRef.current = null;
+      if (cancelled) {
+        if (!id) invoke("kill_terminal", { id: activeId }).catch(() => {});
+        terminal.dispose(); terminalRef.current = null; fitAddonRef.current = null;
         return;
       }
 
-      spawnedId = activeTerminalId;
-      setTerminalId(activeTerminalId);
-      onTerminalReady?.(activeTerminalId);
+      setTerminalId(activeId);
+      onTerminalReady?.(activeId);
 
-      // Connect to PTY output
-      const unlisten = await listen<string>(`terminal-output-${activeTerminalId}`, (event) => {
-        const binaryString = atob(event.payload);
-        const len = binaryString.length;
-        const bytes = new Uint8Array(len);
-        let i = 0;
-        for (; i + 3 < len; i += 4) {
-          bytes[i] = binaryString.charCodeAt(i);
-          bytes[i + 1] = binaryString.charCodeAt(i + 1);
-          bytes[i + 2] = binaryString.charCodeAt(i + 2);
-          bytes[i + 3] = binaryString.charCodeAt(i + 3);
-        }
-        for (; i < len; i++) {
-          bytes[i] = binaryString.charCodeAt(i);
-        }
-
-        if (onCwdChangeRef.current) {
-          const newCwd = extractOsc7Path(binaryString);
-          if (newCwd) {
-            onCwdChangeRef.current(newCwd);
-          }
-        }
-
-        terminal?.write(bytes);
-      });
-      unlistenFn = unlisten;
-
-      // Handle terminal input
-      const dataDisposable = terminal.onData((data) => {
-        invoke("write_terminal", { id: activeTerminalId, data }).catch(console.error);
+      // Connect PTY output
+      const unlisten = await listen<string>(`terminal-output-${activeId}`, (event) => {
+        const bin = atob(event.payload);
+        const bytes = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+        if (onCwdChangeRef.current) { const p = extractOsc7Path(bin); if (p) onCwdChangeRef.current(p); }
+        terminal.write(bytes);
       });
 
-      // Handle terminal resize events
-      const resizeDisposable = terminal.onResize(({ cols, rows }) => {
-        invoke("resize_terminal", { id: activeTerminalId, cols, rows }).catch(console.error);
-      });
+      const dataDisposable = terminal.onData((data) => invoke("write_terminal", { id: activeId, data }).catch(() => {}));
+      const resizeDisposable = terminal.onResize(({ cols, rows }) => invoke("resize_terminal", { id: activeId, cols, rows }).catch(() => {}));
 
-      // Setup resize observer
-      let lastCols = cols;
-      let lastRows = rows;
-      let fitDebounceTimer: ReturnType<typeof setTimeout> | null = null;
-
+      let lastCols = cols, lastRows = rows, fitTimer: ReturnType<typeof setTimeout> | null = null;
       const safeFit = () => {
         try {
-          if (container.offsetWidth > 0 && container.offsetHeight > 0 && fitAddon && terminal) {
-            const viewport = container.querySelector('.xterm-viewport') as HTMLElement;
-            const prevScrollTop = viewport?.scrollTop ?? savedScrollTopRef.current;
-
+          if (container.offsetWidth > 0 && container.offsetHeight > 0) {
+            const vp = container.querySelector('.xterm-viewport') as HTMLElement;
+            const ps = vp?.scrollTop ?? savedScrollTopRef.current;
             fitAddon.fit();
-
-            if (viewport && prevScrollTop > 0) {
-              const maxScroll = viewport.scrollHeight - viewport.clientHeight;
-              viewport.scrollTop = Math.min(prevScrollTop, maxScroll);
-            }
-
+            if (vp && ps > 0) vp.scrollTop = Math.min(ps, vp.scrollHeight - vp.clientHeight);
             if (terminal.cols !== lastCols || terminal.rows !== lastRows) {
-              lastCols = terminal.cols;
-              lastRows = terminal.rows;
-              invoke("resize_terminal", { id: activeTerminalId, cols: terminal.cols, rows: terminal.rows }).catch(console.error);
+              lastCols = terminal.cols; lastRows = terminal.rows;
+              invoke("resize_terminal", { id: activeId, cols: terminal.cols, rows: terminal.rows }).catch(() => {});
             }
           }
-        } catch (e) {
-          // Ignore fit errors
-        }
+        } catch {}
       };
+      const debouncedFit = () => { if (fitTimer) clearTimeout(fitTimer); fitTimer = setTimeout(safeFit, 50); };
 
-      const debouncedFit = () => {
-        if (fitDebounceTimer) clearTimeout(fitDebounceTimer);
-        fitDebounceTimer = setTimeout(safeFit, 50);
-      };
-
-      const resizeObserver = new ResizeObserver((entries) => {
-        for (const entry of entries) {
-          if (entry.contentRect.width > 0 && entry.contentRect.height > 0) {
-            debouncedFit();
-          }
-        }
-      });
-      resizeObserver.observe(container);
-
+      const ro = new ResizeObserver(() => debouncedFit());
+      ro.observe(container);
       window.addEventListener("resize", debouncedFit);
 
-      // Handle paste
-      const handlePaste = async (e: ClipboardEvent) => {
-        e.preventDefault();
-        const text = e.clipboardData?.getData("text");
-        if (text) {
-          invoke("write_terminal", { id: activeTerminalId, data: text }).catch(console.error);
-        }
-      };
+      const handlePaste = (e: ClipboardEvent) => { e.preventDefault(); const t = e.clipboardData?.getData("text"); if (t) invoke("write_terminal", { id: activeId, data: t }).catch(() => {}); };
       container.addEventListener('paste', handlePaste);
 
-      // Track scroll position
-      const viewport = container.querySelector('.xterm-viewport') as HTMLElement;
-      const handleViewportScroll = () => {
-        if (viewport && viewport.scrollTop > 0) {
-          savedScrollTopRef.current = viewport.scrollTop;
-        }
-      };
-      viewport?.addEventListener('scroll', handleViewportScroll, { passive: true });
+      const vp = container.querySelector('.xterm-viewport') as HTMLElement;
+      const handleScroll = () => { if (vp?.scrollTop > 0) savedScrollTopRef.current = vp.scrollTop; };
+      vp?.addEventListener('scroll', handleScroll, { passive: true });
 
-      // Mark as initialized
-      setIsInitialized(true);
-
-      // Store cleanup references in a way we can access from effect cleanup
-      (container as any).__terminalCleanup = () => {
-        if (fitDebounceTimer) clearTimeout(fitDebounceTimer);
-        dataDisposable.dispose();
-        resizeDisposable.dispose();
-        resizeObserver.disconnect();
+      cleanupRef.current = () => {
+        if (fitTimer) clearTimeout(fitTimer);
+        dataDisposable.dispose(); resizeDisposable.dispose(); ro.disconnect();
         window.removeEventListener("resize", debouncedFit);
         container.removeEventListener('paste', handlePaste);
-        viewport?.removeEventListener('scroll', handleViewportScroll);
-        unlistenFn?.();
-        terminal?.dispose();
-        if (!id && spawnedId) {
-          invoke("kill_terminal", { id: spawnedId }).catch(() => {});
-        }
+        vp?.removeEventListener('scroll', handleScroll);
+        unlisten();
+        terminal.dispose();
+        if (!id) invoke("kill_terminal", { id: activeId }).catch(() => {});
       };
     };
 
-    initialize();
-
+    const timer = setTimeout(initialize, 10);
     return () => {
       cancelled = true;
-      const cleanup = (container as any).__terminalCleanup;
-      if (cleanup) {
-        cleanup();
-        delete (container as any).__terminalCleanup;
-      }
-      terminalRef.current = null;
-      fitAddonRef.current = null;
-      setIsInitialized(false);
-      setTerminalId(null);
+      clearTimeout(timer);
+      // Don't cleanup here - only cancel pending init
+      // Actual cleanup happens on unmount via separate effect
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [visible, cwd]); // Re-run when visibility or cwd changes
+  }, [visible]); // Only re-run when visibility changes
 
-  // Update terminal theme when app theme changes
+  // Cleanup only on unmount
   useEffect(() => {
-    if (terminalRef.current) {
-      terminalRef.current.options.theme = getTerminalTheme();
-    }
-  }, [theme, customTheme, getTerminalTheme]);
+    return () => {
+      if (cleanupRef.current) {
+        cleanupRef.current();
+        cleanupRef.current = null;
+      }
+    };
+  }, []);
 
-  // Resize and focus when visibility changes
+  // Theme changes
+  useEffect(() => { if (terminalRef.current) terminalRef.current.options.theme = getTerminalTheme(); }, [theme, customTheme, getTerminalTheme]);
+
+  // Focus/resize when becoming visible
   useEffect(() => {
     if (visible && terminalRef.current && fitAddonRef.current && terminalId) {
       terminalRef.current.focus();
-      const timer = setTimeout(() => {
+      const t = setTimeout(() => {
         try {
           fitAddonRef.current?.fit();
-          const terminal = terminalRef.current;
-          if (terminal) {
-            invoke("resize_terminal", { id: terminalId, cols: terminal.cols, rows: terminal.rows }).catch(console.error);
-          }
-          const viewport = containerRef.current?.querySelector('.xterm-viewport') as HTMLElement;
-          if (viewport && savedScrollTopRef.current > 0) {
-            const maxScroll = viewport.scrollHeight - viewport.clientHeight;
-            viewport.scrollTop = Math.min(savedScrollTopRef.current, maxScroll);
-          }
-        } catch (e) {
-          // Ignore fit errors
-        }
-      }, 250);
-      return () => clearTimeout(timer);
+          if (terminalRef.current) invoke("resize_terminal", { id: terminalId, cols: terminalRef.current.cols, rows: terminalRef.current.rows }).catch(() => {});
+        } catch {}
+      }, 100);
+      return () => clearTimeout(t);
     }
   }, [visible, terminalId]);
 
-  // Focus terminal when window gains focus
+  // Window focus
   useEffect(() => {
     if (!autoFocusOnWindowFocus || !visible || !terminalRef.current) return;
-
-    const unlisten = getCurrentWindow().onFocusChanged(({ payload: focused }) => {
-      if (focused && terminalRef.current) {
-        terminalRef.current.focus();
-      }
-    });
-
-    return () => {
-      unlisten.then((fn) => fn());
-    };
+    const unlisten = getCurrentWindow().onFocusChanged(({ payload }) => { if (payload && terminalRef.current) terminalRef.current.focus(); });
+    return () => { unlisten.then(fn => fn()); };
   }, [visible, autoFocusOnWindowFocus]);
 
-  // Focus terminal on click
-  const handleClick = () => {
-    terminalRef.current?.focus();
-  };
-
-  // Get background color from current theme
   const bgColor = getTerminalTheme().background;
 
-  // Prevent drag events from causing canvas to black out
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-  };
-
-  // Handle file path drops from GitPanel
-  const handleMouseUp = () => {
-    const draggedPath = (window as unknown as { __draggedFilePath?: string }).__draggedFilePath;
-    if (draggedPath && terminalId) {
-      invoke("write_terminal", { id: terminalId, data: draggedPath + " " });
-      (window as unknown as { __draggedFilePath?: string }).__draggedFilePath = undefined;
-      terminalRef.current?.focus();
-    }
-  };
-
   return (
-    <div
-      className="h-full w-full p-1"
-      style={{ backgroundColor: bgColor, transform: "translateZ(0)" }}
-      onClick={handleClick}
-      onMouseUp={handleMouseUp}
-      onDragOver={handleDragOver}
-      onDragEnter={handleDragOver}
-    >
-      <div
-        ref={containerRef}
-        className="h-full w-full"
-        style={{ transform: "translateZ(0)" }}
-      />
+    <div className="h-full w-full p-1" style={{ backgroundColor: bgColor, transform: "translateZ(0)" }}
+      onClick={() => terminalRef.current?.focus()}
+      onMouseUp={() => {
+        const p = (window as any).__draggedFilePath;
+        if (p && terminalId) { invoke("write_terminal", { id: terminalId, data: p + " " }); (window as any).__draggedFilePath = undefined; terminalRef.current?.focus(); }
+      }}
+      onDragOver={e => e.preventDefault()} onDragEnter={e => e.preventDefault()}>
+      <div ref={containerRef} className="h-full w-full" style={{ transform: "translateZ(0)" }} />
     </div>
   );
 }
