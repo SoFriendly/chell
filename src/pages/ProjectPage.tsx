@@ -431,9 +431,19 @@ export default function ProjectPage() {
     }
   }, [showFileSearch, fileTree]);
 
-  // Global file search keyboard shortcut (Cmd+P / Ctrl+P / Cmd+F / Ctrl+F)
+  // Global keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Prevent backspace from navigating back in the Tauri webview
+      if (e.key === 'Backspace') {
+        const target = e.target as HTMLElement;
+        const isEditable = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable;
+        if (!isEditable) {
+          e.preventDefault();
+        }
+      }
+
+      // File search (Cmd+P / Ctrl+P / Cmd+F / Ctrl+F)
       const isMac = navigator.platform.toUpperCase().includes('MAC');
       const modifier = isMac ? e.metaKey : e.ctrlKey;
       if (modifier && (e.key === 'p' || e.key === 'f')) {
