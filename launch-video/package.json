@@ -6,8 +6,8 @@
   "license": "UNLICENSED",
   "private": true,
   "dependencies": {
-    "@remotion/cli": "4.0.417",
-    "@remotion/tailwind-v4": "4.0.417",
+    "@remotion/cli": "4.0.481",
+    "@remotion/tailwind-v4": "4.0.481",
     "@remotion/transitions": "^4.0.417",
     "clsx": "^2.1.1",
     "lucide-react": "^0.563.0",
