@@ -3312,7 +3312,7 @@ export default function GitPanel({ projectPath, isGitRepo, onRefresh, onInitRepo
                         <ContextMenuTrigger asChild>
                           <div
                             className={cn(
-                              "group flex items-start gap-2 rounded-full px-2.5 py-2 hover:bg-muted/50 cursor-pointer overflow-hidden -mx-2",
+                              "group flex items-start gap-2 rounded-md px-2.5 py-2 hover:bg-muted/50 cursor-pointer overflow-hidden -mx-2",
                               isExpanded && "bg-muted/30"
                             )}
                             onClick={() => toggleCommitExpand(commit.id)}

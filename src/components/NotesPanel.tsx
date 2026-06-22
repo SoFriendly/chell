@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { resolveMarkdownImageSrc } from "@/lib/markdown";
 import { StickyNote, Plus, ArrowLeft, Pencil, Save, Trash2, Copy } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -386,7 +387,15 @@ export default function NotesPanel({ projectPath, onNoteDropAtPosition }: NotesP
             <ScrollArea className="h-full">
               {selectedNote.content ? (
                 <article className="prose prose-sm max-w-none p-3 overflow-auto">
-                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                  <ReactMarkdown
+                    remarkPlugins={[remarkGfm]}
+                    urlTransform={(url) => url}
+                    components={{
+                      img: ({ src, node: _node, ...props }) => (
+                        <img src={resolveMarkdownImageSrc(src, notesPath)} {...props} />
+                      ),
+                    }}
+                  >
                     {selectedNote.content}
                   </ReactMarkdown>
                 </article>

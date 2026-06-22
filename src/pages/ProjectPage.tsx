@@ -88,6 +88,7 @@ import { useSettingsStore } from "@/stores/settingsStore";
 import { cn } from "@/lib/utils";
 import { hslToHex, THEME_DEFAULTS } from "@/lib/colorUtils";
 import { getAllAssistants, getAllAssistantCommands } from "@/lib/assistants";
+import { resolveMarkdownImageSrc } from "@/lib/markdown";
 import type { Project, GitStatus, FileDiff, Branch, Commit, WorktreeInfo, CustomThemeColors, ProjectFolder, ProjectFileData, DiffPanelSelection } from "@/types";
 
 // Types for global file search
@@ -3193,7 +3194,15 @@ export default function ProjectPage() {
                 />
               ) : markdownFile.path.endsWith('.md') ? (
                 <article className="prose prose-sm max-w-none p-4 overflow-auto h-full">
-                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                  <ReactMarkdown
+                    remarkPlugins={[remarkGfm]}
+                    urlTransform={(url) => url}
+                    components={{
+                      img: ({ src, node: _node, ...props }) => (
+                        <img src={resolveMarkdownImageSrc(src, markdownFile.path)} {...props} />
+                      ),
+                    }}
+                  >
                     {markdownFile.content}
                   </ReactMarkdown>
                 </article>
