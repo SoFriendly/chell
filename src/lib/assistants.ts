@@ -24,12 +24,14 @@ export const BUILT_IN_ASSISTANTS: AssistantDefinition[] = [
     isBuiltIn: true,
   },
   {
-    id: "gemini",
-    name: "Gemini CLI",
-    command: "gemini",
-    description: "Google's Gemini AI assistant for coding",
-    installCommand: "npm install -g @google/gemini-cli",
-    docsUrl: "https://ai.google.dev/gemini-api",
+    id: "antigravity",
+    name: "Antigravity CLI",
+    command: "agy",
+    description: "Google's Antigravity AI assistant for coding",
+    installCommand: isWindows
+      ? "irm https://antigravity.google/cli/install.ps1 | iex"
+      : "curl -fsSL https://antigravity.google/cli/install.sh | bash",
+    docsUrl: "https://antigravity.google",
     isBuiltIn: true,
   },
   {

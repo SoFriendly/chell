@@ -60,7 +60,7 @@ const steps: Step[] = [
     title: "Your AI, front and center",
     subtitle: "Assistant Panel",
     description:
-      "Run Claude Code, Aider, Gemini, or any AI assistant here. Multiple tabs for different tasks. Your AI and your changes, always side by side.",
+      "Run Claude Code, Codex, Antigravity, or any AI assistant here. Multiple tabs for different tasks. Your AI and your changes, always side by side.",
     icon: <Bot className="h-12 w-12" />,
     highlight: "assistant",
   },

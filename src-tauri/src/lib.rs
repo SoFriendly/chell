@@ -802,7 +802,7 @@ fn spawn_terminal(
     } else if shell.is_empty() {
         "shell".to_string()
     } else {
-        let assistant_commands = ["claude", "aider", "gemini", "codex", "opencode", "pi"];
+        let assistant_commands = ["claude", "aider", "agy", "codex", "opencode", "pi"];
         let cmd = shell.split_whitespace().next().unwrap_or("");
         if assistant_commands.contains(&cmd) {
             "assistant".to_string()
@@ -2564,9 +2564,9 @@ fn check_installed_assistants() -> Result<Vec<String>, String> {
         installed.push("aider".to_string());
     }
 
-    // Check for Gemini CLI
-    if command_exists("gemini") {
-        installed.push("gemini".to_string());
+    // Check for Antigravity CLI
+    if command_exists("agy") {
+        installed.push("antigravity".to_string());
     }
 
     // Check for OpenAI Codex CLI
@@ -2777,7 +2777,13 @@ fn install_assistant(command: String) -> Result<String, String> {
             }
         }
         "aider" => "pip install aider-chat",
-        "gemini" => "npm install -g @anthropic-ai/gemini-cli",
+        "agy" => {
+            if cfg!(target_os = "windows") {
+                "irm https://antigravity.google/cli/install.ps1 | iex"
+            } else {
+                "curl -fsSL https://antigravity.google/cli/install.sh | bash"
+            }
+        }
         "codex" => "npm install -g @openai/codex",
         "opencode" => "curl -fsSL https://opencode.ai/install | bash",
         "pi" => "npm install -g @mariozechner/pi-coding-agent",
