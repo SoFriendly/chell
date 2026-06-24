@@ -2,6 +2,12 @@
 
 All notable changes to Orca will be documented in this file.
 
+## [0.3.13]
+
+### Improvements
+- **Antigravity CLI**: Replaced the Gemini CLI assistant with Google's new Antigravity CLI (`agy`). Installs via `curl -fsSL https://antigravity.google/cli/install.sh | bash` (or `irm https://antigravity.google/cli/install.ps1 | iex` on Windows), with detection and install support across desktop and mobile.
+- **Local Images in Markdown**: Markdown rendering now supports local image files in Notes and the markdown preview. Relative and absolute local paths are resolved against the markdown file's directory and loaded via Tauri's `asset://` protocol; remote, data, and blob URLs pass through unchanged.
+
 ## [0.3.12]
 
 ### Improvements
