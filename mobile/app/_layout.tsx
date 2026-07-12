@@ -112,7 +112,14 @@ function RootLayoutContent() {
               <Pressable
                 onPress={() => {
                   useConnectionStore.getState().setActiveProject(null);
-                  router.replace("/");
+                  // Both app/index.tsx and app/(tabs)/index.tsx resolve to "/",
+                  // so a plain replace("/") stays inside the tab navigator.
+                  // Dismissing the pushed (tabs) screen is what returns home.
+                  if (router.canDismiss()) {
+                    router.dismissAll();
+                  } else {
+                    router.replace("/");
+                  }
                 }}
                 style={{ padding: 8 }}
               >
