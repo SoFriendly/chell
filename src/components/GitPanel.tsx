@@ -2306,6 +2306,10 @@ export default function GitPanel({ projectPath, isGitRepo, onRefresh, onInitRepo
     }
   };
 
+  // Must be invoked as a plain function (FileItem({...})), not rendered as
+  // <FileItem/>: a component type recreated on every GitPanel render makes
+  // React remount the whole row, dismissing any open context menu whenever
+  // unrelated state (e.g. terminal activity) re-renders the panel.
   const FileItem = ({ diff, index }: { diff: FileDiff; index: number }) => {
     const isSelected = selectedFiles.has(diff.path);
     const isActive = activeDiffSource === "changes" && diff.path === activeDiffPath;
@@ -2318,6 +2322,7 @@ export default function GitPanel({ projectPath, isGitRepo, onRefresh, onInitRepo
 
     return (
       <div
+        key={diff.path}
         className="group min-w-0 cursor-grab active:cursor-grabbing"
         onMouseDown={(e) => handleFileDragStart(e, diff.path)}
       >
@@ -2406,6 +2411,10 @@ export default function GitPanel({ projectPath, isGitRepo, onRefresh, onInitRepo
             <ContextMenuItem onClick={() => handleRevealInFileManager(diff.path)}>
               <FolderOpen className="mr-2 h-4 w-4" />
               {getRevealLabel()}
+            </ContextMenuItem>
+            <ContextMenuItem onClick={() => handleCopyPath(diff.path)}>
+              <Copy className="mr-2 h-4 w-4" />
+              Copy Path
             </ContextMenuItem>
             {preferredEditor && (
               <ContextMenuItem onClick={() => handleOpenInTerminalEditor(diff.path)}>
@@ -2557,7 +2566,8 @@ export default function GitPanel({ projectPath, isGitRepo, onRefresh, onInitRepo
     );
   };
 
-  // File tree recursive component
+  // File tree recursive render function. Like FileItem, must be invoked as a
+  // plain function so re-renders don't remount rows and close context menus.
   const FileTreeView = ({
     nodes,
     expandedDirs,
@@ -2657,15 +2667,13 @@ export default function GitPanel({ projectPath, isGitRepo, onRefresh, onInitRepo
                       />
                     </div>
                   )}
-                  {node.children && (
-                    <FileTreeView
-                      nodes={node.children}
-                      expandedDirs={expandedDirs}
-                      onToggleDir={onToggleDir}
-                      projectPath={projectPath}
-                      depth={depth + 1}
-                    />
-                  )}
+                  {node.children && FileTreeView({
+                    nodes: node.children,
+                    expandedDirs,
+                    onToggleDir,
+                    projectPath,
+                    depth: depth + 1,
+                  })}
                 </div>
               )}
             </>
@@ -3227,9 +3235,7 @@ export default function GitPanel({ projectPath, isGitRepo, onRefresh, onInitRepo
                     Unstaged Changes
                   </h3>
                   <div className="space-y-0.5">
-                    {unstagedChanges.map((diff, index) => (
-                      <FileItem key={diff.path} diff={diff} index={index} />
-                    ))}
+                    {unstagedChanges.map((diff, index) => FileItem({ diff, index }))}
                   </div>
                 </div>
               )}
@@ -3241,9 +3247,9 @@ export default function GitPanel({ projectPath, isGitRepo, onRefresh, onInitRepo
                     Staged Changes
                   </h3>
                   <div className="space-y-0.5">
-                    {stagedChanges.map((diff, index) => (
-                      <FileItem key={diff.path} diff={diff} index={unstagedChanges.length + index} />
-                    ))}
+                    {stagedChanges.map((diff, index) =>
+                      FileItem({ diff, index: unstagedChanges.length + index })
+                    )}
                   </div>
                 </div>
               )}
@@ -4030,12 +4036,12 @@ export default function GitPanel({ projectPath, isGitRepo, onRefresh, onInitRepo
                           )}
                           {fileTrees[folder.id] ? (
                             fileTrees[folder.id].length > 0 ? (
-                              <FileTreeView
-                                nodes={fileTrees[folder.id]}
-                                expandedDirs={expandedDirs}
-                                onToggleDir={toggleDir}
-                                projectPath={folder.path}
-                              />
+                              FileTreeView({
+                                nodes: fileTrees[folder.id],
+                                expandedDirs,
+                                onToggleDir: toggleDir,
+                                projectPath: folder.path,
+                              })
                             ) : (
                               <div className="py-2 text-center text-xs text-muted-foreground">Empty folder</div>
                             )
@@ -4105,12 +4111,12 @@ export default function GitPanel({ projectPath, isGitRepo, onRefresh, onInitRepo
                           />
                         </div>
                       )}
-                      <FileTreeView
-                        nodes={fileTree}
-                        expandedDirs={expandedDirs}
-                        onToggleDir={toggleDir}
-                        projectPath={projectPath}
-                      />
+                      {FileTreeView({
+                        nodes: fileTree,
+                        expandedDirs,
+                        onToggleDir: toggleDir,
+                        projectPath,
+                      })}
                       {/* Add folder button - only shown in single folder mode */}
                       {onAddFolder && (
                         <Button
