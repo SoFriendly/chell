@@ -15,9 +15,9 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "13B07F861A680F5B00A75B9A"
-               BuildableName = "ChellPortal.app"
-               BlueprintName = "ChellPortal"
-               ReferencedContainer = "container:ChellPortal.xcodeproj">
+               BuildableName = "Orca.app"
+               BlueprintName = "Orca"
+               ReferencedContainer = "container:Orca.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
       </BuildActionEntries>
@@ -33,9 +33,9 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "00E356ED1AD99517003FC87E"
-               BuildableName = "ChellPortalTests.xctest"
-               BlueprintName = "ChellPortalTests"
-               ReferencedContainer = "container:ChellPortal.xcodeproj">
+               BuildableName = "OrcaTests.xctest"
+               BlueprintName = "OrcaTests"
+               ReferencedContainer = "container:Orca.xcodeproj">
             </BuildableReference>
          </TestableReference>
       </Testables>
@@ -55,9 +55,9 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "13B07F861A680F5B00A75B9A"
-            BuildableName = "ChellPortal.app"
-            BlueprintName = "ChellPortal"
-            ReferencedContainer = "container:ChellPortal.xcodeproj">
+            BuildableName = "Orca.app"
+            BlueprintName = "Orca"
+            ReferencedContainer = "container:Orca.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
    </LaunchAction>
@@ -72,9 +72,9 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "13B07F861A680F5B00A75B9A"
-            BuildableName = "ChellPortal.app"
-            BlueprintName = "ChellPortal"
-            ReferencedContainer = "container:ChellPortal.xcodeproj">
+            BuildableName = "Orca.app"
+            BlueprintName = "Orca"
+            ReferencedContainer = "container:Orca.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
    </ProfileAction>

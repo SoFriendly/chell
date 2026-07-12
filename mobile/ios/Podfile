@@ -26,7 +26,7 @@ platform :ios, podfile_properties['ios.deploymentTarget'] || '16.4'
 
 prepare_react_native_project!
 
-target 'ChellPortal' do
+target 'Orca' do
   use_expo_modules!
 
   if ENV['EXPO_USE_COMMUNITY_AUTOLINKING'] == '1'
