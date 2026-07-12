@@ -166,7 +166,6 @@ const buildHtml = (css: string, xtermJs: string, fitJs: string, theme: typeof TE
       const fitAddon = new FitAddon.FitAddon();
       term.loadAddon(fitAddon);
       term.open(document.getElementById("terminal"));
-      fitAddon.fit();
       term.focus();
 
       // Enable autocorrect on the hidden textarea
@@ -179,11 +178,40 @@ const buildHtml = (css: string, xtermJs: string, fitJs: string, theme: typeof TE
 
       term.onData((data) => post({ type: "input", data }));
 
+      // Only report sane, changed dimensions. An early fit() before layout or
+      // font load produces a tiny grid (e.g. 3 rows) that squashes the remote
+      // PTY and garbles TUI apps until the next real resize.
+      let lastCols = 0;
+      let lastRows = 0;
       function sendSize() {
-        post({ type: "resize", cols: term.cols, rows: term.rows });
+        if (term.cols >= 20 && term.rows >= 4 && (term.cols !== lastCols || term.rows !== lastRows)) {
+          lastCols = term.cols;
+          lastRows = term.rows;
+          post({ type: "resize", cols: term.cols, rows: term.rows });
+        }
       }
 
-      sendSize();
+      function refit() {
+        try { fitAddon.fit(); } catch (e) {}
+        sendSize();
+      }
+
+      // Wait for the embedded font before measuring — cell metrics change
+      // when it finishes loading, which would otherwise report wrong cols.
+      document.fonts.ready.then(() => requestAnimationFrame(() => {
+        try { fitAddon.fit(); } catch (e) {}
+        if (term.cols >= 20 && term.rows >= 4) {
+          // Nudge: report one column narrower first so the host PTY always
+          // sees a size change and TUI apps repaint after buffer replay.
+          post({ type: "resize", cols: term.cols - 1, rows: term.rows });
+          lastCols = term.cols - 1;
+          lastRows = term.rows;
+        }
+        sendSize();
+      }));
+
+      // Track container size changes (keyboard, toolbar, orientation).
+      new ResizeObserver(() => refit()).observe(document.getElementById("terminal"));
 
       function handleMessage(event) {
         let message;
@@ -191,8 +219,7 @@ const buildHtml = (css: string, xtermJs: string, fitJs: string, theme: typeof TE
         if (message.type === "output") {
           term.write(message.data || "");
         } else if (message.type === "fit") {
-          fitAddon.fit();
-          sendSize();
+          refit();
         } else if (message.type === "blur") {
           term.blur();
           document.activeElement?.blur();
@@ -205,10 +232,7 @@ const buildHtml = (css: string, xtermJs: string, fitJs: string, theme: typeof TE
 
       document.addEventListener("message", handleMessage);
       window.addEventListener("message", handleMessage);
-      window.addEventListener("resize", () => {
-        fitAddon.fit();
-        sendSize();
-      });
+      window.addEventListener("resize", refit);
 
       post({ type: "ready" });
     </script>
@@ -359,7 +383,7 @@ const AssistantTerminalWebView = forwardRef<AssistantTerminalWebViewRef, Assista
         if (message.type === "resize") {
           const cols = Number(message.cols || 0);
           const rows = Number(message.rows || 0);
-          if (cols > 0 && rows > 0) {
+          if (cols >= 20 && rows >= 4) {
             onResize(cols, rows);
           }
         }

@@ -2566,7 +2566,7 @@ fn check_installed_assistants() -> Result<Vec<String>, String> {
 
     // Check for Antigravity CLI
     if command_exists("agy") {
-        installed.push("antigravity".to_string());
+        installed.push("agy".to_string());
     }
 
     // Check for OpenAI Codex CLI
