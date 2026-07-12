@@ -12,7 +12,7 @@
     ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.sofriendly.chell",
+      "bundleIdentifier": "com.sofriendly.orca",
       "infoPlist": {
         "LSApplicationCategoryType": "public.app-category.developer-tools"
       }
@@ -22,7 +22,7 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#121212"
       },
-      "package": "com.chell.portal"
+      "package": "com.sofriendly.orca"
     },
     "web": {
       "bundler": "metro",
@@ -50,7 +50,8 @@
         {
           "image": "./assets/splash.png",
           "resizeMode": "contain",
-          "backgroundColor": "#121212"
+          "backgroundColor": "#121212",
+          "imageWidth": 200
         }
       ],
       "expo-status-bar"

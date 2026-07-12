@@ -1,4 +1,4 @@
-package com.chell.portal
+package com.sofriendly.orca
 import expo.modules.splashscreen.SplashScreenManager
 
 import android.os.Build

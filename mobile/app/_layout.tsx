@@ -112,7 +112,6 @@ function RootLayoutContent() {
               <Pressable
                 onPress={() => {
                   useConnectionStore.getState().setActiveProject(null);
-                  router.dismissAll();
                   router.replace("/");
                 }}
                 style={{ padding: 8 }}

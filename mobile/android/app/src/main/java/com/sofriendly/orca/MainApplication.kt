@@ -1,4 +1,4 @@
-package com.chell.portal
+package com.sofriendly.orca
 
 import android.app.Application
 import android.content.res.Configuration
