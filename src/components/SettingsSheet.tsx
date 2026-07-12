@@ -16,7 +16,7 @@ import {
   Bot,
   ExternalLink,
   RefreshCw,
-  // Smartphone,
+  Smartphone,
   Eye,
   EyeOff,
   Trash2,
@@ -31,6 +31,7 @@ import { Switch } from "@/components/ui/switch";
 import {
   Dialog,
   DialogContent,
+  DialogTitle,
 } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useSettingsStore } from "@/stores/settingsStore";
@@ -44,7 +45,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-// import { RemotePortalSettings } from "@/components/RemotePortalSettings";
+import { RemotePortalSettings } from "@/components/RemotePortalSettings";
 import { getAllAssistants, getAllAssistantCommands } from "@/lib/assistants";
 import type { ThemeOption, AssistantDefinition, AiProviderType } from "@/types";
 
@@ -53,7 +54,7 @@ interface SettingsSheetProps {
   onOpenChange: (open: boolean) => void;
 }
 
-type SettingsTab = "general" | "assistants" | "appearance" | "ai" | "github" | "keyboard" | "about";
+type SettingsTab = "general" | "assistants" | "appearance" | "ai" | "github" | "portal" | "keyboard" | "about";
 
 const NAV_ITEMS: { id: SettingsTab; label: string; icon: React.ReactNode }[] = [
   { id: "general", label: "General", icon: <Settings className="h-4 w-4" /> },
@@ -61,7 +62,7 @@ const NAV_ITEMS: { id: SettingsTab; label: string; icon: React.ReactNode }[] = [
   { id: "appearance", label: "Appearance", icon: <Palette className="h-4 w-4" /> },
   { id: "ai", label: "AI Behavior", icon: <Sparkles className="h-4 w-4" /> },
   { id: "github", label: "GitHub", icon: <Github className="h-4 w-4" /> },
-  // { id: "portal", label: "Remote Portal", icon: <Smartphone className="h-4 w-4" /> },
+  { id: "portal", label: "Remote Portal", icon: <Smartphone className="h-4 w-4" /> },
   { id: "keyboard", label: "Keyboard", icon: <Keyboard className="h-4 w-4" /> },
   { id: "about", label: "About", icon: <Info className="h-4 w-4" /> },
 ];
@@ -363,6 +364,7 @@ export default function SettingsSheet({ open, onOpenChange }: SettingsSheetProps
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-3xl p-0 gap-0 overflow-hidden">
+        <DialogTitle className="sr-only">Settings</DialogTitle>
         <div className="flex h-[550px]">
           {/* Left sidebar navigation */}
           <div className="w-48 border-r border-border bg-card p-2">
@@ -1107,8 +1109,8 @@ export default function SettingsSheet({ open, onOpenChange }: SettingsSheetProps
                 </div>
               )}
 
-              {/* Remote Portal Tab (hidden for now) */}
-              {/* {activeTab === "portal" && <RemotePortalSettings />} */}
+              {/* Remote Portal Tab */}
+              {activeTab === "portal" && <RemotePortalSettings />}
 
               {/* About Tab */}
               {activeTab === "about" && (

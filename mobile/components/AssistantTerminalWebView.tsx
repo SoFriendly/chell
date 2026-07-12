@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState, forwardRef, useImperativeHandle } from "react";
 import { Text, View } from "react-native";
 import { Asset } from "expo-asset";
-import * as FileSystem from "expo-file-system";
+import * as FileSystem from "expo-file-system/legacy";
 import WebView, { WebViewMessageEvent } from "react-native-webview";
 import { useTheme } from "~/components/ThemeProvider";
 

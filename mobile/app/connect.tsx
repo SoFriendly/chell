@@ -26,6 +26,7 @@ import {
   CardFooter,
   Badge,
 } from "~/components/ui";
+import { s } from "~/lib/scale";
 
 export default function ConnectPage() {
   const router = useRouter();
@@ -167,7 +168,7 @@ export default function ConnectPage() {
           {isConnected ? (
             <View className="gap-2">
               <View className="flex-row items-center">
-                <Check size={16} color={colors.success} />
+                <Check size={s(16)} color={colors.success} />
                 <Text className="text-foreground ml-2">
                   Connected to {desktopDeviceName || "Desktop"}
                 </Text>
@@ -178,7 +179,7 @@ export default function ConnectPage() {
           )}
           {error && (
             <View className="flex-row items-center mt-2">
-              <X size={16} color={colors.destructive} />
+              <X size={s(16)} color={colors.destructive} />
               <Text className="text-destructive ml-2">{error}</Text>
             </View>
           )}
@@ -196,7 +197,7 @@ export default function ConnectPage() {
       <Card className="mb-4">
         <CardHeader>
           <View className="flex-row items-center">
-            <QrCode size={18} color={colors.ai} />
+            <QrCode size={s(18)} color={colors.ai} />
             <CardTitle className="ml-2">Add Desktop</CardTitle>
           </View>
           <CardDescription>
@@ -206,7 +207,7 @@ export default function ConnectPage() {
         <CardContent>
           <Button
             onPress={handleScanQR}
-            icon={<Camera size={18} color={colors.primaryForeground} />}
+            icon={<Camera size={s(18)} color={colors.primaryForeground} />}
           >
             Scan QR Code
           </Button>
@@ -218,7 +219,7 @@ export default function ConnectPage() {
         <CardHeader>
           <View className="flex-row items-center justify-between">
             <View className="flex-row items-center">
-              <Monitor size={18} color={colors.info} />
+              <Monitor size={s(18)} color={colors.info} />
               <CardTitle className="ml-2">
                 Linked Desktops ({linkedPortals.length})
               </CardTitle>
@@ -231,7 +232,7 @@ export default function ConnectPage() {
         <CardContent>
           {linkedPortals.length === 0 ? (
             <View className="py-8 items-center">
-              <Monitor size={32} color={colors.muted} />
+              <Monitor size={s(32)} color={colors.muted} />
               <Text className="text-muted-foreground mt-4">
                 No desktops linked yet
               </Text>
@@ -258,7 +259,7 @@ export default function ConnectPage() {
                       }`}
                     >
                       <Monitor
-                        size={20}
+                        size={s(20)}
                         color={portal.isOnline ? colors.success : colors.mutedForeground}
                       />
                     </View>
@@ -282,10 +283,10 @@ export default function ConnectPage() {
                       className="p-2"
                       onPress={() => handleRemovePortal(portal)}
                     >
-                      <Trash2 size={18} color={colors.destructive} />
+                      <Trash2 size={s(18)} color={colors.destructive} />
                     </Pressable>
                     {(portal.id !== activePortalId || !isConnected) && (
-                      <ChevronRight size={18} color={colors.mutedForeground} />
+                      <ChevronRight size={s(18)} color={colors.mutedForeground} />
                     )}
                   </View>
                 </Pressable>
@@ -360,7 +361,7 @@ export default function ConnectPage() {
               className="w-10 h-10 rounded-full bg-black/50 items-center justify-center"
               onPress={() => setShowScanner(false)}
             >
-              <X size={24} color="#fff" />
+              <X size={s(24)} color="#fff" />
             </Pressable>
           </View>
 

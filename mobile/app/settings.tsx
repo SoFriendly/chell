@@ -26,6 +26,7 @@ import { useConnectionStore, LinkedPortal } from "~/stores/connectionStore";
 import { useThemeStore, ThemeOption } from "~/stores/themeStore";
 import { useTheme } from "~/components/ThemeProvider";
 import { Button, Separator } from "~/components/ui";
+import { s } from "~/lib/scale";
 
 export default function SettingsPage() {
   const { colors } = useTheme();
@@ -176,9 +177,9 @@ export default function SettingsPage() {
           >
             <View className="flex-row items-center">
               {isConnected ? (
-                <Wifi size={20} color={colors.primary} />
+                <Wifi size={s(20)} color={colors.primary} />
               ) : (
-                <WifiOff size={20} color={colors.mutedForeground} />
+                <WifiOff size={s(20)} color={colors.mutedForeground} />
               )}
               <View className="ml-3">
                 <Text
@@ -209,7 +210,7 @@ export default function SettingsPage() {
 
           {error && (
             <View className="flex-row items-center p-3 rounded-lg bg-destructive/10 mb-4">
-              <X size={16} color={colors.destructive} />
+              <X size={s(16)} color={colors.destructive} />
               <Text className="text-destructive ml-2 text-sm">{error}</Text>
             </View>
           )}
@@ -218,7 +219,7 @@ export default function SettingsPage() {
           <Button
             onPress={handleScanQR}
             variant="outline"
-            icon={<QrCode size={18} color={colors.foreground} />}
+            icon={<QrCode size={s(18)} color={colors.foreground} />}
           >
             Scan QR to Add Desktop
           </Button>
@@ -254,7 +255,7 @@ export default function SettingsPage() {
                         }`}
                       >
                         <Monitor
-                          size={20}
+                          size={s(20)}
                           color={portal.isOnline ? "#22c55e" : colors.mutedForeground}
                         />
                       </View>
@@ -280,7 +281,7 @@ export default function SettingsPage() {
                       className="p-2"
                       onPress={() => handleRemovePortal(portal)}
                     >
-                      <Trash2 size={18} color={colors.destructive} />
+                      <Trash2 size={s(18)} color={colors.destructive} />
                     </Pressable>
                   </Pressable>
                 );
@@ -316,7 +317,7 @@ export default function SettingsPage() {
                 >
                   <View className="flex-row items-center">
                     <Icon
-                      size={20}
+                      size={s(20)}
                       color={isActive ? colors.foreground : colors.mutedForeground}
                     />
                     <Text
@@ -327,7 +328,7 @@ export default function SettingsPage() {
                       {t.name}
                     </Text>
                   </View>
-                  {isActive && <Check size={20} color={colors.foreground} />}
+                  {isActive && <Check size={s(20)} color={colors.foreground} />}
                 </Pressable>
               );
             })}
@@ -421,7 +422,7 @@ export default function SettingsPage() {
               className="w-10 h-10 rounded-full bg-black/50 items-center justify-center"
               onPress={() => setShowScanner(false)}
             >
-              <X size={24} color="#fff" />
+              <X size={s(24)} color="#fff" />
             </Pressable>
           </View>
 

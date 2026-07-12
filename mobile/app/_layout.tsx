@@ -1,5 +1,11 @@
 import "../global.css";
 import { useEffect } from "react";
+import { rem } from "nativewind";
+import { uiScale, s } from "~/lib/scale";
+
+// Scale the whole rem-based design system (text/spacing classes) to the
+// device viewport before anything renders. See lib/scale.ts.
+rem.set(14 * uiScale);
 import { Stack, router } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { useFonts } from "expo-font";
@@ -14,16 +20,26 @@ import { useGitStore } from "~/stores/gitStore";
 SplashScreen.preventAutoHideAsync();
 
 function RootLayoutContent() {
-  const { status, connect, wsUrl, requestStatus } = useConnectionStore();
+  const { status, requestStatus } = useConnectionStore();
   const { status: gitStatus, toggleBranchPicker } = useGitStore();
   const { theme, colors } = useTheme();
 
-  // Auto-connect on app start if URL is configured
+  // Auto-connect on app start once persisted state (relay URL, saved portal
+  // pairing) has fully rehydrated. Connecting off wsUrl alone races hydration
+  // after a JS reload, which made the app forget it was paired.
   useEffect(() => {
-    if (wsUrl && status === "disconnected") {
-      connect();
+    const tryConnect = () => {
+      const state = useConnectionStore.getState();
+      if (state.wsUrl && state.status === "disconnected") {
+        state.connect();
+      }
+    };
+    if (useConnectionStore.persist.hasHydrated()) {
+      tryConnect();
     }
-  }, [wsUrl]);
+    const unsub = useConnectionStore.persist.onFinishHydration(tryConnect);
+    return unsub;
+  }, []);
 
   // Request status (project list, theme, etc.) when connected
   useEffect(() => {
@@ -73,20 +89,20 @@ function RootLayoutContent() {
                 onPress={toggleBranchPicker}
                 style={{ flexDirection: 'row', alignItems: 'center' }}
               >
-                <GitBranch size={16} color={colors.primary} />
+                <GitBranch size={s(16)} color={colors.primary} />
                 <Text style={{ color: colors.foreground, fontWeight: '600', marginLeft: 8 }} numberOfLines={1}>
                   {gitStatus?.branch || "main"}
                 </Text>
-                <ChevronDown size={14} color={colors.mutedForeground} style={{ marginLeft: 4 }} />
+                <ChevronDown size={s(14)} color={colors.mutedForeground} style={{ marginLeft: 4 }} />
                 {gitStatus && gitStatus.behind > 0 && (
                   <View style={{ flexDirection: 'row', alignItems: 'center', marginLeft: 8, backgroundColor: colors.muted, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
-                    <ArrowDown size={10} color={colors.foreground} />
+                    <ArrowDown size={s(10)} color={colors.foreground} />
                     <Text style={{ color: colors.foreground, fontSize: 10, marginLeft: 2 }}>{gitStatus.behind}</Text>
                   </View>
                 )}
                 {gitStatus && gitStatus.ahead > 0 && (
                   <View style={{ flexDirection: 'row', alignItems: 'center', marginLeft: 4, backgroundColor: colors.muted, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
-                    <ArrowUp size={10} color={colors.foreground} />
+                    <ArrowUp size={s(10)} color={colors.foreground} />
                     <Text style={{ color: colors.foreground, fontSize: 10, marginLeft: 2 }}>{gitStatus.ahead}</Text>
                   </View>
                 )}
@@ -101,7 +117,7 @@ function RootLayoutContent() {
                 }}
                 style={{ padding: 8 }}
               >
-                <Home size={22} color={colors.foreground} />
+                <Home size={s(22)} color={colors.foreground} />
               </Pressable>
             ),
             headerRight: () => (
@@ -109,7 +125,7 @@ function RootLayoutContent() {
                 onPress={() => router.push("/settings")}
                 style={{ padding: 8 }}
               >
-                <Settings size={22} color={colors.foreground} />
+                <Settings size={s(22)} color={colors.foreground} />
               </Pressable>
             ),
           }}
@@ -120,7 +136,7 @@ function RootLayoutContent() {
             title: "Settings",
             headerLeft: () => (
               <Pressable onPress={() => router.back()} style={{ padding: 4 }}>
-                <ChevronLeft size={24} color={colors.foreground} />
+                <ChevronLeft size={s(24)} color={colors.foreground} />
               </Pressable>
             ),
           }}

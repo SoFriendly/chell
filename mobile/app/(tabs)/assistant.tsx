@@ -33,6 +33,7 @@ import { useTerminalStore } from "~/stores/terminalStore";
 import { useTheme } from "~/components/ThemeProvider";
 import { Button } from "~/components/ui";
 import AssistantTerminalWebView, { AssistantTerminalWebViewRef } from "~/components/AssistantTerminalWebView";
+import { s } from "~/lib/scale";
 
 interface AssistantTab {
   id: string;
@@ -397,7 +398,7 @@ export default function AssistantTabPage() {
   if (!isConnected) {
     return (
       <View className="flex-1 items-center justify-center bg-background p-4">
-        <WifiOff size={48} color={colors.mutedForeground} />
+        <WifiOff size={s(48)} color={colors.mutedForeground} />
         <Text className="text-foreground font-medium mt-4 text-lg">
           Not Connected
         </Text>
@@ -446,12 +447,12 @@ export default function AssistantTabPage() {
               {/* Assistant/Shell icon */}
               {tab.command === "" && tab.source === "mobile" ? (
                 <TerminalIcon
-                  size={14}
+                  size={s(14)}
                   color={tab.id === activeTabId ? colors.foreground : colors.mutedForeground}
                 />
               ) : (
                 <Bot
-                  size={14}
+                  size={s(14)}
                   color={tab.id === activeTabId ? colors.foreground : colors.mutedForeground}
                 />
               )}
@@ -469,7 +470,7 @@ export default function AssistantTabPage() {
                 className="ml-2 p-1"
                 onPress={() => handleCloseTab(tab.id)}
               >
-                <X size={12} color={colors.mutedForeground} />
+                <X size={s(12)} color={colors.mutedForeground} />
               </Pressable>
             </Pressable>
           ))}
@@ -482,7 +483,7 @@ export default function AssistantTabPage() {
             size="icon"
             onPress={() => setShowDropdown(!showDropdown)}
           >
-            <Plus size={18} color={colors.foreground} />
+            <Plus size={s(18)} color={colors.foreground} />
           </Button>
 
           {showDropdown && (
@@ -503,9 +504,9 @@ export default function AssistantTabPage() {
                   >
                     <View className="flex-row items-center">
                       {option.command === "" ? (
-                        <TerminalIcon size={16} color={colors.success} />
+                        <TerminalIcon size={s(16)} color={colors.success} />
                       ) : (
-                        <Bot size={16} color={isInstalled ? colors.info : colors.mutedForeground} />
+                        <Bot size={s(16)} color={isInstalled ? colors.info : colors.mutedForeground} />
                       )}
                       <Text
                         className={`ml-2 ${
@@ -515,7 +516,7 @@ export default function AssistantTabPage() {
                         {option.name}
                       </Text>
                     </View>
-                    {isInstalled && <Check size={14} color={colors.success} />}
+                    {isInstalled && <Check size={s(14)} color={colors.success} />}
                   </Pressable>
                 );
               })}
@@ -527,7 +528,7 @@ export default function AssistantTabPage() {
       {/* Terminal Output or Empty State */}
       {tabs.length === 0 ? (
         <View className="flex-1 items-center justify-center">
-          <Bot size={48} color={colors.mutedForeground} />
+          <Bot size={s(48)} color={colors.mutedForeground} />
           <Text className="text-foreground font-medium mt-4">
             {isCheckingInstalled ? "Loading..." : "No assistants running"}
           </Text>
@@ -550,7 +551,7 @@ export default function AssistantTabPage() {
             />
           ) : (
             <View className="flex-1 items-center justify-center">
-              <Bot size={32} color={colors.muted} />
+              <Bot size={s(32)} color={colors.muted} />
               <Text style={{ color: colors.mutedForeground }} className="mt-4">
                 {activeTab?.name} starting...
               </Text>
@@ -581,7 +582,7 @@ export default function AssistantTabPage() {
               onPress={handleNewLine}
               className="mr-2"
             >
-              <CornerDownLeft size={20} color={colors.primary} />
+              <CornerDownLeft size={s(20)} color={colors.primary} />
             </Button>
             <Button
               variant="ghost"
@@ -589,7 +590,7 @@ export default function AssistantTabPage() {
               onPress={handlePaste}
               className="mr-2"
             >
-              <ClipboardPaste size={16} color={colors.primary} />
+              <ClipboardPaste size={s(16)} color={colors.primary} />
             </Button>
             <Button
               variant="ghost"
@@ -597,7 +598,7 @@ export default function AssistantTabPage() {
               onPress={handleArrowUp}
               className="mr-2"
             >
-              <ArrowUp size={20} color={colors.primary} />
+              <ArrowUp size={s(20)} color={colors.primary} />
             </Button>
             <Button
               variant="ghost"
@@ -605,7 +606,7 @@ export default function AssistantTabPage() {
               onPress={handleArrowDown}
               className="mr-2"
             >
-              <ArrowDown size={20} color={colors.primary} />
+              <ArrowDown size={s(20)} color={colors.primary} />
             </Button>
             <Button
               variant="ghost"
@@ -613,7 +614,7 @@ export default function AssistantTabPage() {
               onPress={handleArrowLeft}
               className="mr-2"
             >
-              <ArrowLeft size={20} color={colors.primary} />
+              <ArrowLeft size={s(20)} color={colors.primary} />
             </Button>
             <Button
               variant="ghost"
@@ -621,7 +622,7 @@ export default function AssistantTabPage() {
               onPress={handleArrowRight}
               className="mr-2"
             >
-              <ArrowRight size={20} color={colors.primary} />
+              <ArrowRight size={s(20)} color={colors.primary} />
             </Button>
             <View className="flex-1" />
             <Button
@@ -638,11 +639,11 @@ export default function AssistantTabPage() {
               }}
               className="flex-row items-center"
             >
-              <KeyboardIcon size={18} color={colors.primary} />
+              <KeyboardIcon size={s(18)} color={colors.primary} />
               {isKeyboardVisible ? (
-                <ChevronDown size={14} color={colors.primary} style={{ marginLeft: 4 }} />
+                <ChevronDown size={s(14)} color={colors.primary} style={{ marginLeft: 4 }} />
               ) : (
-                <ChevronUp size={14} color={colors.primary} style={{ marginLeft: 4 }} />
+                <ChevronUp size={s(14)} color={colors.primary} style={{ marginLeft: 4 }} />
               )}
             </Button>
           </View>

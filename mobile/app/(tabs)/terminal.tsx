@@ -36,6 +36,7 @@ import { useTerminalStore } from "~/stores/terminalStore";
 import { useTheme } from "~/components/ThemeProvider";
 import { Button, Card, CardContent } from "~/components/ui";
 import type { ProjectContext, RemoteTerminal } from "~/types";
+import { s } from "~/lib/scale";
 
 // Terminal themes matching desktop app themes
 const TERMINAL_THEMES = {
@@ -307,7 +308,7 @@ export default function TerminalTabPage() {
   if (!isConnected) {
     return (
       <View className="flex-1 items-center justify-center bg-background p-4">
-        <WifiOff size={48} color={colors.mutedForeground} />
+        <WifiOff size={s(48)} color={colors.mutedForeground} />
         <Text className="text-foreground font-medium mt-4 text-lg">
           Not Connected
         </Text>
@@ -356,7 +357,7 @@ export default function TerminalTabPage() {
               onPress={() => setActiveTerminal(terminal.id)}
             >
               <TerminalIcon
-                size={14}
+                size={s(14)}
                 color={terminal.id === activeTerminalId ? colors.foreground : colors.mutedForeground}
               />
               <Text
@@ -373,7 +374,7 @@ export default function TerminalTabPage() {
                 className="ml-2 p-1"
                 onPress={() => handleCloseTerminal(terminal.id)}
               >
-                <X size={12} color={colors.mutedForeground} />
+                <X size={s(12)} color={colors.mutedForeground} />
               </Pressable>
             </Pressable>
           ))}
@@ -386,11 +387,11 @@ export default function TerminalTabPage() {
             onPress={() => setShowRemoteTerminals(!showRemoteTerminals)}
             className="mr-1"
           >
-            <Link size={18} color={colors.primary} />
+            <Link size={s(18)} color={colors.primary} />
           </Button>
         )}
         <Button variant="ghost" size="icon" onPress={handleNewTerminal}>
-          <Plus size={18} color={colors.foreground} />
+          <Plus size={s(18)} color={colors.foreground} />
         </Button>
       </View>
 
@@ -398,7 +399,7 @@ export default function TerminalTabPage() {
       {showRemoteTerminals && availableRemoteTerminals.length > 0 && (
         <View className="border-b border-border bg-card p-3">
           <View className="flex-row items-center mb-2">
-            <Monitor size={16} color={colors.primary} />
+            <Monitor size={s(16)} color={colors.primary} />
             <Text className="text-foreground font-medium ml-2 text-sm">
               Desktop Terminal Sessions
             </Text>
@@ -412,7 +413,7 @@ export default function TerminalTabPage() {
               className="flex-row items-center p-2 rounded-md bg-secondary mb-1"
               onPress={() => handleAttachRemoteTerminal(rt)}
             >
-              <TerminalIcon size={14} color={colors.foreground} />
+              <TerminalIcon size={s(14)} color={colors.foreground} />
               <View className="ml-2 flex-1">
                 <Text className="text-foreground text-sm" numberOfLines={1}>
                   {rt.title}
@@ -421,7 +422,7 @@ export default function TerminalTabPage() {
                   {rt.cwd}
                 </Text>
               </View>
-              <Link size={14} color={colors.primary} />
+              <Link size={s(14)} color={colors.primary} />
             </Pressable>
           ))}
         </View>
@@ -437,9 +438,9 @@ export default function TerminalTabPage() {
         {output.length === 0 ? (
           <View className="items-center justify-center py-8">
             {activeTerminal?.source === "remote" ? (
-              <Monitor size={32} color={terminalColors.muted} />
+              <Monitor size={s(32)} color={terminalColors.muted} />
             ) : (
-              <TerminalIcon size={32} color={terminalColors.muted} />
+              <TerminalIcon size={s(32)} color={terminalColors.muted} />
             )}
             <Text style={{ color: terminalColors.muted }} className="mt-4">
               {activeTerminal?.source === "remote" ? "Remote session attached" : "Terminal ready"}
@@ -496,7 +497,7 @@ export default function TerminalTabPage() {
       {showNLT && (
         <View className="border-t border-border bg-card p-3">
           <View className="flex-row items-center mb-2">
-            <Wand2 size={16} color={colors.ai} />
+            <Wand2 size={s(16)} color={colors.ai} />
             <Text className="text-foreground font-medium ml-2 text-sm">
               Natural Language Terminal
             </Text>
@@ -527,7 +528,7 @@ export default function TerminalTabPage() {
               disabled={!aiInput.trim()}
               className="flex-1"
             >
-              <Sparkles size={14} color={colors.foreground} />
+              <Sparkles size={s(14)} color={colors.foreground} />
               <Text className="ml-1 text-foreground">Generate</Text>
             </Button>
             {generatedCommand && (
@@ -551,7 +552,7 @@ export default function TerminalTabPage() {
           onPress={() => setShowNLT(!showNLT)}
           className="mr-2"
         >
-          <Sparkles size={14} color={colors.primary} />
+          <Sparkles size={s(14)} color={colors.primary} />
         </Button>
         <Button
           variant="ghost"
@@ -575,7 +576,7 @@ export default function TerminalTabPage() {
           onPress={handleNewLine}
           className="mr-2"
         >
-          <CornerDownLeft size={20} color={colors.primary} />
+          <CornerDownLeft size={s(20)} color={colors.primary} />
         </Button>
         <Button
           variant="ghost"
@@ -583,7 +584,7 @@ export default function TerminalTabPage() {
           onPress={handleArrowUp}
           className="mr-2"
         >
-          <ArrowUp size={20} color={colors.primary} />
+          <ArrowUp size={s(20)} color={colors.primary} />
         </Button>
         <Button
           variant="ghost"
@@ -591,7 +592,7 @@ export default function TerminalTabPage() {
           onPress={handleArrowDown}
           className="mr-2"
         >
-          <ArrowDown size={20} color={colors.primary} />
+          <ArrowDown size={s(20)} color={colors.primary} />
         </Button>
         <Button
           variant="ghost"
@@ -599,7 +600,7 @@ export default function TerminalTabPage() {
           onPress={handleArrowLeft}
           className="mr-2"
         >
-          <ArrowLeft size={20} color={colors.primary} />
+          <ArrowLeft size={s(20)} color={colors.primary} />
         </Button>
         <Button
           variant="ghost"
@@ -607,7 +608,7 @@ export default function TerminalTabPage() {
           onPress={handleArrowRight}
           className="mr-2"
         >
-          <ArrowRight size={20} color={colors.primary} />
+          <ArrowRight size={s(20)} color={colors.primary} />
         </Button>
         <View className="flex-1" />
         <Button
@@ -622,11 +623,11 @@ export default function TerminalTabPage() {
           }}
           className="flex-row items-center"
         >
-          <KeyboardIcon size={18} color={colors.primary} />
+          <KeyboardIcon size={s(18)} color={colors.primary} />
           {isKeyboardVisible ? (
-            <ChevronDown size={14} color={colors.primary} style={{ marginLeft: 4 }} />
+            <ChevronDown size={s(14)} color={colors.primary} style={{ marginLeft: 4 }} />
           ) : (
-            <ChevronUp size={14} color={colors.primary} style={{ marginLeft: 4 }} />
+            <ChevronUp size={s(14)} color={colors.primary} style={{ marginLeft: 4 }} />
           )}
         </Button>
       </View>
@@ -656,7 +657,7 @@ export default function TerminalTabPage() {
           onPress={handleSend}
           disabled={!input.trim()}
         >
-          <Send size={18} color={input.trim() ? colors.primary : colors.mutedForeground} />
+          <Send size={s(18)} color={input.trim() ? colors.primary : colors.mutedForeground} />
         </Button>
       </View>
     </KeyboardAvoidingView>

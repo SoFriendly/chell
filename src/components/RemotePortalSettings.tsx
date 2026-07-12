@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
+import QRCode from "qrcode";
 import {
   Smartphone,
   Wifi,
@@ -18,21 +19,34 @@ import { usePortalStore } from "@/stores/portalStore";
 import { cn } from "@/lib/utils";
 import type { LinkedDevice } from "@/types";
 
-// Simple QR Code generator using a canvas
+// QR code rendered locally — the payload contains the pairing passphrase,
+// which must never leave the machine (an external QR API would see it).
 function QRCodeDisplay({ data, size = 200 }: { data: string; size?: number }) {
-  // We'll use a simple external QR code API for now
-  // In production, you'd use a library like qrcode or qrcode.react
-  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&data=${encodeURIComponent(data)}&bgcolor=1a1a1a&color=ffffff`;
+  const [qrUrl, setQrUrl] = useState<string>("");
+
+  useEffect(() => {
+    QRCode.toDataURL(data, {
+      width: size,
+      margin: 1,
+      color: { dark: "#1a1a1a", light: "#ffffff" },
+    })
+      .then(setQrUrl)
+      .catch((err) => console.error("Failed to generate QR code:", err));
+  }, [data, size]);
 
   return (
     <div className="flex items-center justify-center p-4 bg-white rounded-lg">
-      <img
-        src={qrUrl}
-        alt="Pairing QR Code"
-        width={size}
-        height={size}
-        className="rounded"
-      />
+      {qrUrl ? (
+        <img
+          src={qrUrl}
+          alt="Pairing QR Code"
+          width={size}
+          height={size}
+          className="rounded"
+        />
+      ) : (
+        <div style={{ width: size, height: size }} />
+      )}
     </div>
   );
 }
@@ -57,7 +71,7 @@ export function RemotePortalSettings() {
     deviceName,
     pairingCode,
     pairingPassphrase,
-    linkedDevices,
+    linkedDevices: linkedDevicesRaw,
     enable,
     disable,
     setRelayUrl,
@@ -66,6 +80,8 @@ export function RemotePortalSettings() {
     setDeviceName,
   } = usePortalStore();
 
+  // Backend events can momentarily deliver no device list; never let that crash the app
+  const linkedDevices = linkedDevicesRaw ?? [];
   const [localRelayUrl, setLocalRelayUrl] = useState(relayUrl);
   const [localDeviceName, setLocalDeviceName] = useState(deviceName);
   const [showAdvanced, setShowAdvanced] = useState(false);
@@ -167,6 +183,19 @@ export function RemotePortalSettings() {
           <div className="mt-2 text-sm text-destructive">{error}</div>
         )}
       </section>
+
+      {!isEnabled && (
+        <div className="py-10 text-center border border-dashed border-border rounded-lg">
+          <Smartphone className="h-8 w-8 mx-auto text-muted-foreground mb-3" />
+          <p className="text-sm font-medium">Remote Portal is off</p>
+          <p className="text-xs text-muted-foreground mt-1 mb-4">
+            Turn it on to get a QR code for pairing your phone.
+          </p>
+          <Button onClick={() => handleTogglePortal(true)}>
+            Enable Remote Portal
+          </Button>
+        </div>
+      )}
 
       {isEnabled && (
         <>

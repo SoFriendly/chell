@@ -48,6 +48,7 @@ import {
 } from "~/components/ui";
 import { useTheme } from "~/components/ThemeProvider";
 import { formatTimestamp, truncate } from "~/lib/utils";
+import { s } from "~/lib/scale";
 
 export default function GitTabPage() {
   const router = useRouter();
@@ -480,7 +481,7 @@ export default function GitTabPage() {
   if (!isConnected) {
     return (
       <View className="flex-1 items-center justify-center bg-background p-4">
-        <WifiOff size={48} color={colors.mutedForeground} />
+        <WifiOff size={s(48)} color={colors.mutedForeground} />
         <Text className="text-foreground font-medium mt-4 text-lg">
           Not Connected
         </Text>
@@ -539,7 +540,7 @@ export default function GitTabPage() {
                     className="justify-start mb-1"
                     onPress={() => handleCheckoutBranch(branch.name)}
                   >
-                    <GitBranch size={14} color={branch.isHead ? colors.ai : colors.mutedForeground} />
+                    <GitBranch size={s(14)} color={branch.isHead ? colors.ai : colors.mutedForeground} />
                     <Text
                       className={`ml-2 ${
                         branch.isHead ? "text-foreground" : "text-muted-foreground"
@@ -547,7 +548,7 @@ export default function GitTabPage() {
                     >
                       {branch.name}
                     </Text>
-                    {branch.isHead && <Check size={14} color={colors.success} />}
+                    {branch.isHead && <Check size={s(14)} color={colors.success} />}
                   </Button>
                 ))}
             </ScrollView>
@@ -565,7 +566,7 @@ export default function GitTabPage() {
                 onPress={handleCreateBranch}
                 disabled={!newBranchName.trim()}
               >
-                <Plus size={16} color="#000" />
+                <Plus size={s(16)} color="#000" />
               </Button>
             </View>
           </CardContent>
@@ -575,9 +576,9 @@ export default function GitTabPage() {
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <View className="flex-row items-center justify-between mb-4">
-          <TabsList className="h-11">
-            <TabsTrigger value="changes" className="px-5 h-10">Changes</TabsTrigger>
-            <TabsTrigger value="history" className="px-5 h-10">History</TabsTrigger>
+          <TabsList className="h-9">
+            <TabsTrigger value="changes" className="px-4 h-8">Changes</TabsTrigger>
+            <TabsTrigger value="history" className="px-4 h-8">History</TabsTrigger>
           </TabsList>
           <View className="flex-row items-center">
             {(stagedFiles.length > 0 || unstagedFiles.length > 0 || untrackedFiles.length > 0) && (
@@ -586,7 +587,7 @@ export default function GitTabPage() {
                 disabled={loading}
                 style={{ padding: 8, opacity: loading ? 0.5 : 1 }}
               >
-                <Archive size={18} color={colors.mutedForeground} />
+                <Archive size={s(18)} color={colors.mutedForeground} />
               </Pressable>
             )}
             <Pressable
@@ -594,21 +595,21 @@ export default function GitTabPage() {
               disabled={loading}
               style={{ padding: 8, opacity: loading ? 0.5 : 1 }}
             >
-              <ArrowDown size={18} color={colors.mutedForeground} />
+              <ArrowDown size={s(18)} color={colors.mutedForeground} />
             </Pressable>
             <Pressable
               onPress={handlePush}
               disabled={loading}
               style={{ padding: 8, opacity: loading ? 0.5 : 1 }}
             >
-              <ArrowUp size={18} color={colors.mutedForeground} />
+              <ArrowUp size={s(18)} color={colors.mutedForeground} />
             </Pressable>
             <Pressable
               onPress={onRefresh}
               disabled={refreshing}
               style={{ padding: 8, opacity: refreshing ? 0.5 : 1 }}
             >
-              <RefreshCw size={18} color={colors.mutedForeground} />
+              <RefreshCw size={s(18)} color={colors.mutedForeground} />
             </Pressable>
           </View>
         </View>
@@ -636,9 +637,9 @@ export default function GitTabPage() {
                           <Pressable
                             onPress={() => toggleFileToCommit(file)}
                             style={{
-                              width: 20,
-                              height: 20,
-                              borderRadius: 4,
+                              width: s(20),
+                              height: s(20),
+                              borderRadius: s(4),
                               borderWidth: 1.5,
                               borderColor: filesToCommit.has(file) ? "transparent" : getCheckboxColor(fileStatus),
                               backgroundColor: filesToCommit.has(file) ? getCheckboxColor(fileStatus) : "transparent",
@@ -647,7 +648,7 @@ export default function GitTabPage() {
                             }}
                           >
                             {filesToCommit.has(file) && (
-                              <Check size={14} color="#fff" strokeWidth={3} />
+                              <Check size={s(14)} color="#fff" strokeWidth={3} />
                             )}
                           </Pressable>
                           <Pressable
@@ -656,7 +657,7 @@ export default function GitTabPage() {
                             onLongPress={() => showFileContextMenu(file, false)}
                           >
                             <View style={{ transform: [{ rotate: isExpanded ? "90deg" : "0deg" }] }}>
-                              <ChevronRight size={16} color={colors.mutedForeground} />
+                              <ChevronRight size={s(16)} color={colors.mutedForeground} />
                             </View>
                             <Text
                               className="text-foreground font-mono text-sm flex-1"
@@ -740,9 +741,9 @@ export default function GitTabPage() {
                           <Pressable
                             onPress={() => toggleFileToCommit(file)}
                             style={{
-                              width: 20,
-                              height: 20,
-                              borderRadius: 4,
+                              width: s(20),
+                              height: s(20),
+                              borderRadius: s(4),
                               borderWidth: 1.5,
                               borderColor: filesToCommit.has(file) ? "transparent" : getCheckboxColor(fileStatus),
                               backgroundColor: filesToCommit.has(file) ? getCheckboxColor(fileStatus) : "transparent",
@@ -751,7 +752,7 @@ export default function GitTabPage() {
                             }}
                           >
                             {filesToCommit.has(file) && (
-                              <Check size={14} color="#fff" strokeWidth={3} />
+                              <Check size={s(14)} color="#fff" strokeWidth={3} />
                             )}
                           </Pressable>
                           <Pressable
@@ -760,7 +761,7 @@ export default function GitTabPage() {
                             onLongPress={() => showFileContextMenu(file, true)}
                           >
                             <View style={{ transform: [{ rotate: isExpanded ? "90deg" : "0deg" }] }}>
-                              <ChevronRight size={16} color={colors.mutedForeground} />
+                              <ChevronRight size={s(16)} color={colors.mutedForeground} />
                             </View>
                             <Text
                               className="text-foreground font-mono text-sm flex-1"
@@ -831,9 +832,9 @@ export default function GitTabPage() {
                         <Pressable
                           onPress={() => toggleFileToCommit(file)}
                           style={{
-                            width: 20,
-                            height: 20,
-                            borderRadius: 4,
+                            width: s(20),
+                            height: s(20),
+                            borderRadius: s(4),
                             borderWidth: 1.5,
                             borderColor: filesToCommit.has(file) ? "transparent" : getCheckboxColor("added"),
                             backgroundColor: filesToCommit.has(file) ? getCheckboxColor("added") : "transparent",
@@ -842,7 +843,7 @@ export default function GitTabPage() {
                           }}
                         >
                           {filesToCommit.has(file) && (
-                            <Check size={14} color="#fff" strokeWidth={3} />
+                            <Check size={s(14)} color="#fff" strokeWidth={3} />
                           )}
                         </Pressable>
                         <Pressable
@@ -851,7 +852,7 @@ export default function GitTabPage() {
                           onLongPress={() => showFileContextMenu(file, true)}
                         >
                           <View style={{ transform: [{ rotate: isExpanded ? "90deg" : "0deg" }] }}>
-                            <ChevronRight size={16} color={colors.mutedForeground} />
+                            <ChevronRight size={s(16)} color={colors.mutedForeground} />
                           </View>
                           <Text
                             className="text-foreground font-mono text-sm flex-1"
@@ -874,7 +875,7 @@ export default function GitTabPage() {
             untrackedFiles.length === 0 && (
               <Card>
                 <CardContent className="items-center py-8">
-                  <Check size={48} color={colors.success} />
+                  <Check size={s(48)} color={colors.success} />
                   <Text className="text-foreground font-medium mt-4">
                     Working tree clean
                   </Text>
@@ -899,7 +900,7 @@ export default function GitTabPage() {
                       }`}
                       onPress={() => showStashMenu(stash)}
                     >
-                      <Archive size={14} color={colors.mutedForeground} />
+                      <Archive size={s(14)} color={colors.mutedForeground} />
                       <View className="flex-1">
                         <Text className="text-foreground text-sm" numberOfLines={1}>
                           {stash.message || `stash@{${stash.index}}`}
@@ -908,7 +909,7 @@ export default function GitTabPage() {
                           {stash.branch}
                         </Text>
                       </View>
-                      <ChevronRight size={14} color={colors.mutedForeground} />
+                      <ChevronRight size={s(14)} color={colors.mutedForeground} />
                     </Pressable>
                   ))}
                 </CardContent>
@@ -926,7 +927,7 @@ export default function GitTabPage() {
                   onPress={handleGenerateMessage}
                   disabled={isGenerating}
                 >
-                  <Sparkles size={12} color={isGenerating ? colors.mutedForeground : colors.ai} />
+                  <Sparkles size={s(12)} color={isGenerating ? colors.mutedForeground : colors.ai} />
                   <Text className="text-xs text-muted-foreground">
                     {isGenerating ? "Generating..." : "AI"}
                   </Text>
@@ -971,7 +972,7 @@ export default function GitTabPage() {
         <TabsContent value="history">
           {history.length === 0 ? (
             <View className="items-center py-8">
-              <GitCommit size={32} color={colors.mutedForeground} />
+              <GitCommit size={s(32)} color={colors.mutedForeground} />
               <Text className="text-muted-foreground mt-4 text-sm">
                 No commit history
               </Text>
@@ -987,7 +988,7 @@ export default function GitTabPage() {
                     }`}
                     onLongPress={() => showCommitContextMenu(historyCommit, index)}
                   >
-                    <GitCommit size={14} color={colors.ai} className="mt-0.5" />
+                    <GitCommit size={s(14)} color={colors.ai} className="mt-0.5" />
                     <View className="flex-1">
                       <Text className="text-foreground text-sm font-medium">
                         {truncate(historyCommit.message.split("\n")[0], 50)}
@@ -1018,7 +1019,7 @@ export default function GitTabPage() {
       {error && (
         <Card className="mt-4 border-destructive">
           <CardContent className="flex-row items-center">
-            <X size={16} color={colors.destructive} />
+            <X size={s(16)} color={colors.destructive} />
             <Text className="text-destructive ml-2">{error}</Text>
           </CardContent>
         </Card>

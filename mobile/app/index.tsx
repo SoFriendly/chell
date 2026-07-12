@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import {
   View,
   Text,
+  Image,
   ScrollView,
   RefreshControl,
   Pressable,
@@ -29,7 +30,7 @@ import {
 } from "~/stores/connectionStore";
 import { useTheme } from "~/components/ThemeProvider";
 import { Button } from "~/components/ui";
-import OrcaLogo from "~/components/OrcaLogo";
+import { s } from "~/lib/scale";
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -161,9 +162,9 @@ export default function HomeScreen() {
               }}
             >
               {isConnected ? (
-                <Wifi size={22} color="#22c55e" />
+                <Wifi size={s(22)} color="#22c55e" />
               ) : (
-                <WifiOff size={22} color={colors.destructive} />
+                <WifiOff size={s(22)} color={colors.destructive} />
               )}
             </Pressable>
           ),
@@ -172,7 +173,7 @@ export default function HomeScreen() {
               onPress={() => router.push("/settings")}
               style={{ padding: 8 }}
             >
-              <Settings size={22} color={colors.foreground} />
+              <Settings size={s(22)} color={colors.foreground} />
             </Pressable>
           ),
         }}
@@ -191,16 +192,10 @@ export default function HomeScreen() {
         >
           {/* Hero Section */}
           <View className="items-center py-8">
-            <View
-              className="w-16 h-16 rounded-2xl items-center justify-center mb-4"
-              style={{
-                backgroundColor: `${colors.primary}20`,
-                borderWidth: 1,
-                borderColor: `${colors.primary}40`,
-              }}
-            >
-              <OrcaLogo size={36} />
-            </View>
+            <Image
+              source={require("~/assets/icon.png")}
+              className="w-16 h-16 rounded-2xl mb-4"
+            />
             <Text className="text-xl font-semibold text-foreground">
               Welcome to Orca
             </Text>
@@ -233,7 +228,7 @@ export default function HomeScreen() {
                   className="w-10 h-10 rounded-lg items-center justify-center"
                   style={{ backgroundColor: colors.muted }}
                 >
-                  <Download size={20} color={colors.mutedForeground} />
+                  <Download size={s(20)} color={colors.mutedForeground} />
                 </View>
                 <View className="flex-1">
                   <Text className="text-sm font-medium text-foreground">
@@ -243,7 +238,7 @@ export default function HomeScreen() {
                     Clone from GitHub, GitLab, or any URL
                   </Text>
                 </View>
-                <ArrowRight size={16} color={colors.mutedForeground} />
+                <ArrowRight size={s(16)} color={colors.mutedForeground} />
               </Pressable>
 
               <Pressable
@@ -260,7 +255,7 @@ export default function HomeScreen() {
                   className="w-10 h-10 rounded-lg items-center justify-center"
                   style={{ backgroundColor: colors.muted }}
                 >
-                  <Monitor size={20} color={colors.mutedForeground} />
+                  <Monitor size={s(20)} color={colors.mutedForeground} />
                 </View>
                 <View className="flex-1">
                   <Text className="text-sm font-medium text-foreground">
@@ -270,7 +265,7 @@ export default function HomeScreen() {
                     Open a repo in Orca Desktop
                   </Text>
                 </View>
-                <ArrowRight size={16} color={colors.mutedForeground} />
+                <ArrowRight size={s(16)} color={colors.mutedForeground} />
               </Pressable>
 
               <Pressable
@@ -287,7 +282,7 @@ export default function HomeScreen() {
                   className="w-10 h-10 rounded-lg items-center justify-center"
                   style={{ backgroundColor: colors.muted }}
                 >
-                  <Plus size={20} color={colors.mutedForeground} />
+                  <Plus size={s(20)} color={colors.mutedForeground} />
                 </View>
                 <View className="flex-1">
                   <Text className="text-sm font-medium text-foreground">
@@ -297,7 +292,7 @@ export default function HomeScreen() {
                     Initialize a new git repository
                   </Text>
                 </View>
-                <ArrowRight size={16} color={colors.mutedForeground} />
+                <ArrowRight size={s(16)} color={colors.mutedForeground} />
               </Pressable>
             </View>
           )}
@@ -317,7 +312,7 @@ export default function HomeScreen() {
                     onPress={() => handleSelectProject(project)}
                     android_ripple={{ color: colors.muted }}
                   >
-                    <FolderGit2 size={16} color={colors.primary} />
+                    <FolderGit2 size={s(16)} color={colors.primary} />
                     <View className="flex-1 min-w-0">
                       <Text
                         className="text-sm font-medium text-foreground"
@@ -365,7 +360,7 @@ export default function HomeScreen() {
             >
               <View className="flex-row items-center justify-between mb-6">
                 <View className="flex-row items-center">
-                  <Download size={20} color={colors.primary} />
+                  <Download size={s(20)} color={colors.primary} />
                   <Text className="text-foreground text-lg font-semibold ml-2">
                     Clone Repository
                   </Text>
@@ -374,7 +369,7 @@ export default function HomeScreen() {
                   onPress={() => setShowCloneModal(false)}
                   className="p-2"
                 >
-                  <X size={20} color={colors.mutedForeground} />
+                  <X size={s(20)} color={colors.mutedForeground} />
                 </Pressable>
               </View>
 
