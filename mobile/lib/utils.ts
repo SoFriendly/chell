@@ -44,14 +44,14 @@ export function stripAnsi(str: string): string {
   // These are used for terminal title, shell integration (133;A, 133;B, etc.)
   // Be aggressive - match anything after ESC ] until BEL, ST, or end of reasonable sequence
   let result = str.replace(
-    // eslint-disable-next-line no-control-regex
+     
     /\x1B\][\x20-\x7E]*(?:\x07|\x1B\\)?/g,
     ""
   );
 
   // Also handle OSC sequences that might have non-printable data
   result = result.replace(
-    // eslint-disable-next-line no-control-regex
+     
     /\x1B\][^\x07]*\x07/g,
     ""
   );
@@ -59,7 +59,7 @@ export function stripAnsi(str: string): string {
   // Second pass: Remove CSI sequences (Control Sequence Introducer)
   // Format: ESC [ <params> <command>
   result = result.replace(
-    // eslint-disable-next-line no-control-regex
+     
     /\x1B\[[0-?]*[ -/]*[@-~]/g,
     ""
   );
@@ -67,7 +67,7 @@ export function stripAnsi(str: string): string {
   // Third pass: Remove other escape sequences
   // Single character escapes like ESC c (reset), ESC 7/8 (save/restore cursor)
   result = result.replace(
-    // eslint-disable-next-line no-control-regex
+     
     /\x1B[@-Z\\-_]/g,
     ""
   );
@@ -75,7 +75,7 @@ export function stripAnsi(str: string): string {
   // Fourth pass: Remove DCS (Device Control String) sequences
   // Format: ESC P ... ST (where ST is ESC \)
   result = result.replace(
-    // eslint-disable-next-line no-control-regex
+     
     /\x1BP[^\x1B]*\x1B\\/g,
     ""
   );
@@ -83,14 +83,14 @@ export function stripAnsi(str: string): string {
   // Fifth pass: Remove APC (Application Program Command) sequences
   // Format: ESC _ ... ST
   result = result.replace(
-    // eslint-disable-next-line no-control-regex
+     
     /\x1B_[^\x1B]*\x1B\\/g,
     ""
   );
 
   // Sixth pass: Remove any remaining control characters except newline/tab/carriage return
   result = result.replace(
-    // eslint-disable-next-line no-control-regex
+     
     /[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g,
     ""
   );

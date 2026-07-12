@@ -54,6 +54,7 @@ const ASSISTANT_OPTIONS: AssistantOption[] = [
   { id: "antigravity", name: "Antigravity CLI", command: "agy" },
   { id: "codex", name: "OpenAI Codex", command: "codex" },
   { id: "opencode", name: "OpenCode", command: "opencode" },
+  { id: "pi", name: "Pi", command: "pi" },
   { id: "shell", name: "Shell", command: "" },
 ];
 
@@ -112,7 +113,7 @@ export default function AssistantTabPage() {
       timeoutId = setTimeout(() => {
         if (mounted) {
           console.log("[Assistant] Check timed out, using fallback");
-          setInstalledCommands(["claude", "aider", "agy", "codex", "opencode"]);
+          setInstalledCommands(["claude", "aider", "agy", "codex", "opencode", "pi"]);
           setIsCheckingInstalled(false);
         }
       }, 10000);
@@ -126,7 +127,7 @@ export default function AssistantTabPage() {
         console.error("[Assistant] Failed to check installed assistants:", err);
         // Default to allowing all if check fails
         console.log("[Assistant] Using fallback assistant list");
-        if (mounted) setInstalledCommands(["claude", "aider", "agy", "codex", "opencode"]);
+        if (mounted) setInstalledCommands(["claude", "aider", "agy", "codex", "opencode", "pi"]);
       } finally {
         console.log("[Assistant] Check complete, setting isCheckingInstalled to false");
         clearTimeout(timeoutId);

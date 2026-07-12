@@ -323,7 +323,7 @@ export default function ConnectPage() {
             <View className="flex-row">
               <Text className="text-primary font-bold mr-2">4.</Text>
               <Text className="text-foreground flex-1">
-                Tap "Scan QR Code" above and scan it
+                Tap &quot;Scan QR Code&quot; above and scan it
               </Text>
             </View>
           </View>

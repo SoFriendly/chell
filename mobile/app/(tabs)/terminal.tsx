@@ -35,7 +35,7 @@ import { useConnectionStore } from "~/stores/connectionStore";
 import { useTerminalStore } from "~/stores/terminalStore";
 import { useTheme } from "~/components/ThemeProvider";
 import { Button, Card, CardContent } from "~/components/ui";
-import type { ProjectContext } from "~/types";
+import type { ProjectContext, RemoteTerminal } from "~/types";
 
 // Terminal themes matching desktop app themes
 const TERMINAL_THEMES = {
@@ -149,7 +149,7 @@ export default function TerminalTabPage() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
   };
 
-  const handleAttachRemoteTerminal = (remoteTerminal: { id: string; title: string; cwd: string }) => {
+  const handleAttachRemoteTerminal = (remoteTerminal: RemoteTerminal) => {
     attachRemoteTerminal(remoteTerminal);
     setShowRemoteTerminals(false);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);

@@ -1,6 +1,7 @@
 import { generateId } from "./utils";
 import type {
   WSMessage,
+  OutgoingMessage,
   CommandMessage,
   CommandResponseMessage,
   TerminalInputMessage,
@@ -176,7 +177,7 @@ export class OrcaWebSocket {
     this.messageHandlers.forEach((handler) => handler(message));
   }
 
-  async sendAsync(message: Omit<WSMessage, "timestamp">): Promise<void> {
+  async sendAsync(message: OutgoingMessage): Promise<void> {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
       console.error("[OrcaWS] send failed - WebSocket not connected, state:", this.ws?.readyState);
       throw new Error("WebSocket not connected");
@@ -226,7 +227,7 @@ export class OrcaWebSocket {
   }
 
   // Synchronous wrapper for compatibility (logs warning if encryption needed)
-  send(message: Omit<WSMessage, "timestamp">): void {
+  send(message: OutgoingMessage): void {
     // For messages that need encryption, use sendAsync
     if (this.encryptionKey && shouldEncrypt(message.type)) {
       this.sendAsync(message).catch((err) => {
@@ -339,7 +340,7 @@ export class OrcaWebSocket {
       type: "request_status",
       id: generateId(),
       sessionToken: this.sessionToken,
-    } as any);
+    });
     console.log("[OrcaWS] request_status message sent");
   }
 
@@ -356,7 +357,7 @@ export class OrcaWebSocket {
       sessionToken: this.sessionToken,
       deviceId,
       deviceName: "Mobile",
-    } as any);
+    });
   }
 
   // Event handlers

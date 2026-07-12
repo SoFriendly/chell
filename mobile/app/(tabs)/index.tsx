@@ -26,7 +26,9 @@ import {
   ChevronRight,
   WifiOff,
   RefreshCw,
+  Archive,
 } from "lucide-react-native";
+import type { Commit, Stash } from "~/types";
 import { useConnectionStore } from "~/stores/connectionStore";
 import { useGitStore } from "~/stores/gitStore";
 import {
@@ -56,6 +58,7 @@ export default function GitTabPage() {
     diffs,
     branches,
     history,
+    stashes,
     loading,
     error,
     refresh,
@@ -67,6 +70,11 @@ export default function GitTabPage() {
     createBranch,
     pull,
     push,
+    stashSave,
+    stashPop,
+    stashDrop,
+    undoLastCommit,
+    revertCommit,
     generateCommitMessage,
     showBranchPicker,
     setShowBranchPicker,
@@ -275,7 +283,7 @@ export default function GitTabPage() {
 
   const showFileContextMenu = (filePath: string, canDiscard: boolean = true) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    const buttons: Array<{ text: string; style?: "cancel" | "destructive" | "default"; onPress?: () => void }> = [
+    const buttons: { text: string; style?: "cancel" | "destructive" | "default"; onPress?: () => void }[] = [
       {
         text: "Copy Path",
         onPress: async () => {
@@ -293,6 +301,102 @@ export default function GitTabPage() {
     }
     buttons.push({ text: "Cancel", style: "cancel" });
     Alert.alert(filePath, undefined, buttons);
+  };
+
+  const handleStash = () => {
+    Alert.alert(
+      "Stash Changes",
+      "Stash all uncommitted changes? You can restore them later from the Stashes section.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Stash",
+          onPress: async () => {
+            try {
+              await stashSave(projectPath);
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            } catch (err) {
+              Alert.alert("Error", err instanceof Error ? err.message : "Failed to stash changes");
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const showStashMenu = (stash: Stash) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    Alert.alert(stash.message || `stash@{${stash.index}}`, `On ${stash.branch}`, [
+      {
+        text: "Pop (apply & remove)",
+        onPress: async () => {
+          try {
+            await stashPop(projectPath, stash.index);
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          } catch (err) {
+            Alert.alert("Error", err instanceof Error ? err.message : "Failed to pop stash");
+          }
+        },
+      },
+      {
+        text: "Drop",
+        style: "destructive",
+        onPress: async () => {
+          try {
+            await stashDrop(projectPath, stash.index);
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+          } catch (err) {
+            Alert.alert("Error", err instanceof Error ? err.message : "Failed to drop stash");
+          }
+        },
+      },
+      { text: "Cancel", style: "cancel" },
+    ]);
+  };
+
+  const showCommitContextMenu = (historyCommit: Commit, index: number) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    const buttons: { text: string; style?: "cancel" | "destructive" | "default"; onPress?: () => void }[] = [
+      {
+        text: "Copy Hash",
+        onPress: async () => {
+          await Clipboard.setStringAsync(historyCommit.id);
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        },
+      },
+      {
+        text: "Revert Commit",
+        style: "destructive",
+        onPress: async () => {
+          try {
+            await revertCommit(projectPath, historyCommit.id);
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          } catch (err) {
+            Alert.alert("Error", err instanceof Error ? err.message : "Failed to revert commit");
+          }
+        },
+      },
+    ];
+    if (index === 0) {
+      buttons.push({
+        text: "Undo (keep changes)",
+        style: "destructive",
+        onPress: async () => {
+          try {
+            await undoLastCommit(projectPath);
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          } catch (err) {
+            Alert.alert("Error", err instanceof Error ? err.message : "Failed to undo commit");
+          }
+        },
+      });
+    }
+    buttons.push({ text: "Cancel", style: "cancel" });
+    Alert.alert(
+      historyCommit.shortId,
+      truncate(historyCommit.message.split("\n")[0], 80),
+      buttons
+    );
   };
 
   const handleCheckoutBranch = async (branch: string) => {
@@ -476,6 +580,15 @@ export default function GitTabPage() {
             <TabsTrigger value="history" className="px-5 h-10">History</TabsTrigger>
           </TabsList>
           <View className="flex-row items-center">
+            {(stagedFiles.length > 0 || unstagedFiles.length > 0 || untrackedFiles.length > 0) && (
+              <Pressable
+                onPress={handleStash}
+                disabled={loading}
+                style={{ padding: 8, opacity: loading ? 0.5 : 1 }}
+              >
+                <Archive size={18} color={colors.mutedForeground} />
+              </Pressable>
+            )}
             <Pressable
               onPress={handlePull}
               disabled={loading}
@@ -772,6 +885,37 @@ export default function GitTabPage() {
               </Card>
             )}
 
+          {/* Stashes */}
+          {stashes.length > 0 && (
+            <View className="mb-4">
+              <SectionHeader>Stashes ({stashes.length})</SectionHeader>
+              <Card className="py-2">
+                <CardContent className="p-0">
+                  {stashes.map((stash, index) => (
+                    <Pressable
+                      key={stash.index}
+                      className={`flex-row items-center gap-3 px-3 py-2 ${
+                        index < stashes.length - 1 ? "border-b border-border" : ""
+                      }`}
+                      onPress={() => showStashMenu(stash)}
+                    >
+                      <Archive size={14} color={colors.mutedForeground} />
+                      <View className="flex-1">
+                        <Text className="text-foreground text-sm" numberOfLines={1}>
+                          {stash.message || `stash@{${stash.index}}`}
+                        </Text>
+                        <Text className="text-muted-foreground text-xs mt-0.5">
+                          {stash.branch}
+                        </Text>
+                      </View>
+                      <ChevronRight size={14} color={colors.mutedForeground} />
+                    </Pressable>
+                  ))}
+                </CardContent>
+              </Card>
+            </View>
+          )}
+
           {/* Commit Section */}
           {(stagedFiles.length > 0 || unstagedFiles.length > 0 || untrackedFiles.length > 0) && (
             <View className="mt-4">
@@ -836,11 +980,12 @@ export default function GitTabPage() {
             <Card className="py-2">
               <CardContent className="p-0">
                 {history.map((historyCommit, index) => (
-                  <View
+                  <Pressable
                     key={historyCommit.id}
                     className={`flex-row items-start gap-3 px-3 py-2 ${
                       index < history.length - 1 ? "border-b border-border" : ""
                     }`}
+                    onLongPress={() => showCommitContextMenu(historyCommit, index)}
                   >
                     <GitCommit size={14} color={colors.ai} className="mt-0.5" />
                     <View className="flex-1">
@@ -861,7 +1006,7 @@ export default function GitTabPage() {
                         </Text>
                       </View>
                     </View>
-                  </View>
+                  </Pressable>
                 ))}
               </CardContent>
             </Card>

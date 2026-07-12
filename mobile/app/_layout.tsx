@@ -50,13 +50,7 @@ function RootLayoutContent() {
           headerTitleStyle: {
             fontWeight: "600",
           },
-          headerLeftContainerStyle: {
-            paddingLeft: 8,
-          },
-          headerRightContainerStyle: {
-            paddingRight: 8,
-          },
-          headerBackTitleVisible: false,
+          headerBackButtonDisplayMode: "minimal",
           contentStyle: {
             backgroundColor: colors.background,
           },

@@ -1,21 +1,18 @@
 {
   "expo": {
-    "name": "Orca Portal",
+    "name": "Chell Portal",
     "slug": "orca-portal",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "scheme": "orca",
     "userInterfaceStyle": "automatic",
-    "splash": {
-      "image": "./assets/splash.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#121212"
-    },
-    "assetBundlePatterns": ["**/*"],
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.sofriendly.orca",
+      "bundleIdentifier": "com.sofriendly.chell",
       "infoPlist": {
         "LSApplicationCategoryType": "public.app-category.developer-tools"
       }
@@ -25,7 +22,7 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#121212"
       },
-      "package": "com.orca.portal"
+      "package": "com.chell.portal"
     },
     "web": {
       "bundler": "metro",
@@ -45,7 +42,18 @@
         {
           "cameraPermission": "Allow Orca Portal to access your camera for QR code scanning"
         }
-      ]
+      ],
+      "expo-asset",
+      "expo-font",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash.png",
+          "resizeMode": "contain",
+          "backgroundColor": "#121212"
+        }
+      ],
+      "expo-status-bar"
     ],
     "experiments": {
       "typedRoutes": true

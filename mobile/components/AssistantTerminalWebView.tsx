@@ -428,4 +428,6 @@ const AssistantTerminalWebView = forwardRef<AssistantTerminalWebViewRef, Assista
   );
 });
 
+AssistantTerminalWebView.displayName = "AssistantTerminalWebView";
+
 export default AssistantTerminalWebView;

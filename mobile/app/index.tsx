@@ -9,7 +9,7 @@ import {
   Modal,
   TextInput,
 } from "react-native";
-import { useRouter } from "expo-router";
+import { useRouter , Stack } from "expo-router";
 import * as Haptics from "expo-haptics";
 import {
   Wifi,
@@ -23,7 +23,6 @@ import {
   ArrowRight,
   Plus,
 } from "lucide-react-native";
-import { Stack } from "expo-router";
 import {
   useConnectionStore,
   DesktopProject,

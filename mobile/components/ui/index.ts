@@ -6,4 +6,3 @@ export * from "./separator";
 export * from "./tabs";
 export * from "./text";
 export * from "./section-header";
-export * from "./file-status-dot";

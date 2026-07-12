@@ -33,7 +33,14 @@ export interface DiffHunk {
   oldLines: number;
   newStart: number;
   newLines: number;
-  lines: string[];
+  lines: DiffLine[];
+}
+
+export interface DiffLine {
+  type: "context" | "addition" | "deletion";
+  content: string;
+  oldLineNo?: number;
+  newLineNo?: number;
 }
 
 export interface Commit {
@@ -49,6 +56,13 @@ export interface Branch {
   isHead: boolean;
   isRemote: boolean;
   upstream?: string;
+}
+
+export interface Stash {
+  index: number;
+  message: string;
+  branch: string;
+  timestamp: string;
 }
 
 export interface Terminal {
@@ -160,12 +174,12 @@ export interface StatusUpdateMessage extends BaseMessage {
   connectionStatus: "connected" | "disconnected";
   activeProject?: Project;
   gitStatus?: GitStatus;
-  projects?: Array<{
+  projects?: {
     id: string;
     name: string;
     path: string;
     folders?: ProjectFolder[];
-  }>;
+  }[];
   activeProjectId?: string;
   theme?: string;
   customTheme?: Record<string, string>;
@@ -180,6 +194,7 @@ export interface ErrorMessage extends BaseMessage {
 
 export interface SelectProjectMessage extends BaseMessage {
   type: "select_project";
+  sessionToken: string | null;
   projectId: string;
 }
 
@@ -190,26 +205,37 @@ export interface ProjectChangedMessage extends BaseMessage {
 
 export interface GitFilesChangedMessage extends BaseMessage {
   type: "git_files_changed";
-  files: string[];
+  repoPath: string;
 }
 
 export interface RegisterMobileMessage extends BaseMessage {
   type: "register_mobile";
-  sessionToken: string;
-  deviceId: string;
   deviceName: string;
+  pairingPassphrase: string;
 }
 
 export interface AttachTerminalMessage extends BaseMessage {
   type: "attach_terminal";
-  sessionToken: string;
+  sessionToken: string | null;
   terminalId: string;
 }
 
 export interface DetachTerminalMessage extends BaseMessage {
   type: "detach_terminal";
-  sessionToken: string;
+  sessionToken: string | null;
   terminalId: string;
+}
+
+export interface RequestStatusMessage extends BaseMessage {
+  type: "request_status";
+  sessionToken: string | null;
+}
+
+export interface ResumeSessionMessage extends BaseMessage {
+  type: "resume_session";
+  sessionToken: string | null;
+  deviceId: string;
+  deviceName: string;
 }
 
 export type WSMessage =
@@ -226,7 +252,17 @@ export type WSMessage =
   | GitFilesChangedMessage
   | RegisterMobileMessage
   | AttachTerminalMessage
-  | DetachTerminalMessage;
+  | DetachTerminalMessage
+  | RequestStatusMessage
+  | ResumeSessionMessage;
+
+// Omit that distributes over a union — plain Omit<WSMessage, K> collapses the
+// union to its common keys, which breaks per-message fields like deviceName.
+export type OutgoingMessage = WSMessage extends infer M
+  ? M extends WSMessage
+    ? Omit<M, "timestamp">
+    : never
+  : never;
 
 // Connection state
 export interface ConnectionState {

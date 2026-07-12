@@ -3,7 +3,7 @@ import { createJSONStorage, persist } from "zustand/middleware";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as SecureStore from "expo-secure-store";
 import * as Device from "expo-device";
-import type { ConnectionState, Project, GitStatus, WSMessage, RemoteTerminal } from "~/types";
+import type { ConnectionState, GitStatus, WSMessage, RemoteTerminal } from "~/types";
 import { initWebSocket, getWebSocket, OrcaWebSocket } from "~/lib/websocket";
 
 // Linked portal (desktop) info
@@ -35,7 +35,7 @@ export interface DesktopProject {
 interface ConnectionStore extends ConnectionState {
   // State
   wsUrl: string;
-  activeProject: Project | null;
+  activeProject: DesktopProject | null;
   gitStatus: GitStatus | null;
 
   // Multi-portal support
@@ -57,7 +57,7 @@ interface ConnectionStore extends ConnectionState {
   disconnect: () => void;
   pair: (pairingPassphrase: string, deviceName: string) => Promise<void>;
   pairFromQR: (qrData: string) => Promise<void>;
-  setActiveProject: (project: Project | null) => void;
+  setActiveProject: (project: DesktopProject | null) => void;
   setGitStatus: (status: GitStatus | null) => void;
 
   // Portal management
@@ -94,7 +94,11 @@ let currentHandlerUnsubscribe: (() => void) | null = null;
 function setupMessageHandler(
   ws: OrcaWebSocket,
   get: () => ConnectionStore,
-  set: (partial: any) => void,
+  set: (
+    partial:
+      | Partial<ConnectionStore>
+      | ((state: ConnectionStore) => Partial<ConnectionStore>)
+  ) => void,
   desktopNameOverride?: string,
   pendingPassphrase?: string
 ) {
@@ -238,7 +242,7 @@ function setupMessageHandler(
 
       case "git_files_changed":
         // Desktop detected git file changes, refresh git status
-        const changedRepoPath = (message as { repoPath: string }).repoPath;
+        const changedRepoPath = message.repoPath;
         const currentProject = get().activeProject;
         // Only refresh if this is the active project
         if (currentProject && currentProject.path === changedRepoPath) {
@@ -466,7 +470,7 @@ export const useConnectionStore = create<ConnectionStore>()(
         await get().connect();
       },
 
-      setActiveProject: (project: Project | null) =>
+      setActiveProject: (project: DesktopProject | null) =>
         set({ activeProject: project }),
 
       setGitStatus: (status: GitStatus | null) => set({ gitStatus: status }),
