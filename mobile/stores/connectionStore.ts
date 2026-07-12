@@ -188,6 +188,7 @@ function setupMessageHandler(
             availableProjects: projects,
             remoteTerminals: terminals,
             hasReceivedInitialStatus: true,
+            error: null,
             activeProject: activeProject ?? state.activeProject,
             gitStatus: message.gitStatus || state.gitStatus,
             linkedPortals: state.linkedPortals.map((p) =>

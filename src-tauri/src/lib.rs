@@ -4398,14 +4398,15 @@ pub fn run() {
                 let _ = native_pty_system();
             });
 
-            // Portal is disabled for now
-            // if portal_was_enabled {
-            //     log::info!("[Portal] Starting portal connection (was enabled on last run)");
-            //     let portal = Portal::new(app.handle().clone(), portal_config);
-            //     let state_clone = state_for_portal.clone();
-            //     portal.connect(state_clone);
-            //     *state_for_portal.portal.lock() = Some(portal);
-            // }
+            // Reconnect the portal on startup if it was enabled last run, so a
+            // restart doesn't silently strand paired mobile devices.
+            if portal_was_enabled {
+                log::info!("[Portal] Starting portal connection (was enabled on last run)");
+                let portal = Portal::new(app.handle().clone(), portal_config);
+                let state_clone = state_for_portal.clone();
+                portal.connect(state_clone);
+                *state_for_portal.portal.lock() = Some(portal);
+            }
 
             // System tray icon (disabled for now - was used for portal background mode)
             // let new_window_item = MenuItemBuilder::with_id("new_window", "New Window").build(app)?;

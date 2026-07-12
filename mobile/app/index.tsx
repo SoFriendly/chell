@@ -49,6 +49,10 @@ export default function HomeScreen() {
   const [cloneUrl, setCloneUrl] = useState("");
   const [clonePath, setClonePath] = useState("");
   const [isCloning, setIsCloning] = useState(false);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [createPath, setCreatePath] = useState("");
+  const [createName, setCreateName] = useState("");
+  const [isCreating, setIsCreating] = useState(false);
 
   const isConnected = status === "connected";
 
@@ -113,6 +117,43 @@ export default function HomeScreen() {
       );
     } finally {
       setIsCloning(false);
+    }
+  };
+
+  const handleCreateRepo = async () => {
+    if (!createName.trim()) {
+      Alert.alert("Error", "Please enter a repository name");
+      return;
+    }
+    if (!createPath.trim()) {
+      Alert.alert("Error", "Please enter a parent directory");
+      return;
+    }
+
+    const fullPath = `${createPath.trim().replace(/\/+$/, "")}/${createName.trim()}`;
+    setIsCreating(true);
+
+    try {
+      await invoke("create_directory", { path: fullPath });
+      await invoke("init_repo", { path: fullPath });
+
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setCreateName("");
+      setCreatePath("");
+      setShowCreateModal(false);
+      requestStatus();
+
+      Alert.alert("Success", `Repository created at ${fullPath}`, [
+        { text: "OK", onPress: () => router.push("/(tabs)") },
+      ]);
+    } catch (err) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      Alert.alert(
+        "Create Failed",
+        err instanceof Error ? err.message : "Failed to create repository"
+      );
+    } finally {
+      setIsCreating(false);
     }
   };
 
@@ -244,39 +285,7 @@ export default function HomeScreen() {
               <Pressable
                 className="flex-row items-center p-4 rounded-xl border border-border bg-card"
                 style={{ gap: 16 }}
-                onPress={() => {
-                  Alert.alert(
-                    "Open Repository",
-                    "Use Orca on your desktop to open a local repository, then it will appear here."
-                  );
-                }}
-              >
-                <View
-                  className="w-10 h-10 rounded-lg items-center justify-center"
-                  style={{ backgroundColor: colors.muted }}
-                >
-                  <Monitor size={s(20)} color={colors.mutedForeground} />
-                </View>
-                <View className="flex-1">
-                  <Text className="text-sm font-medium text-foreground">
-                    Open existing repository
-                  </Text>
-                  <Text className="text-xs text-muted-foreground">
-                    Open a repo in Orca Desktop
-                  </Text>
-                </View>
-                <ArrowRight size={s(16)} color={colors.mutedForeground} />
-              </Pressable>
-
-              <Pressable
-                className="flex-row items-center p-4 rounded-xl border border-border bg-card"
-                style={{ gap: 16 }}
-                onPress={() => {
-                  Alert.alert(
-                    "Create Repository",
-                    "Use Orca on your desktop to create a new repository."
-                  );
-                }}
+                onPress={() => setShowCreateModal(true)}
               >
                 <View
                   className="w-10 h-10 rounded-lg items-center justify-center"
@@ -289,7 +298,7 @@ export default function HomeScreen() {
                     Create new repository
                   </Text>
                   <Text className="text-xs text-muted-foreground">
-                    Initialize a new git repository
+                    Initialize a new git repository on your desktop
                   </Text>
                 </View>
                 <ArrowRight size={s(16)} color={colors.mutedForeground} />
@@ -424,6 +433,90 @@ export default function HomeScreen() {
                     disabled={!cloneUrl.trim() || !clonePath.trim()}
                   >
                     {isCloning ? "Cloning..." : "Clone"}
+                  </Button>
+                </View>
+              </View>
+            </View>
+          </View>
+        </Modal>
+
+        {/* Create Repository Modal */}
+        <Modal
+          visible={showCreateModal}
+          animationType="slide"
+          transparent
+          onRequestClose={() => setShowCreateModal(false)}
+        >
+          <View className="flex-1 bg-black/50 justify-end">
+            <View
+              className="bg-card rounded-t-3xl p-6"
+              style={{ paddingBottom: 40 }}
+            >
+              <View className="flex-row items-center justify-between mb-6">
+                <View className="flex-row items-center">
+                  <Plus size={s(20)} color={colors.primary} />
+                  <Text className="text-foreground text-lg font-semibold ml-2">
+                    Create Repository
+                  </Text>
+                </View>
+                <Pressable
+                  onPress={() => setShowCreateModal(false)}
+                  className="p-2"
+                >
+                  <X size={s(20)} color={colors.mutedForeground} />
+                </Pressable>
+              </View>
+
+              <View className="gap-4">
+                <View>
+                  <Text className="text-foreground font-medium mb-2">
+                    Repository Name
+                  </Text>
+                  <TextInput
+                    className="h-12 rounded-lg border border-input bg-background px-4 text-foreground"
+                    placeholder="my-new-project"
+                    placeholderTextColor={colors.mutedForeground}
+                    value={createName}
+                    onChangeText={setCreateName}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                  />
+                </View>
+
+                <View>
+                  <Text className="text-foreground font-medium mb-2">
+                    Parent Directory
+                  </Text>
+                  <TextInput
+                    className="h-12 rounded-lg border border-input bg-background px-4 text-foreground"
+                    placeholder="~/Projects"
+                    placeholderTextColor={colors.mutedForeground}
+                    value={createPath}
+                    onChangeText={setCreatePath}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                  />
+                  <Text className="text-muted-foreground text-xs mt-1">
+                    Directory on your desktop to create the repo in
+                  </Text>
+                </View>
+
+                <View className="flex-row gap-3 mt-2">
+                  <Button
+                    variant="outline"
+                    className="flex-1"
+                    onPress={() => setShowCreateModal(false)}
+                    disabled={isCreating}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    className="flex-1"
+                    onPress={handleCreateRepo}
+                    loading={isCreating}
+                    disabled={!createName.trim() || !createPath.trim()}
+                  >
+                    {isCreating ? "Creating..." : "Create"}
                   </Button>
                 </View>
               </View>

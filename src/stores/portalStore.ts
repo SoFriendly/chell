@@ -260,6 +260,36 @@ async function handleCommand(message: Record<string, unknown>) {
     const result = await invoke(command, finalParams);
     console.log("[Portal] Command succeeded:", command);
 
+    // Register repos cloned/created from mobile as projects so they appear
+    // in the project list (status updates read from the projects database).
+    if (command === "clone_repo" || command === "init_repo") {
+      const repoPath =
+        command === "clone_repo" && typeof result === "string"
+          ? result
+          : (finalParams.path as string | undefined);
+      if (repoPath) {
+        const name = repoPath.split("/").filter(Boolean).pop() || repoPath;
+        try {
+          const existing = await invoke<{ path: string }[]>("get_all_projects");
+          if (existing.some((p) => p.path === repoPath)) {
+            throw new Error("already registered");
+          }
+          await invoke("add_project", {
+            project: {
+              id: crypto.randomUUID(),
+              name,
+              path: repoPath,
+              lastOpened: new Date().toISOString(),
+              folders: [{ id: crypto.randomUUID(), name, path: repoPath }],
+            },
+          });
+          console.log("[Portal] Registered project from mobile:", repoPath);
+        } catch (err) {
+          console.log("[Portal] Skipped project registration:", err);
+        }
+      }
+    }
+
     // Auto-register mobile-spawned terminals for output forwarding
     if (command === "spawn_terminal" && typeof result === "string") {
       try {
