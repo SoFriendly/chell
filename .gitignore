@@ -24,3 +24,6 @@ dist-ssr
 *.sw?
 notes.md
 .claude/settings.local.json
+
+# Kotlin build tooling session data (mobile android builds)
+mobile/android/.kotlin/
