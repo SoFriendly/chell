@@ -40,6 +40,7 @@ export default function HomeScreen() {
     desktopDeviceName,
     availableProjects,
     selectProject,
+    selectProjectByPath,
     requestStatus,
     invoke,
   } = useConnectionStore();
@@ -75,6 +76,27 @@ export default function HomeScreen() {
     setTimeout(() => setRefreshing(false), 500);
   }, [isConnected, requestStatus]);
 
+  // Select a freshly created/cloned repo before entering the project tabs.
+  // The desktop registers it as a project before the command response comes
+  // back, but our availableProjects list hasn't caught up yet — navigating
+  // without an activeProject leaves the git panel blank.
+  const openNewRepo = async (repoPath: string) => {
+    try {
+      const project = await selectProjectByPath(repoPath);
+      if (!project) {
+        requestStatus();
+        Alert.alert(
+          "Repository ready",
+          "The repository was created but couldn't be opened automatically. Select it from Recent Projects."
+        );
+        return;
+      }
+      router.push("/(tabs)");
+    } catch {
+      requestStatus();
+    }
+  };
+
   const handleSelectProject = (project: DesktopProject) => {
     selectProject(project.id);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -107,7 +129,7 @@ export default function HomeScreen() {
       requestStatus();
 
       Alert.alert("Success", `Repository cloned to ${result}`, [
-        { text: "OK", onPress: () => router.push("/(tabs)") },
+        { text: "OK", onPress: () => openNewRepo(result) },
       ]);
     } catch (err) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
@@ -144,7 +166,7 @@ export default function HomeScreen() {
       requestStatus();
 
       Alert.alert("Success", `Repository created at ${fullPath}`, [
-        { text: "OK", onPress: () => router.push("/(tabs)") },
+        { text: "OK", onPress: () => openNewRepo(fullPath) },
       ]);
     } catch (err) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);

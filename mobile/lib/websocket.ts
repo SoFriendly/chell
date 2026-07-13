@@ -16,7 +16,7 @@ import {
 } from "./portalCrypto";
 
 type MessageHandler = (message: WSMessage) => void;
-type ConnectionHandler = () => void;
+type ConnectionHandler = (wasIntentional?: boolean) => void;
 
 interface PendingCommand {
   resolve: (result: unknown) => void;
@@ -29,9 +29,7 @@ export class OrcaWebSocket {
   private url: string;
   private sessionToken: string | null = null;
   private encryptionKey: EncryptionKey | null = null;
-  private reconnectAttempts = 0;
-  private maxReconnectAttempts = 5;
-  private reconnectDelay = 1000;
+  private intentionalClose = false;
   private pendingCommands: Map<string, PendingCommand> = new Map();
   private messageHandlers: Set<MessageHandler> = new Set();
   private connectHandlers: Set<ConnectionHandler> = new Set();
@@ -55,13 +53,13 @@ export class OrcaWebSocket {
   connect(): Promise<void> {
     return new Promise((resolve, reject) => {
       try {
+        this.intentionalClose = false;
         // Append /ws path if not already present
         const wsUrl = this.url.endsWith('/ws') ? this.url : `${this.url}/ws`;
         this.ws = new WebSocket(wsUrl);
 
         this.ws.onopen = () => {
           console.log("[OrcaWS] Connected to relay server");
-          this.reconnectAttempts = 0;
           this.connectHandlers.forEach((handler) => handler());
           resolve();
         };
@@ -100,8 +98,12 @@ export class OrcaWebSocket {
 
         this.ws.onclose = () => {
           console.log("[OrcaWS] Disconnected from relay server");
-          this.disconnectHandlers.forEach((handler) => handler());
-          this.attemptReconnect();
+          // Reconnection is owned by connectionStore (it must re-send
+          // resume_session for the relay to route messages back to us),
+          // so we only report the close and whether it was requested.
+          this.disconnectHandlers.forEach((handler) =>
+            handler(this.intentionalClose)
+          );
         };
 
         this.ws.onerror = (error) => {
@@ -115,6 +117,7 @@ export class OrcaWebSocket {
   }
 
   disconnect(): void {
+    this.intentionalClose = true;
     if (this.ws) {
       this.ws.close();
       this.ws = null;
@@ -128,26 +131,6 @@ export class OrcaWebSocket {
 
   setSessionToken(token: string): void {
     this.sessionToken = token;
-  }
-
-  private attemptReconnect(): void {
-    if (this.reconnectAttempts >= this.maxReconnectAttempts) {
-      console.log("[OrcaWS] Max reconnect attempts reached");
-      return;
-    }
-
-    this.reconnectAttempts++;
-    const delay = this.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1);
-
-    console.log(
-      `[OrcaWS] Attempting reconnect in ${delay}ms (attempt ${this.reconnectAttempts})`
-    );
-
-    setTimeout(() => {
-      this.connect().catch((err) => {
-        console.error("[OrcaWS] Reconnect failed:", err);
-      });
-    }, delay);
   }
 
   private handleMessage(message: WSMessage): void {

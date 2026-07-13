@@ -67,7 +67,11 @@ interface ConnectionStore extends ConnectionState {
 
   // Project management
   selectProject: (projectId: string) => void;
+  selectProjectByPath: (path: string) => Promise<DesktopProject | null>;
   requestStatus: () => void;
+
+  // Reconnect if the socket died (e.g. Android killed it in the background)
+  ensureConnected: () => void;
 
   // Remote commands (proxy to desktop)
   invoke: <T>(command: string, params?: Record<string, unknown>) => Promise<T>;
@@ -89,6 +93,27 @@ function getDeviceName(): string {
 
 // Track the current handler's unsubscribe function to prevent accumulation
 let currentHandlerUnsubscribe: (() => void) | null = null;
+
+// Auto-reconnect bookkeeping (module scope; the store is a singleton).
+// The store owns reconnection because a bare socket reconnect is useless —
+// the relay only routes to us after resume_session, which connect() sends.
+let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+let reconnectAttempt = 0;
+let autoReconnectEnabled = true;
+
+function scheduleReconnect(get: () => ConnectionStore) {
+  if (reconnectTimer || !autoReconnectEnabled) return;
+  const delay = Math.min(2000 * 2 ** reconnectAttempt, 30000);
+  reconnectAttempt++;
+  console.log(`[ConnectionStore] Reconnecting in ${delay}ms (attempt ${reconnectAttempt})`);
+  reconnectTimer = setTimeout(() => {
+    reconnectTimer = null;
+    const state = get();
+    if (state.status === "disconnected" && state.wsUrl && state.activePortalId) {
+      state.connect();
+    }
+  }, delay);
+}
 
 // Shared message handler setup - used by both connect() and pairFromQR()
 function setupMessageHandler(
@@ -260,13 +285,16 @@ function setupMessageHandler(
     }
   });
 
-  ws.onDisconnect(() => {
+  ws.onDisconnect((wasIntentional) => {
     set((state) => ({
       status: "disconnected",
       linkedPortals: state.linkedPortals.map((p) =>
         p.id === state.activePortalId ? { ...p, isOnline: false } : p
       ),
     }));
+    if (!wasIntentional) {
+      scheduleReconnect(get);
+    }
   });
 }
 
@@ -303,6 +331,7 @@ export const useConnectionStore = create<ConnectionStore>()(
           return;
         }
 
+        autoReconnectEnabled = true;
         set({ status: "connecting", error: null, hasReceivedInitialStatus: false });
 
         try {
@@ -312,6 +341,7 @@ export const useConnectionStore = create<ConnectionStore>()(
           setupMessageHandler(ws, get, set);
 
           await ws.connect();
+          reconnectAttempt = 0;
 
           // If we have a saved session token for the active portal, try to reconnect
           if (activePortalId) {
@@ -363,10 +393,19 @@ export const useConnectionStore = create<ConnectionStore>()(
             status: "disconnected",
             error: err instanceof Error ? err.message : "Connection failed",
           });
+          // Relay unreachable (offline, network switch) — keep retrying
+          scheduleReconnect(get);
         }
       },
 
       disconnect: () => {
+        // User asked to disconnect — stop any automatic reconnection
+        autoReconnectEnabled = false;
+        if (reconnectTimer) {
+          clearTimeout(reconnectTimer);
+          reconnectTimer = null;
+        }
+        reconnectAttempt = 0;
         try {
           const ws = getWebSocket();
           ws.disconnect();
@@ -494,6 +533,19 @@ export const useConnectionStore = create<ConnectionStore>()(
         });
       },
 
+      selectProjectByPath: async (path: string) => {
+        // Refresh the project list from the desktop first — a just-created or
+        // just-cloned repo won't be in availableProjects until a status_update
+        // arrives, which races navigation into the project tabs.
+        const projects = await get().invoke<DesktopProject[]>("get_all_projects");
+        set({ availableProjects: projects });
+        const project = projects.find((p) => p.path === path) ?? null;
+        if (project) {
+          get().selectProject(project.id);
+        }
+        return project;
+      },
+
       requestStatus: () => {
         try {
           const ws = getWebSocket();
@@ -501,6 +553,37 @@ export const useConnectionStore = create<ConnectionStore>()(
         } catch {
           // WebSocket not initialized or not authenticated
         }
+      },
+
+      ensureConnected: () => {
+        const { status, wsUrl, activePortalId } = get();
+        if (!wsUrl || !activePortalId || !autoReconnectEnabled) return;
+        if (status === "connecting" || status === "pairing") return;
+
+        let socketAlive = false;
+        try {
+          socketAlive = getWebSocket().isConnected;
+        } catch {
+          // Not initialized yet
+        }
+
+        if (socketAlive && status === "connected") {
+          // Socket survived backgrounding — just refresh state
+          get().requestStatus();
+          return;
+        }
+
+        // Android kills the socket in the background, often without firing
+        // onclose, so status can still read "connected" over a dead socket.
+        // Reset it so connect()'s already-connected guard doesn't bail.
+        if (reconnectTimer) {
+          clearTimeout(reconnectTimer);
+          reconnectTimer = null;
+        }
+        reconnectAttempt = 0;
+        console.log("[ConnectionStore] Socket dead after resume, reconnecting");
+        set({ status: "disconnected" });
+        get().connect();
       },
 
       invoke: async <T>(

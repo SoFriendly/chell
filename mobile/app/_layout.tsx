@@ -10,7 +10,7 @@ import { Stack, router } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { useFonts } from "expo-font";
 import * as SplashScreen from "expo-splash-screen";
-import { Pressable, View, Text } from "react-native";
+import { AppState, Pressable, View, Text } from "react-native";
 import { ChevronLeft, Home, Settings, GitBranch, ChevronDown, ArrowUp, ArrowDown } from "lucide-react-native";
 import { ThemeProvider, useTheme } from "~/components/ThemeProvider";
 import { useConnectionStore } from "~/stores/connectionStore";
@@ -39,6 +39,18 @@ function RootLayoutContent() {
     }
     const unsub = useConnectionStore.persist.onFinishHydration(tryConnect);
     return unsub;
+  }, []);
+
+  // Android drops the relay socket when the app is backgrounded (app
+  // switcher, screen off), frequently without firing onclose — the store
+  // then believes it's still connected. Verify and reconnect on foreground.
+  useEffect(() => {
+    const sub = AppState.addEventListener("change", (appState) => {
+      if (appState === "active") {
+        useConnectionStore.getState().ensureConnected();
+      }
+    });
+    return () => sub.remove();
   }, []);
 
   // Request status (project list, theme, etc.) when connected

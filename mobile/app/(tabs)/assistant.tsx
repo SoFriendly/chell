@@ -74,9 +74,20 @@ export default function AssistantTabPage() {
     resizeTerminal,
   } = useTerminalStore();
 
-  // Filter remote terminals to only show assistants that weren't spawned by mobile
+  // Filter remote terminals to assistants that weren't spawned by mobile AND
+  // belong to the current project — the desktop reports terminals from all
+  // its open projects, and attaching to another project's assistant here
+  // shows an unrelated (and desktop-width, so garbled) TUI.
   const localTerminalIds = new Set(localTerminals.map(t => t.id));
-  const remoteAssistants = remoteTerminals.filter(t => t.type === "assistant" && !localTerminalIds.has(t.id));
+  const currentProjectPath = activeProject?.path || "";
+  const remoteAssistants = remoteTerminals.filter(
+    (t) =>
+      t.type === "assistant" &&
+      !localTerminalIds.has(t.id) &&
+      !!currentProjectPath &&
+      (t.cwd === currentProjectPath ||
+        t.cwd?.startsWith(currentProjectPath + "/"))
+  );
 
   const [tabs, setTabs] = useState<AssistantTab[]>([]);
   const [activeTabId, setActiveTabId] = useState<string | null>(null);
