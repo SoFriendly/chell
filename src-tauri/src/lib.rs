@@ -612,6 +612,7 @@ fn spawn_terminal(
             format!("{}/.pyenv/bin", home),
             format!("{}/.pyenv/shims", home),
             format!("{}/.nvm/versions/node/default/bin", home),
+            format!("{}/.opencode/bin", home),
             "/opt/homebrew/bin".to_string(),
             "/opt/homebrew/sbin".to_string(),
             "/usr/local/bin".to_string(),
@@ -661,6 +662,7 @@ fn spawn_terminal(
             format!("{}/.pyenv/bin", home),
             format!("{}/.pyenv/shims", home),
             format!("{}/.nvm/versions/node/default/bin", home),
+            format!("{}/.opencode/bin", home),
             "/snap/bin".to_string(),
             "/usr/local/bin".to_string(),
         ];
@@ -1552,6 +1554,7 @@ fn get_augmented_path() -> String {
             format!("{}/bin", home),
             format!("{}/.local/bin", home),
             format!("{}/.cargo/bin", home),
+            format!("{}/.opencode/bin", home),
             "/opt/homebrew/bin".to_string(),
             "/opt/homebrew/sbin".to_string(),
             "/usr/local/bin".to_string(),
@@ -1568,6 +1571,7 @@ fn get_augmented_path() -> String {
             format!("{}/.local/bin", home),
             format!("{}/.cargo/bin", home),
             format!("{}/.nvm/versions/node/default/bin", home),
+            format!("{}/.opencode/bin", home),
             "/snap/bin".to_string(),
             "/usr/local/bin".to_string(),
         ];
@@ -2461,6 +2465,7 @@ fn find_command_path(cmd: &str) -> Option<std::path::PathBuf> {
                 home.join(".local/bin").join(cmd),
                 home.join(".npm-global/bin").join(cmd),
                 home.join(".nvm/versions/node").join("current/bin").join(cmd),
+                home.join(".opencode/bin").join(cmd),
             ];
 
             for path in &common_paths {
@@ -2507,6 +2512,7 @@ fn find_command_path(cmd: &str) -> Option<std::path::PathBuf> {
                 home.join(".local/bin").join(cmd),
                 home.join(".cargo/bin").join(cmd),
                 home.join(".npm-global/bin").join(cmd),
+                home.join(".opencode/bin").join(cmd),
             ];
 
             for path in &linux_paths {
@@ -2621,6 +2627,7 @@ async fn check_commands_installed(commands: Vec<String>) -> Result<Vec<String>, 
                     format!("{}/.pyenv/bin", home),
                     format!("{}/.pyenv/shims", home),
                     format!("{}/.nvm/versions/node/default/bin", home),
+                    format!("{}/.opencode/bin", home),
                     "/usr/local/bin".to_string(),
                     "/usr/local/sbin".to_string(),
                 ]);
